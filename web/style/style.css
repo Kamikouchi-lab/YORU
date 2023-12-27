@@ -1,0 +1,67 @@
+
+body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background-image: url('../image/back.jpg');
+  background-size: cover;
+  color: black; /* テキストの色を白に変更 */
+  cursor: url('../image/cursor.png')16 16, auto;
+  position: relative;
+}
+
+.text {
+  margin-bottom: 10%;
+  font-size: 10px;
+  /* font-weight: bold; フォントを太字に設定 */
+  color: #ffffff;
+  cursor: url('../image/cursor.png')16 16, auto;
+}
+
+.button-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  cursor: url('../image/cursor.png')16 16, auto;
+  
+}
+
+.button-container button {
+  padding: 15px 35px;
+  font-size: 15px;
+  background-color: #464646;
+  color: white;
+  cursor: url('../image/cursor.png')16 16, auto;
+}
+
+.button-container img {
+  width: 100px; /* 画像の幅 */
+  height: auto; /* 画像の高さを比率を保って自動調整 */
+  cursor: pointer; /* カーソルをポインターに変更 */
+  border: none; /* ボーダーなし */
+  margin: 10px 0; /* 上下の余白 */
+  cursor: url('../image/cursor.png')16 16, auto;
+}
+
+.button-container img:hover {
+  opacity: 0.5; /* ホバー時に透明度を変更 */
+}
+
+.image-container img {
+  display: block;
+  margin: auto; /* This will center the image */
+  width: 30%; /* Set the width of the image */
+  height: auto; /* This will keep the aspect ratio of the image intact */
+  /* cursor: url(../image/cursor.png),auto; */
+  cursor: url('../image/cursor.png')16 16, auto;
+}
+
+/* .hoge {
+  cursor: url(../image/cursor.png),auto;
+} */
+

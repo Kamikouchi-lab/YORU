@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <title>Behavior Detection System</title>
+    <script type="text/javascript" src="/eel.js"></script>
+    <meta name="description" content="ページの紹介文">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/meyer-reset/2.0/reset.css">
+    <link rel="stylesheet" href="style/style.css">
+</head>
+<body>
+
+    <div class="image-container">
+        <img src="../image/YORU_logo.png">
+    </div>
+
+
+    
+    <div class="button-container">
+        <!-- <button onclick="runProgram1()">Training</button> -->
+        <img src="../image/button_training.png" alt="Training" onclick="runProgram1()">
+        <p class="text">Creating model</p>
+    </div>
+    <div class="button-container">
+        <button onclick="runProgram2()">Behavior Analysis</button>
+        <p class="text">Behavioral analysis</p>
+    </div>
+    <div class="button-container">
+        <img src="../image/button_realtime.png" alt="Real-time Behavior Detection" onclick="runProgram3()">
+        <!-- <button onclick="runProgram3()">Real-time Behavior Detection</button> -->
+        <p class="text">Realtime system</p>
+        <button onclick="showFileDialog()">Select condition file</button>
+        <p id="file-path"></p>
+    </div>
+    <div class="button-container">
+        <button onclick="runProgram4()">Model Evaluation</button>
+        <p class="text">Evaluate model</p>
+    </div>
+
+
+    <script type="text/javascript">
+        function runProgram1() {
+            window.close();
+            eel.run_train_gui()(function(res){;
+            });
+        }
+    </script>
+
+    <script type="text/javascript">
+        function runProgram2() {
+            window.close();
+            eel.run_analysis_gui()(function(res){
+            });
+        }
+    </script>
+
+    <script type="text/javascript">
+        function runProgram3() {
+            window.close();
+            eel.run_cam_gui_YMH()(function(res){
+            });
+        }
+    </script>
+
+    
+
+    <script>
+        eel.expose(displayFilePath);
+        function displayFilePath(path) {
+            document.getElementById('file-path').innerText = path;
+        }
+
+        function showFileDialog() {
+            eel.show_file_dialog();
+        }
+    </script>
+
+    <script type="text/javascript">
+        function runProgram4() {
+            window.close();
+            eel.run_evaluate_gui()(function(res){
+            });
+        }
+    </script>
+
+
+    <script type="text/javascript">
+        eel.set_host('http://localhost:8080');
+    </script>
+
+</body>
+</html>
