@@ -74,7 +74,7 @@ class camGUI:
     def startDPG(self):
         dpg.create_context()
         dpg.configure_app(
-            init_file="./layout_ini_files/custom_layout_camGUI_.ini",
+            init_file="./logs/custom_layout_camGUI_.ini",
             docking=True,
             docking_space=True,
         )
@@ -449,6 +449,7 @@ def main(confFileName):
         prc_yolo_draw = Process(target=yolo_draw.YOLOdraw, args=(d,))
         prc_tri = Process(target=yolo_tri.init_trigger)
 
+
         prc_gui.start()
         prc_imager.start()
         prc_yolo.start()
@@ -465,7 +466,7 @@ def main(confFileName):
 
 
 if __name__ == "__main__":
-    confFileName = "./config/yoru_default.yaml"
+    confFileName = "./config/yoru_demo_display.yaml"
     main(confFileName)
 
     # with Manager() as manager:

@@ -1,0 +1,90 @@
+name: demo_VR
+
+root: 'C:/Users/nokai/Documents/GitHub/Asovi_VR/'
+
+export: 'camera_test/'
+
+animal:
+ ID: 'YMH_01'
+ default_vstg: 3.2
+
+model:
+ yolo_detection: False
+ yolo_model_path: 'C:/Users/nokai/yoru/config/yolov5s.pt'
+ Trigger: False
+
+
+trigger:
+ trigger_threshold_configuration: 0.5
+ trigger_class: 'person'
+ Arduino_COM: 'None'
+ trigger_style: "straight_display"
+ 
+hardware:
+ COM: 'COM3'
+ COMFREQ: 230400
+ DAQ: 'Dev3' # Used by "Window"
+ DO_port: 'port0'
+ DO_line: 'line0:3'
+ DO_names: ['Streaming', '1', '2', '3']
+ DI_port: 'port1'
+ DI_line: 'line0:3'
+ AO_Ch: 'ao0'
+ AO_Ch_stim: 'ao1'
+ AO_type: 'sw'
+ stage_diameter: 12.0 # [cm]
+ stage_countperrot: 360.0
+ use_camera: True
+ camera_id: 0
+ camera_width: 640
+ camera_height: 480
+ camera_scale: 1
+ camera_fps: 50
+ camera_imshow: False # opencv-window
+
+window:
+ fov: 30
+ depth: 201
+ fullscreen: True
+ size: [900, 400, 1]
+ imgui: True
+ backGroundRGB: [0.1, 0.1, 0.1]
+
+world: 
+ xyz: [-1, -1, 0]
+ length: 200.0
+ geomStage: [0, 128]
+ sepNum: 2
+ sepDutycycle: 0.25
+ inf: 1
+ goal: True
+ block_backword: True
+
+player:
+ speedRate: 0.5
+ speed_twindow: 1.0
+ name: "mice"
+
+texture:
+ contrast: [0.0, 1]
+ File_floor: ['Floor_wLM_01_nolag.png', 'Floor_woLM_01_nolag.png', 'Floor_woLM_01.png']
+ File_wall: ['Wall_wLM_01_nolag.png', 'Wall_woLM_01_nolag.png', 'Wall_woLM_01.png']
+ File_Goal: ['Goal_02.png', False, False]
+ RGB: [0.75, 0.75, 0.75]
+ FreqFloor: 5.0
+ FreqWall: 10.0
+ cd_thre: .5
+ rSeed: 1
+
+task:
+ name: Endless_CL # Goal-directed, Navigation 
+ mismatch_flag: True
+ vmmismatch_dur: 1.5
+ vmmismatch_absRP: 5.0
+ floor_pertub: [[5, 15], [125, 140]]
+ floor_pertub_mag: [-0.4, -0]
+
+#  floor_pertub_mag: [0.5, -0.5, 0.5, -0.5]
+#  floor_pertub: [[25, 40], [70, 85], [125, 140], [170, 185]]
+#  floor_pertub_mag: [0.5, -0.5, 0.5, -0.5]
+

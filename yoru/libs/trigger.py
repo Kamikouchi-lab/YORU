@@ -83,6 +83,7 @@ class trigger_python:
 
     def _load_plugin(self):
         import_path = self.m_dict.get("plugin_name")
+        print(import_path)
         module = importlib.import_module(import_path)
         return module.trigger_condition()
 
