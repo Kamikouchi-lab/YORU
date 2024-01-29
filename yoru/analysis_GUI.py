@@ -10,18 +10,24 @@ import numpy as np
 # cwd = os.getcwd()
 # print(cwd)
 
+import sys
+# for path in sys.path:
+#     print(path)
 
-try:
-    from yoru.libs.file_operation_analysis import file_dialog_tk
-    from yoru.libs.init_analysis import init_analysis
-    from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
-    import yoru.app as YORU
+sys.path.append('../yoru')
+
+
+# try:
+from yoru.libs.file_operation_analysis import file_dialog_tk
+from yoru.libs.init_analysis import init_analysis
+from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
+# import yoru.app as YORU
     
-except(ModuleNotFoundError):
-    from libs.file_operation_analysis import file_dialog_tk
-    from libs.init_analysis import init_analysis
-    from libs.analysis import yolo_analysis, yolo_analysis_image
-    import app as YORU
+# except(ModuleNotFoundError):
+#     from libs.file_operation_analysis import file_dialog_tk
+#     from libs.init_analysis import init_analysis
+#     from libs.analysis import yolo_analysis, yolo_analysis_image
+#     import app as YORU
 
 
 class analyze_GUI:
@@ -328,6 +334,7 @@ class analyze_GUI:
             if self.m_dict["quit"]:  # <-- this line was modified
                 if self.m_dict["back_to_home"]:
                     # subprocess.call(["python", "./yoru/app.py"])
+                    from yoru import app as YORU
                     YORU.main()
                 dpg.destroy_context()
                 break

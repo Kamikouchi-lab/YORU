@@ -9,19 +9,23 @@ import yaml
 
 # if __name__ == "__main__":
     # Run directly
-try:
-    from yoru.libs.create_yaml_train import create_project
-    from yoru.libs.file_operation_train import file_move_random, file_dialog_tk
-    from yoru.libs.init_train import init_train, loadingParam
-    from yoru.grab_GUI import main as grab_main
-    import yoru.app as YORU
 
-except(ModuleNotFoundError):
-    from libs.create_yaml_train import create_project
-    from libs.file_operation_train import file_move_random, file_dialog_tk
-    from libs.init_train import init_train, loadingParam
-    from grab_GUI import main as grab_main
-    import app as YORU
+import sys
+sys.path.append('../yoru')
+
+# try:
+from yoru.libs.create_yaml_train import create_project
+from yoru.libs.file_operation_train import file_move_random, file_dialog_tk
+from yoru.libs.init_train import init_train, loadingParam
+from yoru.grab_GUI import main as grab_main
+# import yoru.app as YORU
+
+# except(ModuleNotFoundError):
+#     from libs.create_yaml_train import create_project
+#     from libs.file_operation_train import file_move_random, file_dialog_tk
+#     from libs.init_train import init_train, loadingParam
+#     from grab_GUI import main as grab_main
+#     import app as YORU
 # else:
 #     # from .libs import threshold
 #     from .libs.create_yaml_train import create_project
@@ -271,6 +275,7 @@ class yolo_train:
             if self.m_dict["quit"]:  # <-- this line was modified
                 if self.m_dict["back_to_home"]:
                     # subprocess.call(["python", "app.py"])
+                    from yoru import app as YORU
                     YORU.main()
                 dpg.destroy_context()
                 break

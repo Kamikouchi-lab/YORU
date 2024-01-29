@@ -10,32 +10,21 @@
     <link rel="stylesheet" href="style/style.css">
 </head>
 <body>
-
-    <div class="image-container">
-        <img src="../image/YORU_logo.png">
-    </div>
-
-
-    
-    <div class="button-container">
-        <!-- <button onclick="runProgram1()">Training</button> -->
-        <img src="../image/button_training.png" alt="Training" onclick="runProgram1()">
-        <p class="text">Creating model</p>
-    </div>
-    <div class="button-container">
-        <button onclick="runProgram2()">Behavior Analysis</button>
-        <p class="text">Behavioral analysis</p>
-    </div>
-    <div class="button-container">
-        <img src="../image/button_realtime.png" alt="Real-time Behavior Detection" onclick="runProgram3()">
-        <!-- <button onclick="runProgram3()">Real-time Behavior Detection</button> -->
-        <p class="text">Realtime system</p>
-        <button onclick="showFileDialog()">Select condition file</button>
-        <p id="file-path"></p>
-    </div>
-    <div class="button-container">
-        <button onclick="runProgram4()">Model Evaluation</button>
-        <p class="text">Evaluate model</p>
+    <div class="button-grid">
+        <div class="button-container">
+            <img src="../image/YORU_training_button.png" alt="Training" onclick="runProgram1()">
+        </div>
+        <div class="button-container">
+            <img src="../image/YORU_evaluation_button.png" alt="Model Evaluation" onclick="runProgram4()">
+        </div>
+        <div class="button-container">
+            <img src="../image/YORU_video_button.png" alt="Behavior Analysis" onclick="runProgram2()">
+        </div>
+        <div class="button-container">
+            <img src="../image/YORU_realtime_button.png" alt="Real-time Behavior Detection" onclick="runProgram3()">
+            <button onclick="showFileDialog()">Select</button>
+            <p id="file-path">ここに文字が表示されます</p>
+        </div>
     </div>
 
 
@@ -63,7 +52,13 @@
         }
     </script>
 
-    
+    <script type="text/javascript">
+        eel.print_file_path()(function(result){
+            document.getElementById('file-path').innerText = result;
+        });
+    </script>
+
+
 
     <script>
         eel.expose(displayFilePath);

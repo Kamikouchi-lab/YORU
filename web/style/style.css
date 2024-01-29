@@ -2,17 +2,25 @@
 body {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
   height: 100vh;
   margin: 0;
-  padding: 0;
+  padding-bottom: 50px;
   box-sizing: border-box;
-  background-image: url('../image/back.jpg');
+  background-image: url('../image/back.png');
   background-size: cover;
   color: black; /* テキストの色を白に変更 */
   cursor: url('../image/cursor.png')16 16, auto;
   position: relative;
+}
+
+
+.button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 2列のグリッドを作成 */
+  grid-gap: 10px; /* グリッドのギャップ */
+  margin-bottom: 0; /* 画面下部の余白 */
 }
 
 .text {
@@ -26,25 +34,20 @@ body {
 .button-container {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  align-items: center; 
+  /* gap: 15px; */
   cursor: url('../image/cursor.png')16 16, auto;
   
 }
 
-.button-container button {
-  padding: 15px 35px;
-  font-size: 15px;
-  background-color: #464646;
-  color: white;
-  cursor: url('../image/cursor.png')16 16, auto;
-}
+
 
 .button-container img {
-  width: 100px; /* 画像の幅 */
+  width: 400px; /* 画像の幅 */
   height: auto; /* 画像の高さを比率を保って自動調整 */
   cursor: pointer; /* カーソルをポインターに変更 */
   border: none; /* ボーダーなし */
-  margin: 10px 0; /* 上下の余白 */
+  margin: 15px 15px; /* 上下の余白 */
   cursor: url('../image/cursor.png')16 16, auto;
 }
 
@@ -59,6 +62,22 @@ body {
   height: auto; /* This will keep the aspect ratio of the image intact */
   /* cursor: url(../image/cursor.png),auto; */
   cursor: url('../image/cursor.png')16 16, auto;
+}
+
+.button-container button {
+  padding: 5px;
+  font-size: 15px;
+  background-color: #464646;
+  color: white;
+  cursor: url('../image/cursor.png')16 16, auto;
+}
+
+.button-container p {
+  background-color: rgb(199, 199, 199); /* 背景色をグレーに設定 */
+  font-size: 12px;
+  margin-left: 10px; /* ボタンとの間隔 */
+  padding: 5px; /* 内側の余白 */
+  /* 他に必要なスタイルがあればここに追加 */
 }
 
 /* .hoge {

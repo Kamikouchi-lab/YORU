@@ -7,11 +7,15 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 from pynput import keyboard
 
-try:
-    from yoru.libs.file_operation_grab import file_dialog_tk
+
+import sys
+sys.path.append('../yoru')
+
+# try:
+from yoru.libs.file_operation_grab import file_dialog_tk
     
-except(ModuleNotFoundError):
-    from libs.file_operation_grab import file_dialog_tk
+# except(ModuleNotFoundError):
+#     from libs.file_operation_grab import file_dialog_tk
 
 
 class grab_gui:

@@ -10,17 +10,19 @@ import numpy as np
 import yaml
 from pynput import keyboard
 
-try:
-    from yoru.libs.file_operation_evaluation import file_dialog_tk
-    from yoru.libs.init_evaluation import init_evaluater
-    from yoru.libs.evaluation_calculation import yolo_analysis_image, Evaluator
-    import yoru.app as YORU
+import sys
+sys.path.append('../yoru')
+
+from yoru.libs.file_operation_evaluation import file_dialog_tk
+from yoru.libs.init_evaluation import init_evaluater
+from yoru.libs.evaluation_calculation import yolo_analysis_image, Evaluator
+# import yoru.app as YORU
     
-except(ModuleNotFoundError):
-    from libs.file_operation_evaluation import file_dialog_tk
-    from libs.init_evaluation import init_evaluater
-    from libs.evaluation_calculation import yolo_analysis_image, Evaluator
-    import app as YORU
+# except(ModuleNotFoundError):
+#     from libs.file_operation_evaluation import file_dialog_tk
+#     from libs.init_evaluation import init_evaluater
+#     from libs.evaluation_calculation import yolo_analysis_image, Evaluator
+#     import app as YORU
 
 
 
@@ -185,6 +187,7 @@ class model_eval_gui:
             if self.m_dict["quit"]:
                 if self.m_dict["back_to_home"]:
                     # subprocess.call(["python", "app.py"])
+                    from yoru import app as YORU
                     YORU.main()
                 dpg.destroy_context()
                 break

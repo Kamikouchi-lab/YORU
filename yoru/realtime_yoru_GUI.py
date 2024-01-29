@@ -18,30 +18,34 @@ import numpy as np
 import pyglet
 
 
-try:
-    from yoru.libs.file_operation_realtime import file_dialog_tk
-    from yoru.libs.imager import capture_streamCV2, capture_streamMSS, select_run
-    from yoru.libs.init_realtime import init_asovi
-    from yoru.libs.trigger import read_condition, yolo_trigger
-    from yoru.libs.util import loadingParam
-    # from yoru.libs.Window import Window
-    from yoru.libs.detection import yolo_detection
-    from yoru.libs.drawing import yolo_drawing
-    import yoru.app as YORU
+# try:
+
+import sys
+sys.path.append('../yoru')
+
+from yoru.libs.file_operation_realtime import file_dialog_tk
+from yoru.libs.imager import capture_streamCV2, capture_streamMSS, select_run
+from yoru.libs.init_realtime import init_asovi
+from yoru.libs.trigger import read_condition, yolo_trigger
+from yoru.libs.util import loadingParam
+# from yoru.libs.Window import Window
+from yoru.libs.detection import yolo_detection
+from yoru.libs.drawing import yolo_drawing
+
     
-except(ModuleNotFoundError):
-    # import app
-    from libs.file_operation_realtime import file_dialog_tk
-    from libs.imager import capture_streamCV2, capture_streamMSS, select_run
-    from libs.init_realtime import init_asovi
-    # from triggers.trigger_default import yolo_trigger, read_com
-    # from libs.trigger_fix import read_condition, yolo_trigger
-    from libs.trigger import read_condition, yolo_trigger
-    from libs.util import loadingParam
-    # from libs.Window import Window
-    from libs.detection import yolo_detection
-    from libs.drawing import yolo_drawing
-    import app as YORU
+# except(ModuleNotFoundError):
+#     # import app
+#     from libs.file_operation_realtime import file_dialog_tk
+#     from libs.imager import capture_streamCV2, capture_streamMSS, select_run
+#     from libs.init_realtime import init_asovi
+#     # from triggers.trigger_default import yolo_trigger, read_com
+#     # from libs.trigger_fix import read_condition, yolo_trigger
+#     from libs.trigger import read_condition, yolo_trigger
+#     from libs.util import loadingParam
+#     # from libs.Window import Window
+#     from libs.detection import yolo_detection
+#     from libs.drawing import yolo_drawing
+#     import app as YORU
 
 
 class camGUI:
@@ -306,6 +310,9 @@ class camGUI:
             if self.m_dict["quit"]:
                 if self.m_dict["back_to_home"]:
                     # subprocess.call(["python", "app.py"])
+
+                    from yoru import app as YORU
+                    
                     YORU.main()
                 dpg.destroy_context()  # <-- moved from __del__
                 break

@@ -28,11 +28,13 @@ class yolo_analysis:
         while len(pre_mat) > len(cur_mat):
             cur_mat.append((-1000, -1000))
 
-        if cur_mat is None:
+        if actual_cur_num < 1:
             return None
         pre_mat = torch.tensor(pre_mat).type(torch.float64)
         cur_mat = torch.tensor(cur_mat).type(torch.float64)
 
+        # print(pre_mat , "pre_mat")
+        # print(cur_mat , "cur_mat")
         matrix = torch.cdist(pre_mat, cur_mat)
         matrix = matrix.numpy()
         match_mat = Munkres().compute(matrix)
@@ -108,6 +110,7 @@ class yolo_analysis:
             process_times = []
 
             result_list = []
+            pre_ids = []
 
             while video.isOpened():
                 ret, frame = video.read()
@@ -165,17 +168,25 @@ class yolo_analysis:
                     # トラッキングの実装
                     id_matrix = self.cal_id(pre_center_pos, cur_center_pos)
                     cur_ids = []
-                    # id_matrixを今のフレームで並び替える
-                    id_matrix.sort(key=lambda x: x[1] if x[1] >= 0 else float("inf"))
-                    for ids in id_matrix:
-                        if ids[0] == -1 or ids[1] == -1:
-                            cur_ids.append(global_counter)
-                            global_counter += 1
-                        else:
-                            cur_ids.append(pre_ids[ids[0]])
-                    # リストの結合
-                    result = [x + [y] for x, y in zip(result, cur_ids)]
-                    # print(result)
+                    # if id_matrix is None:
+                    # print(id_matrix)
+                    if id_matrix is not None:
+                        # id_matrixを今のフレームで並び替える
+                        id_matrix.sort(key=lambda x: x[1] if x[1] >= 0 else float("inf"))
+                        for ids in id_matrix:
+                            if ids[0] == -1 or ids[1] == -1:
+                                cur_ids.append(global_counter)
+                                global_counter += 1
+                            else:
+                                if 0 <= ids[0] < len(pre_ids):
+                                    cur_ids.append(pre_ids[ids[0]])
+                                else:
+                                    # 範囲外の場合の処理（例：新しいIDを割り当てる）
+                                    cur_ids.append(global_counter)
+                                    global_counter += 1
+                        # リストの結合
+                        result = [x + [y] for x, y in zip(result, cur_ids)]
+                        # print(result)
 
                     pre_ids = cur_ids
                     pre_center_pos = cur_center_pos
