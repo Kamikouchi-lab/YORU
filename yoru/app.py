@@ -23,7 +23,7 @@ from yoru import train_GUI
 #     import train_GUI
 
 
-default_condition_file_path = "../config/yoru_default.yaml"
+default_condition_file_path = "./config/yoru_default.yaml"
 condition_file_path = default_condition_file_path
 
 def create_default_json():
@@ -84,7 +84,7 @@ def show_file_dialog():
 
 def update_json_config_file(new_path):
     data = {"config_file": new_path}
-    with open("../logs/condition_file_log.json", "w") as file:
+    with open("./logs/condition_file_log.json", "w") as file:
         json.dump(data, file)
 
 def path_to_ab(rel_path):

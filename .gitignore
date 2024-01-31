@@ -16,6 +16,9 @@ __pycache__/
 *.npy
 *.xml
 
+#log files
+condition_file_log.json
+
 # Distribution / packaging
 .Python
 build/

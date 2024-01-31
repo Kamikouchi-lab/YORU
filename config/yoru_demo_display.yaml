@@ -10,8 +10,11 @@ animal:
 
 model:
  yolo_detection: False
- yolo_model_path: 'C:/Users/nokai/yoru/config/yolov5s.pt'
+ yolo_model_path: './config/yolov5s.pt'
  Trigger: False
+
+capture_style:
+ stream_MSS: False
 
 
 trigger:

@@ -33,6 +33,9 @@ class init_asovi:
         self.m_dict["do"] = self.listCh(self.conf["hardware"]["DO_line"], False)
         self.m_dict["full_screen"] = self.conf["window"]["fullscreen"]
 
+        # camera or screencapture
+        self.m_dict["stream_MSS"] = self.conf["capture_style"]["stream_MSS"]
+
         # - Camera:
         self.m_dict["camera_id"] = self.conf["hardware"]["camera_id"]
         self.m_dict["camera_width"] = self.conf["hardware"]["camera_width"]

@@ -432,7 +432,7 @@ def main(confFileName):
         init_md = init_asovi(config_file=confFileName, m_dict=d)
 
         # MSS or Camera
-        d["stream_MSS"] = False
+        # d["stream_MSS"] = False
         if d["stream_MSS"]:
             SR = select_run(m_dict=d)
             SR.main()

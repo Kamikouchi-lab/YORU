@@ -388,7 +388,7 @@ class yolo_train:
         # train
         cmd = [
             "python",
-            "./yolov5/train.py",
+            "./libs/yolov5/train.py",
             "--imgsz",
             str(self.m_dict["img"]),
             "--batch-size",

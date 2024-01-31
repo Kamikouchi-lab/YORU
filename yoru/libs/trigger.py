@@ -5,6 +5,8 @@ import time
 
 import serial
 import serial.tools.list_ports
+import sys
+sys.path.append('../yoru')
 
 
 class yolo_trigger:
