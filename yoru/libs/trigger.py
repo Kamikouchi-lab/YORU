@@ -1,12 +1,13 @@
 import glob
 import importlib
 import os
+import sys
 import time
 
 import serial
 import serial.tools.list_ports
-import sys
-sys.path.append('../yoru')
+
+sys.path.append("../yoru")
 
 
 class yolo_trigger:

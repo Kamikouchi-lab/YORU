@@ -7,7 +7,7 @@ import torch
 
 try:
     from yoru.libs.util import loadingParam
-except(ModuleNotFoundError):
+except ModuleNotFoundError:
     from libs.util import loadingParam
 
 

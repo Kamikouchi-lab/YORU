@@ -1,9 +1,8 @@
 import time
 
+import asovi.nidaq as daq
 import serial
 import serial.tools.list_ports
-
-import asovi.nidaq as daq
 
 
 class trigger_condition:

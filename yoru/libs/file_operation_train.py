@@ -2,9 +2,9 @@ import glob
 import os
 import random
 import shutil
-from collections import Counter
 import tkinter
 import tkinter.filedialog as filedialog
+from collections import Counter
 from multiprocessing import Manager, Process
 
 import dearpygui.dearpygui as dpg
@@ -87,7 +87,6 @@ class file_move_random:
             except FileNotFoundError:
                 print(f"Don't find {i} files")
         print("complete")
-
 
 
 class file_dialog_tk:

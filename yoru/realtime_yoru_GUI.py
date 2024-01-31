@@ -17,22 +17,20 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 import pyglet
 
-
 # try:
 
-import sys
-sys.path.append('../yoru')
 
+sys.path.append("../yoru")
+
+# from yoru.libs.Window import Window
+from yoru.libs.detection import yolo_detection
+from yoru.libs.drawing import yolo_drawing
 from yoru.libs.file_operation_realtime import file_dialog_tk
 from yoru.libs.imager import capture_streamCV2, capture_streamMSS, select_run
 from yoru.libs.init_realtime import init_asovi
 from yoru.libs.trigger import read_condition, yolo_trigger
 from yoru.libs.util import loadingParam
-# from yoru.libs.Window import Window
-from yoru.libs.detection import yolo_detection
-from yoru.libs.drawing import yolo_drawing
 
-    
 # except(ModuleNotFoundError):
 #     # import app
 #     from libs.file_operation_realtime import file_dialog_tk
@@ -312,7 +310,7 @@ class camGUI:
                     # subprocess.call(["python", "app.py"])
 
                     from yoru import app as YORU
-                    
+
                     YORU.main()
                 dpg.destroy_context()  # <-- moved from __del__
                 break
@@ -455,7 +453,6 @@ def main(confFileName):
         prc_yolo = Process(target=yolo_det.detect, args=(d,))
         prc_yolo_draw = Process(target=yolo_draw.YOLOdraw, args=(d,))
         prc_tri = Process(target=yolo_tri.init_trigger)
-
 
         prc_gui.start()
         prc_imager.start()

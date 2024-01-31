@@ -1,6 +1,7 @@
 import datetime
 import os
 import subprocess
+import sys
 import time
 from multiprocessing import Manager, Process
 
@@ -10,21 +11,19 @@ import numpy as np
 import yaml
 from pynput import keyboard
 
-import sys
-sys.path.append('../yoru')
+sys.path.append("../yoru")
 
+from yoru.libs.evaluation_calculation import Evaluator, yolo_analysis_image
 from yoru.libs.file_operation_evaluation import file_dialog_tk
 from yoru.libs.init_evaluation import init_evaluater
-from yoru.libs.evaluation_calculation import yolo_analysis_image, Evaluator
+
 # import yoru.app as YORU
-    
+
 # except(ModuleNotFoundError):
 #     from libs.file_operation_evaluation import file_dialog_tk
 #     from libs.init_evaluation import init_evaluater
 #     from libs.evaluation_calculation import yolo_analysis_image, Evaluator
 #     import app as YORU
-
-
 
 
 class model_eval_gui:
@@ -188,6 +187,7 @@ class model_eval_gui:
                 if self.m_dict["back_to_home"]:
                     # subprocess.call(["python", "app.py"])
                     from yoru import app as YORU
+
                     YORU.main()
                 dpg.destroy_context()
                 break
@@ -231,11 +231,12 @@ class model_eval_gui:
                 self.m_dict["datas_dir"] = os.path.join(folder_name, "datas")
                 os.makedirs(self.m_dict["datas_dir"])
 
-            
                 self.m_dict["result_dir"] = os.path.join(folder_name, "result")
                 os.makedirs(self.m_dict["result_dir"])
 
-                self.m_dict["pr_curve_dir"] = os.path.join(self.m_dict["result_dir"], "pr_curves")
+                self.m_dict["pr_curve_dir"] = os.path.join(
+                    self.m_dict["result_dir"], "pr_curves"
+                )
                 os.makedirs(self.m_dict["pr_curve_dir"])
 
                 with open(file_path, "a") as yf:
@@ -245,7 +246,6 @@ class model_eval_gui:
                             "evaluate_datas_dir": self.m_dict["datas_dir"],
                             "evaluate_pr_curve_dir": self.m_dict["pr_curve_dir"],
                             "evaluation_info_date": datetime.date.today(),
-                            
                         },
                         yf,
                     )

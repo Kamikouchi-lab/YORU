@@ -1,9 +1,8 @@
 import time
 
+import asovi.arduino as ard
 import serial
 import serial.tools.list_ports
-
-import asovi.arduino as ard
 
 
 class trigger_condition:

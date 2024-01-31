@@ -8,11 +8,10 @@ class trigger_condition:
     def __init__(self):
         window_width = 200
         window_height = 200
-        self.window_name = 'Color Changer'
+        self.window_name = "Color Changer"
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self.window_name, window_height, window_width)
 
-        
         self.black_img = np.ones((window_height, window_width, 3), np.uint8) * 0
 
         self.red_img = np.zeros((window_height, window_width, 3), np.uint8)
@@ -21,9 +20,8 @@ class trigger_condition:
         textsize = cv2.getTextSize("Detected", font, 1, 2)[0]
         textX = (self.red_img.shape[1] - textsize[0]) // 2
         textY = (self.red_img.shape[0] + textsize[1]) // 2
-        
-        cv2.putText(self.red_img, "Detected", (textX, textY), font, 1, (0, 0, 0), 2)
 
+        cv2.putText(self.red_img, "Detected", (textX, textY), font, 1, (0, 0, 0), 2)
 
         cv2.imshow(self.window_name, self.black_img)
         cv2.waitKey(1)
@@ -39,5 +37,5 @@ class trigger_condition:
         key = cv2.waitKey(1)
 
         # If 'q' is pressed, exit the loop
-        if key == ord('q'):
+        if key == ord("q"):
             return None

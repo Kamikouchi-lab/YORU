@@ -1,8 +1,9 @@
 import cv2
 import numpy as np
 
+
 def show_color_change_window():
-    window_name = 'Color Changer'
+    window_name = "Color Changer"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, 200, 200)
 
@@ -30,7 +31,7 @@ def show_color_change_window():
         key = cv2.waitKey(1)
 
         # If 'q' is pressed, exit the loop
-        if key == ord('q'):
+        if key == ord("q"):
             break
 
         # Change color
@@ -38,5 +39,5 @@ def show_color_change_window():
 
     cv2.destroyAllWindows()
 
-show_color_change_window()
 
+show_color_change_window()

@@ -1,26 +1,19 @@
 import glob
+import itertools
+import json
 import os
 import time
 import tkinter as tk
+from collections import Counter
 from tkinter import filedialog
-from tqdm import tqdm
 
 import cv2
-import numpy as np
-import pandas as pd
-import torch
-import json
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import torch
 from tqdm import tqdm
-
-from collections import Counter
-import itertools
 
 
 class yolo_analysis_image:
@@ -81,6 +74,7 @@ class yolo_analysis_image:
                     file.write(" ".join(map(str, sublist)) + "\n")
 
         print("Complete!")
+
 
 class ModelValidation:
     def __init__(self, m_dict):
@@ -501,7 +495,7 @@ class Evaluator(ModelValidation):
     def save_dict_to_txt(self, dic, filename):
         with open(filename, "w") as file:
             json.dump(dic, file)
-    
+
     def list_counter(self, list_of_lists):
         # Extract the first element of each sublist
         # print(list_of_lists)
@@ -512,14 +506,13 @@ class Evaluator(ModelValidation):
         element_counts = Counter(first_elements)
 
         return element_counts
-    
+
     def keySort(self, dicts, reverse=False):
         dicts = sorted(dicts.items(), reverse=reverse)
         dicts = fruits = dict((x, y) for x, y in dicts)
         return dicts
-    
+
     def create_info_text(self, class_names, gt_boxs_no, pred_boxs_no):
-        
         gt_boxs_no = self.keySort(gt_boxs_no)
         pred_boxs_no = self.keySort(pred_boxs_no)
 
@@ -566,17 +559,12 @@ class Evaluator(ModelValidation):
         # count bounding boxes
         gt_boxes_no = self.list_counter(gt_boxes)
         pred_boxes_no = self.list_counter(pred_boxes)
-    
+
         # creating info txt file
         file_contents = self.create_info_text(class_names, gt_boxes_no, pred_boxes_no)
-        info_directory = os.path.join(
-            self.m_dict["result_dir"], "infomation.txt"
-        )
-        with open(info_directory, 'w') as file:
+        info_directory = os.path.join(self.m_dict["result_dir"], "infomation.txt")
+        with open(info_directory, "w") as file:
             file.write(file_contents)
-
-
-        
 
         # gt_classname_boxes = []
         # for item in gt_boxes:

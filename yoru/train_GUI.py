@@ -8,16 +8,17 @@ import dearpygui.dearpygui as dpg
 import yaml
 
 # if __name__ == "__main__":
-    # Run directly
+# Run directly
 
-import sys
-sys.path.append('../yoru')
 
+sys.path.append("../yoru")
+
+from yoru.grab_GUI import main as grab_main
 # try:
 from yoru.libs.create_yaml_train import create_project
-from yoru.libs.file_operation_train import file_move_random, file_dialog_tk
+from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.init_train import init_train, loadingParam
-from yoru.grab_GUI import main as grab_main
+
 # import yoru.app as YORU
 
 # except(ModuleNotFoundError):
@@ -276,6 +277,7 @@ class yolo_train:
                 if self.m_dict["back_to_home"]:
                     # subprocess.call(["python", "app.py"])
                     from yoru import app as YORU
+
                     YORU.main()
                 dpg.destroy_context()
                 break

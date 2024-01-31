@@ -172,7 +172,9 @@ class yolo_analysis:
                     # print(id_matrix)
                     if id_matrix is not None:
                         # id_matrixを今のフレームで並び替える
-                        id_matrix.sort(key=lambda x: x[1] if x[1] >= 0 else float("inf"))
+                        id_matrix.sort(
+                            key=lambda x: x[1] if x[1] >= 0 else float("inf")
+                        )
                         for ids in id_matrix:
                             if ids[0] == -1 or ids[1] == -1:
                                 cur_ids.append(global_counter)

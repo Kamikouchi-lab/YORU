@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import time
 from multiprocessing import Manager, Process
 
@@ -7,13 +8,11 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 from pynput import keyboard
 
-
-import sys
-sys.path.append('../yoru')
+sys.path.append("../yoru")
 
 # try:
 from yoru.libs.file_operation_grab import file_dialog_tk
-    
+
 # except(ModuleNotFoundError):
 #     from libs.file_operation_grab import file_dialog_tk
 
@@ -64,7 +63,9 @@ class grab_gui:
     def gui_configure(self):
         dpg.create_context()
         dpg.configure_app(
-            init_file="./config/custom_layout_grab.ini", docking=True, docking_space=True
+            init_file="./config/custom_layout_grab.ini",
+            docking=True,
+            docking_space=True,
         )
         dpg.create_viewport(title="ASoVi-GUI beta 0.5", width=960, height=900)
 

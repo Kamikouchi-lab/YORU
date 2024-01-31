@@ -1,21 +1,20 @@
+import json
 import os
 import subprocess
-from tkinter import Tk, filedialog
-import json
-import eel
+import sys
 from pathlib import Path
+from tkinter import Tk, filedialog
 
+import eel
 
 # if __name__ == "__main__":
 
-import sys
-sys.path.append('../yoru')
-    
+
+sys.path.append("../yoru")
+
 # try:
-from yoru import analysis_GUI
-from yoru import realtime_yoru_GUI
-from yoru import evaluation_GUI
-from yoru import train_GUI
+from yoru import analysis_GUI, evaluation_GUI, realtime_yoru_GUI, train_GUI
+
 # except(ModuleNotFoundError):
 #     import analysis_GUI
 #     import realtime_yoru_GUI
@@ -26,17 +25,19 @@ from yoru import train_GUI
 default_condition_file_path = "./config/yoru_default.yaml"
 condition_file_path = default_condition_file_path
 
+
 def create_default_json():
     log_dir = "./logs"
     log_file_path = f"{log_dir}/condition_file_log.json"
-    
+
     # ディレクトリが存在しない場合は作成
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    
+
     default_data = {"config_file": default_condition_file_path}
     with open(log_file_path, "w") as file:
         json.dump(default_data, file)
+
 
 def load_condition_file():
     global condition_file_path
@@ -61,7 +62,7 @@ def run_cam_gui_YMH():
         realtime_yoru_GUI.main(condition_file_path)
         # subprocess.Popen(["python", "cam_gui_YMH.py"])
     else:
-        print ("not find config file")
+        print("not find config file")
 
 
 @eel.expose
@@ -82,15 +83,18 @@ def show_file_dialog():
     eel.displayFilePath(condition_file_path)  # JavaScript関数にファイルパスを送る
     print(condition_file_path)
 
+
 def update_json_config_file(new_path):
     data = {"config_file": new_path}
     with open("./logs/condition_file_log.json", "w") as file:
         json.dump(data, file)
 
+
 def path_to_ab(rel_path):
     p_rel = Path(rel_path)
     p_abu = p_rel.resolve()
     return str(p_abu)
+
 
 @eel.expose
 def print_file_path():
@@ -99,6 +103,7 @@ def print_file_path():
     p_abu = p_rel.resolve()
     print(p_abu)
     return str(p_abu)
+
 
 @eel.expose
 def run_analysis_gui():
