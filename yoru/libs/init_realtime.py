@@ -23,16 +23,10 @@ class init_asovi:
         self.m_dict["back_to_home"] = False
         self.m_dict["init_finished"] = False
         self.m_dict["stream"] = False
-        self.m_dict["blackout"] = False
         self.m_dict["stg_obst"] = False
         self.m_dict["export"] = self.conf["export"]
         self.m_dict["curLog"] = "hoge.txt"
-
-        # Hardware:
-        self.m_dict["di"] = self.listCh(self.conf["hardware"]["DI_line"], False)
-        self.m_dict["do"] = self.listCh(self.conf["hardware"]["DO_line"], False)
-        self.m_dict["full_screen"] = self.conf["window"]["fullscreen"]
-
+ 
         # camera or screencapture
         self.m_dict["stream_MSS"] = self.conf["capture_style"]["stream_MSS"]
 
@@ -72,13 +66,6 @@ class init_asovi:
         )
         self.m_dict["camera_imshow"] = self.conf["hardware"]["camera_imshow"]
 
-        # Animal
-        self.m_dict["animal-id"] = self.conf["animal"]["ID"]
-        self.m_dict["vstg"] = self.conf["animal"]["default_vstg"]
-        self.m_dict["vstg_bias"] = 0.0
-        self.m_dict["lap_count"] = 0
-        self.m_dict["mm_run_count"] = 0
-
         # Camera
         # self.m_dict["camera_fps"] = 0.0
 
@@ -113,22 +100,8 @@ class init_asovi:
         self.m_dict["plugin_name"] = "trigger_plugins.straight"
 
         # VR environment
-        self.m_dict["trackID"] = 0
-        self.m_dict["fps"] = 60
-        self.m_dict["posZ"] = 0
-        self.m_dict["spd_gain"] = 1.0
-        self.m_dict["rbuf"] = 0
-        self.m_dict["spd"] = 0
-        self.m_dict["prespd"] = 0
         self.m_dict["now"] = datetime.datetime.now()
-        self.m_dict["FileNameHead"] = self.conf["animal"]["ID"]
-        self.m_dict["count2cm"] = (
-            self.conf["hardware"]["stage_diameter"]
-            * 3.1416
-            / self.conf["hardware"]["stage_countperrot"]
-        ) * self.conf["player"]["speedRate"]
-        self.m_dict["mismatch_now"] = False
-        self.m_dict["show_goal"] = self.conf["world"]["goal"]
+        self.m_dict["FileNameHead"] = self.conf["export_name"]
         self.m_dict["initialized"] = True
 
     def listCh(self, linestr="line0:3", default=False):
