@@ -38,6 +38,7 @@ YORUのインストール
   - 下記をanaconda promptで実行する。
 
     ` $ cd yoru`
+    
     ` $ python -m yoru` 
 
 
