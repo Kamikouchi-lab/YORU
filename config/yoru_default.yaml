@@ -12,7 +12,7 @@ model:
  Trigger: False
 
 capture_style:
- stream_MSS: True
+ stream_MSS: False
 
 
 trigger:
