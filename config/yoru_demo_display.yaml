@@ -17,7 +17,7 @@ capture_style:
 
 trigger:
  trigger_threshold_configuration: 0.5
- trigger_class: 'person'
+ trigger_class: 'cell phone'
  Arduino_COM: 'None'
  trigger_style: "straight_display"
  
@@ -29,4 +29,3 @@ hardware:
  camera_scale: 1
  camera_fps: 30
  camera_imshow: False # opencv-window
-
