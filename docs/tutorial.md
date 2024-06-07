@@ -1,5 +1,6 @@
 #Tutorial top page
-- Create a model
-- Analyze video
-- Closed-loop system
-- Evaluate models
+- [Install YORU](install.md)
+- [Create a model](training.md)
+- [Analyze video](analysis.md)
+- [Closed-loop system](closed-loop.md)
+- [Evaluate models](evaluation.md)
