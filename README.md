@@ -1,14 +1,21 @@
 # YORU (Your Optimal Recognition Utility)
 Online/Offline tracking analysis and closed-loop manipulation tool
 
+画像
+
+### Features
+
+- TBA
+
 
 ## Quick install
 1. Install GPU driver and [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit)
 
 2. Create virtual invironment using [YORU.yml](YORU.yml) in command prompt or Anaconda prompt
+   
      ` $ conda env create -f "YORU.ymlのパス"`
 
-3. 
+4. 
 
      
 
@@ -22,4 +29,14 @@ Online/Offline tracking analysis and closed-loop manipulation tool
 4. 仮想環境内でYORUを実行する
   - 下記をanaconda promptで実行する。
 
-     ` $ python -m yoru` 
+     ` $ python -m yoru`
+
+## Learn to YORU
+- Learn step-by-step: Tutorial(TBA)
+
+- Learn by reading: TBA
+
+# License:
+
+TBA
+
