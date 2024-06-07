@@ -32,7 +32,7 @@ Online/Offline tracking analysis and closed-loop manipulation tool
      ` $ python -m yoru`
 
 ## Learn to YORU
-- Learn step-by-step: Tutorial(TBA)
+- Learn step-by-step: [Tutorial](docs/tutorial.md)
 
 - Learn by reading: TBA
 
