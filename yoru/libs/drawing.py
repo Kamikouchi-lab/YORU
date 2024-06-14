@@ -23,8 +23,9 @@ class yolo_drawing:
 
     def drawing(self, img, results):
         # print(results)
-        for *box, conf, cls in results:
+        for *box, conf, cls, name, time in results:
             label = f"{self.names[int(cls)]} {conf:.2f}"
+            # label = f"{name} {conf:.2f}
 
             cv2.rectangle(
                 img,

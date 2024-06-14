@@ -2,6 +2,7 @@ import datetime
 import time
 import tkinter as tk
 from threading import Thread
+import csv
 
 import cv2
 import mss
@@ -48,11 +49,15 @@ class capture_streamCV2:
         self.startCapture()
         t0 = time.perf_counter()
         stream_flag = False
+        self.frame_count = 0
         while True:
             now = datetime.datetime.now()
             if (not stream_flag) & self.m_dict["stream"]:
+                file_name_base = (
+                    self.m_dict["export"] + "/" + self.m_dict["curLog"]
+                )
                 curVidName = (
-                    self.m_dict["export"] + "/" + self.m_dict["curLog"] + "_vid.avi"
+                    file_name_base  + "_vid.avi"
                 )
                 self.vwriter = cv2.VideoWriter(
                     curVidName,
@@ -61,27 +66,49 @@ class capture_streamCV2:
                     self.resized_resolution,
                     1,
                 )
-                self.currentLogFile = open(curVidName + ".log", "a+")
-                self.currentLogFile.write(
-                    "# Streaming start: " + str(datetime.datetime.now()) + "\r"
-                )
-                self.currentLogFile.write("Date, Time" + "\r")
+                # self.currentLogFile = open(curVidName + ".log", "a+")
+                # self.currentLogFile.write(
+                #     "# Streaming start: " + str(datetime.datetime.now()) + "\r"
+                # )
+                # self.currentLogFile.write("Date, Time" + "\r")
+
+                self.LogFile = open(file_name_base + "_log.csv", "a+", newline='')
+                self.log_writer = csv.writer(self.LogFile)
+                self.log_writer.writerows([[
+                    "frame",
+                    "total_time",]])
+                
+                
+                self.detectionlogfile = open(file_name_base + "_detect.csv", "a+", newline='')
+                self.rtesult_writer = csv.writer(self.detectionlogfile)
+                self.rtesult_writer.writerows([[
+                    "x1",
+                    "y1",
+                    "x2",
+                    "y2",
+                    "confidence",
+                    "class",
+                    "class_name",
+                    "total_time",]])
                 stream_flag = True
                 print("Start: Video-streaming")
 
             elif stream_flag & (not self.m_dict["stream"]):
+                self.frame_count = 0
                 # Streaming Done.
                 stream_flag = False
                 self.vwriter.release()
                 print(curVidName)
-                self.currentLogFile.close()
+                # self.currentLogFile.close()
+                self.detectionlogfile.close()
+                self.LogFile.close()
                 print("Finished: Video-streaming")
 
             # Ensure camera is connected
             if self.capture.isOpened():
                 (status, frame) = self.capture.read()
                 t1 = time.perf_counter()
-                self.total_time = t1 - self.m_dict["t0"]
+                self.m_dict["total_time"] = t1 - self.m_dict["t0"]
                 halfImg = cv2.resize(frame, self.resized_resolution)
 
                 if status:
@@ -90,9 +117,13 @@ class capture_streamCV2:
                     if self.m_dict["stream"] & stream_flag:
                         self.vwriter.write(halfImg)
                         "# Date, total time, Count, Speed, Position, Dark, Z-stage, di"
-                        self.currentLogFile.write(
-                            str(now) + ", " + str(self.total_time) + "\r"
-                        )
+                        # self.currentLogFile.write(
+                        #     str(now) + ", " + str(self.m_dict["total_time"]) + "\r"
+                        # )
+                        self.log_writer.writerows([[self.frame_count, str(self.m_dict["total_time"])]])
+                        if self.m_dict["yolo_process_state"]:
+                            self.rtesult_writer.writerows(self.m_dict["yolo_results"])
+                        self.frame_count += 1
                 else:
                     break
                 if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -164,10 +195,17 @@ class capture_streamMSS:
         self.startCapture()
         t0 = time.perf_counter()
         stream_flag = False
+        self.frame_count = 0
         while True:
             now = datetime.datetime.now()
             if (not stream_flag) & self.m_dict["stream"]:
-                curVidName = self.m_dict["export"] + self.m_dict["curLog"] + "_vid.avi"
+                file_name_base = (
+                    self.m_dict["export"] + "/" + self.m_dict["curLog"]
+                )
+                curVidName = (
+                    file_name_base  + "_vid.avi"
+                )
+
                 self.vwriter = cv2.VideoWriter(
                     curVidName,
                     self.fmt,
@@ -175,18 +213,42 @@ class capture_streamMSS:
                     self.resized_resolution,
                     1,
                 )
-                self.currentLogFile = open(curVidName + ".log", "a+")
-                self.currentLogFile.write(
-                    "# Streaming start: " + str(datetime.datetime.now()) + "\r"
-                )
-                self.currentLogFile.write("Date, Time" + "\r")
+                # self.currentLogFile = open(curVidName + ".log", "a+")
+                
+                # self.currentLogFile.write(
+                #     "# Streaming start: " + str(datetime.datetime.now()) + "\r"
+                # )
+                # self.currentLogFile.write("Date, Time" + "\r")
+
+                self.LogFile = open(file_name_base + "_log.csv", "a+", newline='')
+                self.log_writer = csv.writer(self.LogFile)
+                self.log_writer.writerows([[
+                    "frame",
+                    "total_time",]])
+                
+                
+                self.detectionlogfile = open(file_name_base + "_detect.csv", "a+", newline='')
+                self.rtesult_writer = csv.writer(self.detectionlogfile)
+                self.rtesult_writer.writerows([[
+                    "x1",
+                    "y1",
+                    "x2",
+                    "y2",
+                    "confidence",
+                    "class",
+                    "class_name",
+                    "total_time",]])
                 stream_flag = True
                 print("Start: Video-streaming")
             elif stream_flag & (not self.m_dict["stream"]):
+                self.frame_count = 0
                 # Streaming Done.
                 stream_flag = False
                 self.vwriter.release()
-                self.currentLogFile.close()
+                print(curVidName)
+                # self.currentLogFile.close()
+                self.detectionlogfile.close()
+                self.LogFile.close()
                 print("Finished: Video-streaming")
 
             # Ensure camera is connected
@@ -194,20 +256,23 @@ class capture_streamMSS:
                 # (status, frame) = mss.capture.read()
                 frame = np.array(self.src.grab(self.disp)) * 1
                 t1 = time.perf_counter()
-                self.total_time = t1 - self.m_dict["t0"]
+                self.m_dict["total_time"] = t1 - self.m_dict["t0"]
                 halfImg = cv2.resize(frame, self.resized_resolution)
 
                 if True:
                     if self.m_dict["camera_imshow"]:
                         cv2.imshow("frame", halfImg)
                     if self.m_dict["stream"] & stream_flag:
-                        im = cv2.cvtColor(halfImg, cv2.COLOR_RGB2BGR)
-                        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-                        self.vwriter.write(im)
+                        self.vwriter.write(halfImg)
                         "# Date, total time, Count, Speed, Position, Dark, Z-stage, di"
-                        self.currentLogFile.write(
-                            str(now) + ", " + str(self.total_time) + "\r"
-                        )
+                        # self.currentLogFile.write(
+                        #     str(now) + ", " + str(self.m_dict["total_time"]) + "\r"
+                        # )
+                        self.log_writer.writerows([[self.frame_count, str(self.m_dict["total_time"])]])
+                        if self.m_dict["yolo_process_state"]:
+                            self.rtesult_writer.writerows(self.m_dict["yolo_results"])
+                        self.frame_count += 1
+
                 else:
                     break
                 if cv2.waitKey(1) & 0xFF == ord("q"):
