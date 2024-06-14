@@ -12,8 +12,8 @@ import win32gui
 from PIL import Image
 
 # プロジェクタの設定
-proj_width = 800
-proj_height = 600
+proj_width = 1280
+proj_height = 720
 proj_pos_x = -proj_width
 proj_pos_y = -proj_height
 
@@ -76,10 +76,10 @@ cv2.waitKey(1)
 #                                 bpp))
 #     return image
 
-camera_height = 480
-camera_width = 640
+camera_height = 1024
+camera_width = 1280
 camera_fps = 30
-camera_id = 0
+camera_id = 1
 
 print("CV-capture start...")
 capture = cv2.VideoCapture(camera_id)
@@ -110,8 +110,8 @@ def projection_image(image, wait=False):
 
 # サークルグリッドパターンの生成
 def generate_circle_grid(
-    proj_width=800,
-    proj_height=600,
+    proj_width=1280,
+    proj_height=720,
     circle_num_h=5,
     circle_num_w=8,
     circle_radius=16,
@@ -122,10 +122,10 @@ def generate_circle_grid(
     points = []
 
     for y in range(circle_num_h):
-        # y = circle_num_h - y - 1
+        y = circle_num_h - y - 1
         for x in range(circle_num_w):
             # カメラ・プロジェクタ配置の都合でxを逆順に
-            # x = circle_num_w - x - 1
+            x = circle_num_w - x - 1
 
             center_x = x - (circle_num_w - 1) / 2
             center_y = y - (circle_num_h - 1) / 2
@@ -149,7 +149,7 @@ def generate_circle_grid(
 # キャリブレーション，パターン投影して検出したら進む
 # circle_grid_image, proj_centers = generate_circle_grid(proj_width=proj_width, proj_height=proj_height)
 circle_grid_image, proj_centers = generate_circle_grid(
-    proj_width=proj_width, proj_height=proj_height, circle_interval=20, circle_radius=8
+    proj_width=proj_width, proj_height=proj_height, circle_interval=80, circle_radius=20
 )
 projection_image(circle_grid_image)
 
@@ -176,4 +176,4 @@ cam2proj_mat, _ = cv2.findHomography(
 )
 print(cam2proj_mat)
 
-np.save("./projecter_programs/camera_calibration.npy", cam2proj_mat)
+np.save("./camera_calibration.npy", cam2proj_mat)

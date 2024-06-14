@@ -16,8 +16,8 @@ class trigger_condition:
         print("loading....")
         # プロジェクタの設定
 
-        proj_width = 800
-        proj_height = 600
+        proj_width = 1280
+        proj_height = 720
         proj_pos_x = -proj_width
         proj_pos_y = -proj_height
         dummy_img = np.zeros((proj_height, proj_width, 3), np.uint8)
@@ -44,7 +44,7 @@ class trigger_condition:
         # cv2.imshow('prj_view', self.black_proj_img)
         # cv2.waitKey(1)
 
-        self.cam2proj_mat = np.load("./projecter_programs/camera_calibration.npy")
+        self.cam2proj_mat = np.load("./camera_calibration.npy")
         print(self.cam2proj_mat)
 
         self.past_time = 0
@@ -94,22 +94,22 @@ class trigger_condition:
                 calibration_pos_rd = self.cam2proj_point_coord(pos_rd)
                 calibration_pos_center = self.cam2proj_point_coord(pos_center)
 
-                # cv2.rectangle(proj_image,
-                #     pt1=calibration_pos_lt,
-                #     pt2=calibration_pos_rd,
-                #     color=(0, 255, 0),
-                #     thickness=-1,
-                #     lineType=cv2.LINE_4,
-                #     shift=0)
-                cv2.circle(
-                    proj_image,
-                    center=calibration_pos_center,
-                    radius=25,
+                cv2.rectangle(proj_image,
+                    pt1=calibration_pos_lt,
+                    pt2=calibration_pos_rd,
                     color=(0, 255, 0),
                     thickness=-1,
                     lineType=cv2.LINE_4,
-                    shift=0,
-                )
+                    shift=0)
+                # cv2.circle(
+                #     proj_image,
+                #     center=calibration_pos_center,
+                #     radius=25,
+                #     color=(0, 255, 0),
+                #     thickness=-1,
+                #     lineType=cv2.LINE_4,
+                #     shift=0,
+                # )
 
         # print(proj_image)
         self.projection_image(proj_image)

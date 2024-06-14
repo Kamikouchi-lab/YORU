@@ -17,15 +17,16 @@ capture_style:
 
 trigger:
  trigger_threshold_configuration: 0.5
- trigger_class: 'cell phone'
+ trigger_class: 'person'
  Arduino_COM: 'None'
- trigger_style: "straight_display"
+ trigger_style: "projecter_drawing"
  
 hardware:
  use_camera: True
- camera_id: 0
- camera_width: 640
- camera_height: 480
+ camera_id: 1
+ camera_width: 1280
+ camera_height: 1024
  camera_scale: 1
  camera_fps: 30
  camera_imshow: False # opencv-window
+
