@@ -389,15 +389,15 @@ class camGUI:
         if tf:  # streaming start
             dt = datetime.datetime.now()
             fnhead = dpg.get_value("fileName")
-            self.currentLogFileName = fnhead + dt.strftime("%Y%m%d-%H%M%S_%f") + ".log"
-            self.currentLogFile = open(
-                self.m_dict["export"] + "/" + self.currentLogFileName, "a+"
-            )
-            self.currentLogFile.write("# Streaming start: " + str(dt) + "\r")
-            self.currentLogFile.write(
-                "# Date, total time, Count, Speed, Track, Position, Dark, Z-stage, Gain_d, di0, di1, di2, di3, "
-                + "\r"
-            )
+            self.currentLogFileName = fnhead + dt.strftime("%Y%m%d-%H%M%S_%f") 
+            # self.currentLogFile = open(
+            #     self.m_dict["export"] + "/" + self.currentLogFileName, "a+"
+            # )
+            # self.currentLogFile.write("# Streaming start: " + str(dt) + "\r")
+            # self.currentLogFile.write(
+            #     "# Date, total time, Count, Speed, Track, Position, Dark, Z-stage, Gain_d, di0, di1, di2, di3, "
+            #     + "\r"
+            # )
             self.m_dict["curLog"] = self.currentLogFileName
             self.m_dict["stream"] = tf
         else:
@@ -406,8 +406,8 @@ class camGUI:
                 self.config_name,
                 self.m_dict["export"] + "/" + self.currentLogFileName + ".yaml",
             )
-            print("Saved config: ", ret)
-            self.currentLogFile.close()
+            # print("Saved config: ", ret)
+            # self.currentLogFile.close()
 
     def __del__(self):
         if hasattr(self, "quit"):

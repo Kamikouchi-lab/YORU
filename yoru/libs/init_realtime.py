@@ -26,6 +26,7 @@ class init_asovi:
         self.m_dict["stg_obst"] = False
         self.m_dict["export"] = self.conf["export"]
         self.m_dict["curLog"] = "hoge.txt"
+        self.m_dict["total_time"] = 0
  
         # camera or screencapture
         self.m_dict["stream_MSS"] = self.conf["capture_style"]["stream_MSS"]
@@ -98,6 +99,7 @@ class init_asovi:
         self.m_dict["plugins"] = []
         self.m_dict["in_plugin_name"] = self.conf["trigger"]["trigger_style"]
         self.m_dict["plugin_name"] = "trigger_plugins.straight"
+        self.m_dict["trigger_signal"] = 0
 
         # VR environment
         self.m_dict["now"] = datetime.datetime.now()

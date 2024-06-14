@@ -87,10 +87,32 @@ class yolo_detection:
                         if image.any() & self.m_dict["yolo_detection"]:
                             self.detection_result = self.yolo_model(image)
 
-                            self.m_dict["yolo_results"] = (
+                            result = (
                                 self.detection_result.xyxy[0].detach().cpu().numpy()
                             )
+                            class_ids = result[:, 5].astype(int)
+                            # class_names = [model.names[class_id] for class_id in class_ids]
+                            self.m_dict["yolo_class_names"] = [self.m_dict["class_name_list"][i] for i in class_ids]
+
+                            
+                            # object型のNumPy配列を作成
+                            yolo_results = np.empty((result.shape[0], result.shape[1] + 2), dtype=object)
+
+                            # 座標部分をコピー
+                            yolo_results[:, :-2] = result
+
+                            # クラス名を追加
+                            yolo_results[:, -2] = self.m_dict["yolo_class_names"]
+
+                            yolo_results[:, -1] = self.m_dict["total_time"]
+
+                            # 結果を保存
+                            self.m_dict["yolo_results"] = yolo_results
+
+                            # self.m_dict["yolo_results"] = [sublist + [self.m_dict["yolo_class_names"][i]] for i, sublist in enumerate(result)]
+
                             # print(self.m_dict["yolo_results"])
+                            # print(self.m_dict["yolo_class_names"])
                             # image_result = self.drawing(image, self.m_dict["yolo_results"])
                             # self.m_dict["yolo_detection_frame"] = image_result
                             self.m_dict["now"] = time.perf_counter()
