@@ -226,18 +226,18 @@ class camGUI:
                     width=100,
                     callback=lambda: self.list_in_com(),
                 )
-                dpg.add_text(label="baudrate_input", default_value="  Baudrate:")
-                dpg.add_input_text(
-                    tag="baudrate_in",
-                    default_value=self.m_dict["baudrate"],
-                    width=100,
-                    hint="integer only",
-                    callback=lambda: self.baudrate_input(),
-                )
                 dpg.add_button(
                     label="COM list load",
                     callback=lambda: self.load_COM_list(),
                     enabled=True,
+                )
+                dpg.add_text(label="pin_input", default_value="  Pin No.:")
+                dpg.add_input_text(
+                    tag="pin_in",
+                    default_value=self.m_dict["pin"],
+                    width=100,
+                    hint="integer only",
+                    callback=lambda: self.pin_input(),
                 )
             with dpg.group(horizontal=True):
                 dpg.add_text(label="title", default_value="Trigger Plugin:")
@@ -366,9 +366,9 @@ class camGUI:
         tf = dpg.get_value("com_list")
         self.m_dict["arduino_com"] = tf
 
-    def baudrate_input(self):
-        tf = dpg.get_value("baudrate_in")
-        self.m_dict["baudrate"] = tf
+    def pin_input(self):
+        tf = dpg.get_value("pin_in")
+        self.m_dict["pin"] = tf
         # if isinstance(tf, int):
         #     self.m_dict["baudrate"] = tf
         # else:

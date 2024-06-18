@@ -7,7 +7,10 @@ import time
 import serial
 import serial.tools.list_ports
 
+
 sys.path.append("../yoru")
+
+import libs.arduino as ard
 
 
 class yolo_trigger:
@@ -15,9 +18,11 @@ class yolo_trigger:
         print("== Trigger Start ==")
         self.m_dict = m_dict
         self.m_dict["Trigger"] = False
+        
 
     def init_trigger(self):
         while not self.m_dict.get("quit", False):
+            # print("a")
             if not self.m_dict.get("Trigger", False):
                 time.sleep(1)  # 1秒間スリープしてCPUの使用率を下げる
                 continue
@@ -28,11 +33,11 @@ class yolo_trigger:
             try:
                 self.arduino_tri = trigger_python(self.m_dict)
                 print("read COM clear")
-            except serial.serialutil.SerialException:
-                # self.arduino_tri.serial_close
-                print("No COM ....")
+            # except serial.serialutil.SerialException:
+            #     # self.arduino_tri.serial_close
+            #     print("No COM ....")
 
-                time.sleep(1)
+            #     time.sleep(1)
                 # continue
             except Exception as e:  # 具体的なエラーメッセージを出力
                 print(f"Error: {e}")
@@ -43,12 +48,6 @@ class yolo_trigger:
     def process_triggers(self):
         while not self.m_dict.get("quit", False) and self.m_dict.get("Trigger", False):
             try:
-                # クラス名を取得
-                self.class_ids = self.m_dict["yolo_results"][:, 5].astype(int)
-                self.m_dict["yolo_class_names"] = [
-                    self.class_list[i] for i in self.class_ids
-                ]
-
                 self.arduino_tri.trigger()
                 # print(self.m_dict["yolo_results"])
 
@@ -61,20 +60,27 @@ class yolo_trigger:
                 print("Not turning on YOLO....")
                 time.sleep(1)
                 break
+        
+        self.arduino_tri.close()
+        self.arduino_tri = None
 
 
 class trigger_python:
     def __init__(self, m_dict={}):
         self.m_dict = m_dict
         self.com = self.m_dict["arduino_com"]
-        self.ser_baudrate = int(self.m_dict.get("baudrate", 9600))
+        self.pin = self.m_dict["pin"]
+        self.myArduino = None  # 初期化
+        # self.ser_baudrate = int(self.m_dict.get("baudrate", 9600))
 
-        if self.com != "None":
-            self.ser = serial.Serial(
-                port=self.com, baudrate=self.ser_baudrate, timeout=1
-            )
+        if self.com and self.com != "None":
+            try:
+                self.myArduino = ard.dio(comport=self.com, doCh_IDs=[self.pin])
+            except PermissionError as e:
+                    print(f"Error: could not open port '{self.com}': {e}")
+                    self.myArduino = None
         else:
-            self.ser = None
+            self.myArduino = None
 
         self.tri_class = self.m_dict.get("trigger_class")
         self.m_dict["plugin_name"] = "trigger_plugins." + self.m_dict.get(
@@ -88,23 +94,28 @@ class trigger_python:
         import_path = self.m_dict.get("plugin_name")
         print(import_path)
         module = importlib.import_module(import_path)
-        return module.trigger_condition()
+        return module.trigger_condition(self.m_dict)
 
     def trigger(self):
         # self.module.trigger_condition.trigger(self.tri_class, self.m_dict['yolo_class_names'], self.ser)
         self.trigger_instance.trigger(
             self.tri_class,
             self.m_dict.get("yolo_class_names", []),
-            self.ser,
-            self.m_dict["yolo_results"].astype(int),
+            self.myArduino,
+            self.m_dict["yolo_results"],
             self.m_dict["now"],
         )
         # print("trigger_command")
 
-    def serial_close(self):
-        if self.ser:
-            self.ser.close()
+    def close(self):
+        if self.myArduino:
+            self.myArduino.writeDO_all(0)
+            print("Arduino connection closed.")
+        self.trigger_instance = None
+        print("Trigger instance set to None.")
 
+def __del__(self):
+        self.close()
 
 class read_condition:
     def __init__(self, m_dict={}):

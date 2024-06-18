@@ -19,7 +19,7 @@ trigger:
  trigger_threshold_configuration: 0.5
  trigger_class: 'person'
  Arduino_COM: 'COM3'
- trigger_style: "straight"
+ trigger_style: "straight_firmata"
  
 hardware:
  use_camera: True
@@ -27,5 +27,5 @@ hardware:
  camera_width: 640
  camera_height: 480
  camera_scale: 1
- camera_fps: 50
+ camera_fps: 30
  camera_imshow: False # opencv-window
