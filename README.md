@@ -24,8 +24,9 @@ Online/Offline tracking analysis and closed-loop manipulation tool
 5. Install [Pytorch](https://pytorch.org) depending on the CUDA versions.
 
     - For CUDA==11.8
+
     `conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia`
-    - * torch, torchvision and torchaudio will be installed.
+    - (torch, torchvision and torchaudio will be installed.)
 
 6. Run YORU in command prompt or Anaconda prompt.
 
