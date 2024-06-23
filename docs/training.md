@@ -3,7 +3,8 @@
 1. Run the YORU's Training sub-module.
 
 2. Create a project folder. (Step0)
-    - Folders and condition yaml file will be created.
+    
+    > Folders and condition yaml file will be created.
 
 3. Extract frames for labeling using Grab GUI. (Step1)
 
