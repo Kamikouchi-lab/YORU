@@ -17,7 +17,8 @@
     - For CUDA==11.8
 
     `conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia`
-    - (torch, torchvision and torchaudio will be installed.)
+    
+    >(torch, torchvision and torchaudio will be installed.)
 
 6. Run YORU in command prompt or Anaconda prompt.
 
