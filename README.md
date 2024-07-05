@@ -1,7 +1,7 @@
 # YORU (Your Optimal Recognition Utility)
 
 <img src="logos/YORU_logo.png" width="40%">
-<img src="docs/imgs/title_movie.gif" width="100%">
+<img src="docs/imgs/title_movie.gif" width="50%">
 
 “YORU” (Your Optimal Recognition Utility) is an open source animal behavior recognition system using Python. YORU can detect animal behaviors not only single-aminal behaviors but also social beahviors. YORU also provide online/offline analysis and closed-loop manipulation.
 
@@ -49,3 +49,10 @@
 
 TBA
 
+## Third-Party Libraries and Licenses
+
+This project includes code from the following repositories:
+
+- [LabelImg](https://github.com/HumanSignal/labelImg): Licensed under the MIT License
+
+- [yolov5](https://github.com/ultralytics/yolov5): Licensed under the AGPL-3.0 License
