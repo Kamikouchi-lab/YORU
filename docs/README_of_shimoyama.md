@@ -32,10 +32,14 @@ YORUのインストール
    - CUDA==11.8 の場合
      `conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia`
 
-4. 仮想環境内でYORUを実行する
+4. YORUのレポジトリーを自分のパソコンにクローン、もしくはダウンロードする。
+
+5. 仮想環境内でYORUを実行する
   - 下記をanaconda promptで実行する。
 
-     ` $ python -m yoru` 
+    ` $ cd yoru`
+    
+    ` $ python -m yoru` 
 
 
 ## 2.Training
