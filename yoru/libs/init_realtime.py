@@ -4,11 +4,15 @@ import time
 
 import numpy as np
 import torch
+import sys
 
-try:
-    from yoru.libs.util import loadingParam
-except ModuleNotFoundError:
-    from libs.util import loadingParam
+sys.path.append("../yoru")
+from yoru.libs.util import loadingParam
+
+# try:
+#     from yoru.libs.util import loadingParam
+# except ModuleNotFoundError:
+#     from libs.util import loadingParam
 
 
 class init_asovi:
