@@ -1,7 +1,3 @@
-[submodule "libs/labelImg"]
-	path = libs/labelImg
-	url = https://github.com/HumanSignal/labelImg.git
-	branch = master
 [submodule "libs/yolov5"]
 	path = libs/yolov5
 	url = https://github.com/ultralytics/yolov5.git
