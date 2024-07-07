@@ -81,7 +81,7 @@
 
 # License:
 
-TBA
+AGPL-3.0 License:  YORU is intended for research/academic/personal use only. See the [LICENSE](LICENSE) file for more details.
 
 # Third-Party Libraries and Licenses
 
