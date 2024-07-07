@@ -92,7 +92,7 @@ class yolo_detection:
                             )
                             class_ids = result[:, 5].astype(int)
                             # class_names = [model.names[class_id] for class_id in class_ids]
-                            self.m_dict["yolo_class_names"] = [self.m_dict["class_name_list"][i] for i in class_ids]
+                            yoru_names_list = [self.m_dict["class_name_list"][i] for i in class_ids]
 
                             
                             # object型のNumPy配列を作成
@@ -102,7 +102,8 @@ class yolo_detection:
                             yolo_results[:, :-2] = result
 
                             # クラス名を追加
-                            yolo_results[:, -2] = self.m_dict["yolo_class_names"]
+                            yolo_results[:, -2] = yoru_names_list
+                            self.m_dict["yolo_class_names"] = yoru_names_list
 
                             yolo_results[:, -1] = self.m_dict["total_time"]
 

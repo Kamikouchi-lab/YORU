@@ -84,7 +84,7 @@ class init_asovi:
         # trigger conditions
         self.m_dict["Trigger"] = False
         self.m_dict["COM_list"] = []
-        self.m_dict["baudrate"] = 9600
+        self.m_dict["pin"] = 13
         self.m_dict["trigger_th_conf"] = self.conf["trigger"][
             "trigger_threshold_configuration"
         ]
