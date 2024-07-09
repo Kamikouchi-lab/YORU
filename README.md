@@ -23,7 +23,7 @@
     b. Clone repository
 
     ```
-    cd path¥to¥download
+    cd "Path/to/download"
     git clone https://github.com/Kamikouchi-lab/YORU.git 
     ```
 
@@ -54,7 +54,7 @@
 6. Run YORU in command prompt or Anaconda prompt.
 
     ```
-    conda activate yoru"
+    conda activate yoru
     cd "Peth/to/YORU/project/folder"
     python -m yoru
     ```
