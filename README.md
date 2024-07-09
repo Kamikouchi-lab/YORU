@@ -13,15 +13,6 @@
 
 # Quick install
 1. Download or clone the YORU project.
-
-    a. Download git
-
-    ```
-    conda install git
-    ```
-
-    b. Clone repository
-
     ```
     cd "Path/to/download"
     git clone https://github.com/Kamikouchi-lab/YORU.git 
