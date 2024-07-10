@@ -2,6 +2,7 @@ import os
 import time
 import tkinter as tk
 from tkinter import filedialog
+import matplotlib.pyplot as plt
 
 import cv2
 import dearpygui.dearpygui as dpg
@@ -50,6 +51,46 @@ class yolo_analysis:
 
         return ret_match_mat
 
+    def get_colormap(self, label_names, colormap_name):
+        colormap = {}
+        cmap = plt.get_cmap(colormap_name)
+        label_ids = list(range(len(label_names)))
+        for i in range(len(label_ids)):
+            rgb = [int(d) for d in np.array(cmap(float(i) / len(label_ids))) * 255][:3]
+            colormap[label_ids[i]] = tuple(rgb)
+
+        return colormap
+    
+    def drawing(self, img, box, conf, cls):
+        # print(results)
+        label = f"{self.class_names[int(cls)]} {conf:.2f}"
+        # label = f"{name} {conf:.2f}
+
+        cv2.rectangle(
+            img,
+            pt1=(int(box[0]), int(box[1])),
+            pt2=(int(box[2]), int(box[3])),
+            color=self.colormap[int(cls)],
+            thickness=4,
+            lineType=cv2.LINE_4,
+            shift=0,
+        )
+        cv2.putText(
+            img,
+            text=label,
+            org=(int(box[0]), int(box[1]) - 10),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=1.5,
+            color=self.colormap[int(cls)],
+            thickness=5,
+            lineType=cv2.LINE_4,
+        )
+            # print(label)
+        # self.m_dict["yolo_detection_farme"] = img
+        # cv2.imshow('prj_view2', img)
+        return img
+
+
     def analyze(self):
         dpg.disable_item("analyze_btn")
         dpg.disable_item("create_movie")
@@ -61,11 +102,13 @@ class yolo_analysis:
         )
 
         # クラス名の取得
-        class_names = (
+        self.class_names = (
             yolo_model.module.names
             if hasattr(yolo_model, "module")
             else yolo_model.names
         )
+
+        self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
         movie_count = len(self.mov_path_list)
         self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
@@ -131,18 +174,18 @@ class yolo_analysis:
 
                 yolo_result = yolo_model(frame)
 
-                if self.m_dict["create_video"]:
-                    # 検出結果の描画
-                    yolo_result.render()  # render()は検出結果を描画します
-                    result_frame = yolo_result.ims[0]
+                
+                    # yolo_result.render()  # render()は検出結果を描画します
+                    # result_frame = yolo_result.ims[0]
                     # フレームを出力動画に書き込む
-                    out.write(result_frame)
+
+
                 cur_center_pos = []
                 result = []
                 for *box, conf, cls in yolo_result.xyxy[0]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
                     x_center = (box[0].item() + box[2].item()) / 2
                     y_center = (box[1].item() + box[3].item()) / 2
-                    class_name = class_names[int(cls.item())]
+                    class_name = self.class_names[int(cls.item())]
 
                     # 結果をリストに保存
                     result.append(
@@ -161,6 +204,13 @@ class yolo_analysis:
                     )
 
                     cur_center_pos.append((x_center, y_center))
+
+                    if self.m_dict["create_video"]:
+                        # 検出結果の描画
+                        frame = self.drawing(frame, box, conf, cls)
+                
+                if self.m_dict["create_video"]:
+                    out.write(frame)
 
                 if self.m_dict["tracking_state"]:
                     # トラッキングの実装
@@ -254,7 +304,7 @@ class yolo_analysis:
                 out.release()
             movie_count = movie_count - 1
             self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
-            dpg.set_value("no_mov", self.m_dict["no_movies"])
+            dpg.set_value("no_mov", self.m_dict["no_movies"]),
 
         self.m_dict["estimate_time"] = "Estimated remaining time: none"
         self.m_dict["no_movies"] = "Leaving movies: none"
@@ -352,6 +402,47 @@ class yolo_analysis_image:
         self.img_path_list = self.m_dict["input_path_image"]
         self.out_path = self.m_dict["output_path"]
         print("init")
+    
+    def drawing(self, img, results):
+        # print(results)
+        for *box, conf, cls in results:
+            label = f"{self.class_names[int(cls)]} {conf:.2f}"
+            # label = f"{name} {conf:.2f}
+
+            cv2.rectangle(
+                img,
+                pt1=(int(box[0]), int(box[1])),
+                pt2=(int(box[2]), int(box[3])),
+                color=self.colormap[int(cls)],
+                thickness=4,
+                lineType=cv2.LINE_4,
+                shift=0,
+            )
+            cv2.putText(
+                img,
+                text=label,
+                org=(int(box[0]), int(box[1]) - 10),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=1.5,
+                color=self.colormap[int(cls)],
+                thickness=5,
+                lineType=cv2.LINE_4,
+            )
+            # print(label)
+        # self.m_dict["yolo_detection_farme"] = img
+        # cv2.imshow('prj_view2', img)
+        return img
+    
+
+    def get_colormap(self, label_names, colormap_name):
+        colormap = {}
+        cmap = plt.get_cmap(colormap_name)
+        label_ids = list(range(len(label_names)))
+        for i in range(len(label_ids)):
+            rgb = [int(d) for d in np.array(cmap(float(i) / len(label_ids))) * 255][:3]
+            colormap[label_ids[i]] = tuple(rgb)
+
+        return colormap
 
     def analyze_image(self):
         dpg.disable_item("analyze_img_btn")
@@ -363,11 +454,13 @@ class yolo_analysis_image:
         )
 
         # クラス名の取得
-        class_names = (
+        self.class_names = (
             yolo_model.module.names
             if hasattr(yolo_model, "module")
             else yolo_model.names
         )
+
+        self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
         image_count = len(self.img_path_list)
 
@@ -388,8 +481,12 @@ class yolo_analysis_image:
                 frame = cv2.flip(frame, 1)
 
             yolo_result = yolo_model(frame)
-            yolo_result.render()
-            result_frame = yolo_result.ims[0]
+            result_frame = self.drawing(frame, yolo_result)
+
+            # yolo_result.render()
+            # result_frame = yolo_result.ims[0]
+
+
             # フレームを出力動画に書き込む
             result_file_path = os.path.join(
                 self.out_path, file_name_without_ext + "_render.png"
@@ -401,7 +498,7 @@ class yolo_analysis_image:
             ]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
                 x_center = (box[0].item() + box[2].item()) / 2
                 y_center = (box[1].item() + box[3].item()) / 2
-                class_name = class_names[int(cls.item())]
+                class_name = self.class_names[int(cls.item())]
 
                 # 結果をリストに保存
                 result_list.append(

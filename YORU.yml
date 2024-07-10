@@ -26,7 +26,7 @@ dependencies:
       - requests
       - thop
       - tqdm
-      - ultralytics==8.0.124
+      - ultralytics==8.2.52
       - mss
       - scikit-image
       - imgui
@@ -34,7 +34,3 @@ dependencies:
       - PyOpenGL_accelerate
       - pyserial
       - pywin32
-      - labelImg==1.8.6
-
-
-# torchはcudaのバージョンに合わせてpipでインストール
