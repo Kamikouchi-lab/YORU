@@ -61,31 +61,30 @@ class yolo_analysis:
 
         return colormap
     
-    def drawing(self, img, results):
+    def drawing(self, img, box, conf, cls):
         # print(results)
-        for *box, conf, cls, name, time in results:
-            label = f"{self.class_names[int(cls)]} {conf:.2f}"
-            # label = f"{name} {conf:.2f}
+        label = f"{self.class_names[int(cls)]} {conf:.2f}"
+        # label = f"{name} {conf:.2f}
 
-            cv2.rectangle(
-                img,
-                pt1=(int(box[0]), int(box[1])),
-                pt2=(int(box[2]), int(box[3])),
-                color=self.colormap[int(cls)],
-                thickness=4,
-                lineType=cv2.LINE_4,
-                shift=0,
-            )
-            cv2.putText(
-                img,
-                text=label,
-                org=(int(box[0]), int(box[1]) - 10),
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                fontScale=1.5,
-                color=self.colormap[int(cls)],
-                thickness=5,
-                lineType=cv2.LINE_4,
-            )
+        cv2.rectangle(
+            img,
+            pt1=(int(box[0]), int(box[1])),
+            pt2=(int(box[2]), int(box[3])),
+            color=self.colormap[int(cls)],
+            thickness=4,
+            lineType=cv2.LINE_4,
+            shift=0,
+        )
+        cv2.putText(
+            img,
+            text=label,
+            org=(int(box[0]), int(box[1]) - 10),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=1.5,
+            color=self.colormap[int(cls)],
+            thickness=5,
+            lineType=cv2.LINE_4,
+        )
             # print(label)
         # self.m_dict["yolo_detection_farme"] = img
         # cv2.imshow('prj_view2', img)
@@ -109,7 +108,7 @@ class yolo_analysis:
             else yolo_model.names
         )
 
-        self.colormap = self.get_colormap(class_names, "gist_rainbow")
+        self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
         movie_count = len(self.mov_path_list)
         self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
@@ -175,13 +174,11 @@ class yolo_analysis:
 
                 yolo_result = yolo_model(frame)
 
-                if self.m_dict["create_video"]:
-                    # 検出結果の描画
-                    image_result = self.drawing(frame, yolo_result)
+                
                     # yolo_result.render()  # render()は検出結果を描画します
                     # result_frame = yolo_result.ims[0]
                     # フレームを出力動画に書き込む
-                    out.write(image_result)
+
 
                 cur_center_pos = []
                 result = []
@@ -207,6 +204,13 @@ class yolo_analysis:
                     )
 
                     cur_center_pos.append((x_center, y_center))
+
+                    if self.m_dict["create_video"]:
+                        # 検出結果の描画
+                        frame = self.drawing(frame, box, conf, cls)
+                
+                if self.m_dict["create_video"]:
+                    out.write(frame)
 
                 if self.m_dict["tracking_state"]:
                     # トラッキングの実装
@@ -401,7 +405,7 @@ class yolo_analysis_image:
     
     def drawing(self, img, results):
         # print(results)
-        for *box, conf, cls, name, time in results:
+        for *box, conf, cls in results:
             label = f"{self.class_names[int(cls)]} {conf:.2f}"
             # label = f"{name} {conf:.2f}
 
@@ -455,6 +459,8 @@ class yolo_analysis_image:
             if hasattr(yolo_model, "module")
             else yolo_model.names
         )
+
+        self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
         image_count = len(self.img_path_list)
 
