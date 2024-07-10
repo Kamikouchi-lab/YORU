@@ -257,7 +257,7 @@ class model_eval_gui:
         subprocess.call(["python", "grab_gui.py"])
 
     def labelImg_bt(self):
-        subprocess.call(["python", "./labelImg/labelImg.py"])
+        subprocess.call(["labelImg"])
 
     def yolo_detection(self):
         yolo_det = yolo_analysis_image(self.m_dict)

@@ -340,7 +340,7 @@ class yolo_train:
     def labelImg_bt(self):
         # print("quit_pushed")
         # self.m_dict["quit"] = True
-        subprocess.call(["python", "./libs/labelImg/labelImg.py"])
+        subprocess.call(["labelImg"])
         dpg.set_value("step3_state", "Complete!!")
         # dpg.destroy_context()  # <-- moved from __del__
 
