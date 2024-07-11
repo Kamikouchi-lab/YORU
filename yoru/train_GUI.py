@@ -46,7 +46,7 @@ class yolo_train:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="Training Model", width=940, height=850)
+        dpg.create_viewport(title="YORU - Training", width=940, height=850)
         imager_window = dpg.generate_uuid()
 
         # theme
