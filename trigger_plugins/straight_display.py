@@ -5,7 +5,8 @@ import numpy as np
 
 
 class trigger_condition:
-    def __init__(self):
+    def __init__(self, m_dict):
+        self.m_dict = m_dict
         window_width = 200
         window_height = 200
         self.window_name = "Color Changer"
@@ -27,7 +28,7 @@ class trigger_condition:
         cv2.waitKey(1)
         print("trigger_command")
 
-    def trigger(self, tri_cl, in_cl, ser, results, now):
+    def trigger(self, tri_cl, in_cl, Arduino, results, now):
         if tri_cl in in_cl:
             proj_img = self.red_img
         else:
