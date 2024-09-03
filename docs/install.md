@@ -4,7 +4,13 @@
 
 - eel package need to use Google Chrome.
 
-2. Download or clone the YORU project.
+1. Check the instlation of [Miniconda](https://docs.anaconda.com/miniconda/)
+
+> Anaconda's [TERMS OF SERVICE](https://legal.anaconda.com/policies/en?name=terms-of-service#terms-of-service) was changed. If you used Anaconda in an organization that has two hundred (200) or more employees or contractors, you have to be careful.
+
+> Currently, you can use miniconda freely.
+
+3. Download or clone the YORU project.
 
     a. Download git
 
@@ -19,21 +25,21 @@
     git clone https://github.com/Kamikouchi-lab/YORU.git 
     ```
 
-3. Install the GPU driver and [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit).
+4. Install the GPU driver and [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit).
 
-4. Create a virtual environment using [YORU.yml](YORU.yml) in command prompt or Anaconda prompt.
+5. Create a virtual environment using [YORU.yml](YORU.yml) in command prompt or Anaconda prompt.
    
      ```
      conda env create -f "Peth/to/YORU.yml"
      ```
 
-5. Activate the virtual environment in command prompt or Anaconda prompt.
+6. Activate the virtual environment in command prompt or miniconda prompt.
 
      ```
      conda activate yoru
      ```
 
-6. Install [Pytorch](https://pytorch.org) depending on the CUDA versions.
+7. Install [Pytorch](https://pytorch.org) depending on the CUDA versions.
 
     - For CUDA==11.8
 
@@ -43,7 +49,7 @@
     
     >(torch, torchvision and torchaudio will be installed.)
 
-7. Run YORU in command prompt or Anaconda prompt.
+8. Run YORU in command prompt or miniconda prompt.
 
     ```
     conda activate yoru
