@@ -67,7 +67,7 @@ class grab_gui:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="ASoVi-GUI beta 0.5", width=960, height=900)
+        dpg.create_viewport(title="YORU - Frame Capture", width=960, height=900)
 
         # GUI-settings
         with dpg.texture_registry(show=False):

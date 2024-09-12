@@ -80,7 +80,7 @@ class camGUI:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Real-time analysis", width=1280, height=700)
+        dpg.create_viewport(title="YORU - Real-time Process", width=1280, height=700)
 
         imager_window = dpg.generate_uuid()
         imager_window2 = dpg.generate_uuid()

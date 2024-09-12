@@ -403,31 +403,30 @@ class yolo_analysis_image:
         self.out_path = self.m_dict["output_path"]
         print("init")
     
-    def drawing(self, img, results):
+    def drawing(self, img, box, conf, cls):
         # print(results)
-        for *box, conf, cls in results:
-            label = f"{self.class_names[int(cls)]} {conf:.2f}"
+        label = f"{self.class_names[int(cls)]} {conf:.2f}"
             # label = f"{name} {conf:.2f}
 
-            cv2.rectangle(
-                img,
-                pt1=(int(box[0]), int(box[1])),
-                pt2=(int(box[2]), int(box[3])),
-                color=self.colormap[int(cls)],
-                thickness=4,
-                lineType=cv2.LINE_4,
-                shift=0,
-            )
-            cv2.putText(
-                img,
-                text=label,
-                org=(int(box[0]), int(box[1]) - 10),
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                fontScale=1.5,
-                color=self.colormap[int(cls)],
-                thickness=5,
-                lineType=cv2.LINE_4,
-            )
+        cv2.rectangle(
+            img,
+            pt1=(int(box[0]), int(box[1])),
+            pt2=(int(box[2]), int(box[3])),
+            color=self.colormap[int(cls)],
+            thickness=4,
+            lineType=cv2.LINE_4,
+            shift=0,
+        )
+        cv2.putText(
+            img,
+            text=label,
+            org=(int(box[0]), int(box[1]) - 10),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=1.5,
+            color=self.colormap[int(cls)],
+            thickness=5,
+            lineType=cv2.LINE_4,
+        )
             # print(label)
         # self.m_dict["yolo_detection_farme"] = img
         # cv2.imshow('prj_view2', img)
@@ -481,21 +480,8 @@ class yolo_analysis_image:
                 frame = cv2.flip(frame, 1)
 
             yolo_result = yolo_model(frame)
-            result_frame = self.drawing(frame, yolo_result)
 
-            # yolo_result.render()
-            # result_frame = yolo_result.ims[0]
-
-
-            # フレームを出力動画に書き込む
-            result_file_path = os.path.join(
-                self.out_path, file_name_without_ext + "_render.png"
-            )
-            cv2.imwrite(result_file_path, result_frame)
-
-            for *box, conf, cls in yolo_result.xyxy[
-                0
-            ]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
+            for *box, conf, cls in yolo_result.xyxy[0]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
                 x_center = (box[0].item() + box[2].item()) / 2
                 y_center = (box[1].item() + box[3].item()) / 2
                 class_name = self.class_names[int(cls.item())]
@@ -515,6 +501,15 @@ class yolo_analysis_image:
                         class_name,
                     ]
                 )
+
+                result_frame = self.drawing(frame, box, conf, cls)
+
+            # フレームを出力動画に書き込む
+            result_file_path = os.path.join(
+                self.out_path, file_name_without_ext + "_render.png"
+            )
+            cv2.imwrite(result_file_path, result_frame)
+
 
         # リストをデータフレームに変換
         df_results = pd.DataFrame(
