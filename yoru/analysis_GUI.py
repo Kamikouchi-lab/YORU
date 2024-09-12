@@ -96,7 +96,7 @@ class analyze_GUI:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Analysis", width=800, height=800)
+        dpg.create_viewport(title="YORU - Video Analysis", width=800, height=800)
 
         # GUI-settings
         with dpg.texture_registry(show=False):
