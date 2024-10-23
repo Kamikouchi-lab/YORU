@@ -228,10 +228,10 @@ class model_eval_gui:
                     i += 1
                 os.makedirs(folder_name)
                 print(folder_name)
-                self.m_dict["datas_dir"] = os.path.join(folder_name, "datas")
+                self.m_dict["datas_dir"] = os.path.join(folder_name, "data")
                 os.makedirs(self.m_dict["datas_dir"])
 
-                self.m_dict["result_dir"] = os.path.join(folder_name, "result")
+                self.m_dict["result_dir"] = os.path.join(folder_name, "results")
                 os.makedirs(self.m_dict["result_dir"])
 
                 self.m_dict["pr_curve_dir"] = os.path.join(
@@ -265,7 +265,7 @@ class model_eval_gui:
 
     def cal_aps_btn(self):
         evaluator = Evaluator(self.m_dict)
-        evaluator.run_evaluation(self.m_dict["datas_dir"])
+        evaluator.run_evaluation(self.m_dict["data_dir"])
 
     def quit_cb(self):
         print("quit_pushed")

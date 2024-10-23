@@ -20,7 +20,7 @@ class yolo_analysis_image:
     def __init__(self, m_dict):
         self.m_dict = m_dict
         self.yolo_model_path = self.m_dict["model_path"]
-        self.datas_path = self.m_dict["datas_dir"]
+        self.data_path = self.m_dict["data_dir"]
         print("init")
 
     def analyze_image(self):
@@ -35,7 +35,7 @@ class yolo_analysis_image:
             else yolo_model.names
         )
 
-        search_path = os.path.join(self.datas_path, "*.png")
+        search_path = os.path.join(self.data_path, "*.png")
         img_path_list = glob.glob(search_path)
         image_count = len(img_path_list)
 
@@ -50,7 +50,7 @@ class yolo_analysis_image:
 
             # 出力パスの作成
             result_txt_path = os.path.join(
-                self.datas_path, file_name_without_ext + "_yolo.txt"
+                self.data_path, file_name_without_ext + "_yolo.txt"
             )
             result = []
             for *box, conf, cls in yolo_result.xywhn[0]:
@@ -181,27 +181,6 @@ class ModelValidation:
 
         return recall, precision
 
-    # def sort_array(self, array):
-    #     """
-    #     NumPy 配列の値を小さい順に並べる関数
-
-    #     Args:
-    #         array: 並べ替える NumPy 配列
-
-    #     Returns:
-    #         sorted_array: 並べ替えられた NumPy 配列
-    #     """
-
-    #     # 配列をコピーする
-    #     sorted_array = array.copy()
-
-    #     # インデックスをソートする
-    #     sorted_indices = np.argsort(sorted_array)
-
-    #     # 配列をソートされたインデックスで並び替える
-    #     sorted_array = sorted_array[sorted_indices]
-
-    #     return sorted_array
 
     def calculate_ap(self, recalls, precisions):
         """Interpolated AP - VOC 2010 way"""
@@ -224,57 +203,6 @@ class ModelValidation:
 
         return ap
 
-    # def calculate_ap(self, recall_list, precision_list):
-    #     """
-    #     VOC 2010 way に基づく AP の計算を行う関数
-
-    #     Args:
-    #         recall_list: 各画像の recall のリスト
-    #         precision_list: 各画像の precision のリスト
-
-    #     Returns:
-    #         AP: AP の値
-    #     """
-
-    #     # 累積 precision のリストを作成する
-    #     # print("recall list", recall_list)
-    #     self.plot_precision_recall(recall_list, precision_list)
-    #     cumulative_precision_list = []
-    #     for i in range(len(precision_list)):
-    #         if i == 0:
-    #             cumulative_precision_list.append(precision_list[i])
-    #         else:
-    #             cumulative_precision_list.append(cumulative_precision_list[-1] * precision_list[i])
-
-    #     # AP を計算する
-    #     ap = 0.0
-    #     for i in range(len(recall_list)):
-    #         if recall_list[i] == 0.0:
-    #             continue
-    #         ap += (recall_list[i] * cumulative_precision_list[i])
-
-    #     return ap
-
-    # def plot_precision_recall(self, recall_list, precision_list):
-    #     """
-    #     precisions-recalls 曲線を描写する関数
-
-    #     Args:
-    #         recall_list: recall のリスト
-    #         precision_list: precision のリスト
-
-    #     Returns:
-    #         None
-    #     """
-
-    #     # 図の準備
-    #     plt.plot(recall_list, precision_list)
-    #     plt.xlabel("Recall")
-    #     plt.ylabel("Precision")
-
-    #     # 図の表示
-    #     plt.show()
-    #     plt.savefig("test_image.png")
 
 
 class Evaluator(ModelValidation):
@@ -377,87 +305,6 @@ class Evaluator(ModelValidation):
             precisions_dict,
         )
 
-        # iou_thresholds = np.arange(0.50, 1.00, 0.05)
-        # ap_50_95 = {}
-        # mAP_50_95 = {}
-        # ap_50 = {}
-        # ap_75 = {}
-        # iou_results = {}
-        # recalls_dict = {}
-        # precisions_dict = {}
-
-        # # 各クラスに対して評価を行う
-        # for class_id in tqdm(classes, desc="Processing images"):
-        #     class_aps = []
-        #     iou_per_class = []
-        #     counter = 0
-        #     for iou_thresh in iou_thresholds:
-        #         tp_list = []
-        #         fp_list = []
-        #         recall_list = []
-        #         precision_list = []
-
-        #         for list_indx, pred_box_image in enumerate(pred_boxes):
-        #             gt_box_image = gt_boxes[list_indx]
-        #             # print(pred_box_image, gt_box_image)
-        #             # pred_box_imageとgt_box_imageは各画像に対するboxの情報
-
-        #             # print(class_id)
-        #             class_gt_boxes = [
-        #                 box for box in gt_box_image if int(float(box[0])) == int(class_id)
-        #             ]
-        #             class_pred_boxes = [
-        #                 box for box in pred_box_image if int(float(box[0])) == int(class_id)
-        #             ]
-        #             # print(class_gt_boxes,"/n", class_pred_boxes)
-
-        #             tp, fp, iou_list = self.calculate_tp_fp(
-        #                 class_gt_boxes, class_pred_boxes, iou_thresh
-        #             )
-
-        #             # print(class_gt_boxes)
-        #             # print("evaluate", class_id, len(class_pred_boxes), len(class_gt_boxes) )
-        #             total_gt_elements = len(class_gt_boxes)
-        #             # print(total_gt_elements)
-        #             recall, precision = self.calculate_precision_recall(tp, fp, total_gt_elements)
-
-        #             tp_list.extend(tp)
-        #             fp_list.extend(fp)
-        #             #初回一回のみ
-        #             if counter == 0:
-        #                 iou_per_class.extend(iou_list)
-        #             recall_list.extend(recall)
-        #             precision_list.extend(precision)
-
-        #         # print(sum(recall_list), sum(precision_list))
-        #         ap = self.calculate_ap(recall_list, precision_list)
-        #         # print(ap)
-        #         class_aps.append(ap)
-        #         counter += 1
-
-        #     recalls_dict[class_id] = recall_list
-        #     precisions_dict[class_id] = precision_list
-        #     ap_50_95[class_id] = class_aps
-        #     ap_50[class_id] = class_aps[0]
-        #     ap_75[class_id] = class_aps[5]
-        #     mAP_50_95[class_id] = np.mean(class_aps)
-        #     iou_results[class_id] = iou_per_class
-
-        # mAP_50 = sum(ap_50.values()) / len(ap_50)
-        # mAP_75 = sum(ap_75.values()) / len(ap_75)
-
-        # # print(iou_results)
-
-        # return {
-        #     "AP@[.50:.05:.95]_per_class": ap_50_95,
-        #     "mAP@[.50:.05:.95]_per_class": mAP_50_95,
-        #     "AP@.50_per_class": ap_50,
-        #     "mAP@.50": mAP_50,
-        #     "AP@.75_per_class": ap_75,
-        #     "mAP@.75": mAP_75,
-        #     # "recalls": recalls_dict,
-        #     # "precisions":  precisions_dict,
-        # }, iou_results, recalls_dict, precisions_dict
 
     def read_boxes_txt(self, box_path):
         boxes_list = []
@@ -530,9 +377,52 @@ class Evaluator(ModelValidation):
             file_content += f"{class_name2}({class_num2}): {count2}\n"
 
         return file_content
+    
+    def count_correct_predictions(self, labels, predictions):
+        """
+        ラベルと予測ラベルの一致をカウントします。重複するラベルにも対応しています。
+        """
+        label_counts = Counter(labels)
+        prediction_counts = Counter(predictions)
+        correct = 0
+        for label in label_counts:
+            correct += min(label_counts[label], prediction_counts.get(label, 0))
+        return correct
+
+
+    def calculate_precision_recall(self, directory):
+        total_labels = 0
+        total_predictions = 0
+        correct_predictions = 0
+
+        for file in tqdm(os.listdir(directory)):
+            if file.endswith(".png") or file.endswith(".jpg"):
+                base_filename = file.split(".")[0]
+                label_file = os.path.join(directory, base_filename + ".txt")
+                yolo_file = os.path.join(directory, base_filename + "_yolo.txt")
+
+                if os.path.exists(label_file) and os.path.exists(yolo_file):
+                    with open(label_file, "r") as lf, open(yolo_file, "r") as yf:
+                        labels = [int(line.split()[0]) for line in lf.readlines()]
+                        predictions = [int(line.split()[0]) for line in yf.readlines()]
+
+                        total_labels += len(labels)
+                        total_predictions += len(predictions)
+
+                        correct_predictions += self.count_correct_predictions(labels, predictions)
+
+        if total_labels > 0 and total_predictions > 0:
+            recall = correct_predictions / total_labels
+            precision = correct_predictions / total_predictions
+            return precision, recall, total_labels, total_predictions, correct_predictions
+        else:
+            return 0, 0, 0, 0, 0
 
     def run_evaluation(self, image_directory):
         # ディレクトリ内の全ての画像を取得
+
+        precision, recall, total_labels, total_predictions, correct_predictions = self.calculate_precision_recall(image_directory)
+
         image_files = [
             f
             for f in os.listdir(image_directory)
@@ -566,14 +456,7 @@ class Evaluator(ModelValidation):
         with open(info_directory, "w") as file:
             file.write(file_contents)
 
-        # gt_classname_boxes = []
-        # for item in gt_boxes:
-        #     name_index = item[0]
-        #     converted_item = [class_names[int(name_index)]] + item[1:]
-        #     gt_classname_boxes.append(converted_item)
 
-        # Evaluatorで評価を実行
-        # print(len(gt_boxes), len(pred_boxes))
 
         filename = os.path.basename(self.m_dict["model_path"])
         model_base_name = os.path.splitext(filename)[0]
@@ -581,6 +464,13 @@ class Evaluator(ModelValidation):
         results, iou_res, recalls_dict, precisions_dict = self.evaluate(
             gt_boxes, pred_boxes, class_names, model_base_name
         )
+
+        # add precision and recall data
+        results["Precision of all"] = precision
+        results["Recall of all"] = recall
+        results["Total ground-truth labels"] = total_labels
+        results["Total YOLO predictions"] = total_predictions
+        results["Total correct predictions"] = correct_predictions
 
         print(results)
 
@@ -597,19 +487,7 @@ class Evaluator(ModelValidation):
         )
         iou_dataframe.to_csv(result_directory_iou)
 
-        # # recall listの出力
-        # recalls_dataframe = self.dict_to_dataframe(recalls_dict)
-        # result_directory_recalls = os.path.join(
-        #     self.m_dict["result_dir"], model_base_name + "_recalls_results" + ".csv"
-        # )
-        # recalls_dataframe.to_csv(result_directory_recalls)
 
-        # # precision listの出力
-        # precisions_dataframe = self.dict_to_dataframe(precisions_dict)
-        # result_directory_precisions = os.path.join(
-        #     self.m_dict["result_dir"], model_base_name + "_precision_results" + ".csv"
-        # )
-        # precisions_dataframe.to_csv(result_directory_precisions)
 
         # 結果の描写
         self.drawing_graph(
