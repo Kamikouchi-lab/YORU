@@ -12,7 +12,7 @@ class init_evaluater:
         self.m_dict["config_file_path"] = ""
         self.m_dict["project_dir"] = ""
         self.m_dict["result_dir"] = ""
-        self.m_dict["datas_dir"] = ""
+        self.m_dict["data_dir"] = ""
 
     def __del__(self):
         print("== Initialization finished ==.")
