@@ -11,7 +11,7 @@
 - TBA
 
 # Instractions
-[YORU Documens](https://github.com/Kamikouchi-lab/YORU_doc)
+[YORU Documents](https://kamikouchi-lab.github.io/YORU_doc/)
 
 
 # Quick install
