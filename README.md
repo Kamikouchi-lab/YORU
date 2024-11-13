@@ -10,6 +10,9 @@
 
 - TBA
 
+# Instractions
+[YORU Documens](https://github.com/Kamikouchi-lab/YORU_doc)
+
 
 # Quick install
 1. Download or clone the YORU project.
