@@ -10,7 +10,7 @@
 
 - TBA
 
-# Instractions
+# Instructions
 [YORU Documents](https://kamikouchi-lab.github.io/YORU_doc/)
 
 
@@ -72,6 +72,10 @@
 - CPU: Intel Core i9 (11th)
 - GPU: NVIDIA RTX 3080
 - Memory: DDR4 32 GB
+
+# Reference
+ - Yamanouchi, H. M., Takeuchi, R. F., Chiba, N., Hashimoto, K., Shimizu, T., Tanaka, R., & Kamikouchi, A. (2024). YORU: social behavior detection based on user-defined animal appearance using deep learning. bioRxiv (p. 2024.11.12.623320). https://doi.org/10.1101/2024.11.12.623320
+
 
 # License:
 
