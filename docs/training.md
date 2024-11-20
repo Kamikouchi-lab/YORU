@@ -12,7 +12,7 @@
 
    Ⅱ. Select Save directory. (Basically, all_label_images in the project folder is a good choice.)
 
-   Ⅲ. Decide the grabed frame name.
+   Ⅲ. Decide the grabbed frame name.
 
    IV. Cut out the screenshot.
 
@@ -24,7 +24,7 @@
 
 4. Run LabelImg and label the frames. (Step2)
 
-    > The detailed coduments is accessed in [LabelImg](https://github.com/HumanSignal/labelImg).
+    > The detailed documents are accessible in [LabelImg](https://github.com/HumanSignal/labelImg).
 
     > Save format is done in YOLO. 
 

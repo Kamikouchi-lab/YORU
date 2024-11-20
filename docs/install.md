@@ -1,10 +1,10 @@
 # Install
 
-0. Check the instlation of [Google Chrome](https://www.google.com/intl/ja/chrome/)
+0. Check the instllation of [Google Chrome](https://www.google.com/intl/ja/chrome/)
 
 - eel package need to use Google Chrome.
 
-1. Check the instlation of [Miniconda](https://docs.anaconda.com/miniconda/)
+1. Check the instllation of [Miniconda](https://docs.anaconda.com/miniconda/)
 
 > Anaconda's [TERMS OF SERVICE](https://legal.anaconda.com/policies/en?name=terms-of-service#terms-of-service) was changed. If you used Anaconda in an organization that has two hundred (200) or more employees or contractors, you have to be careful.
 
@@ -30,7 +30,7 @@
 5. Create a virtual environment using [YORU.yml](YORU.yml) in command prompt or Anaconda prompt.
    
      ```
-     conda env create -f "Peth/to/YORU.yml"
+     conda env create -f "Path/to/YORU.yml"
      ```
 
 6. Activate the virtual environment in command prompt or miniconda prompt.
@@ -49,10 +49,10 @@
     
     >(torch, torchvision and torchaudio will be installed.)
 
-8. Run YORU in command prompt or miniconda prompt.
+8. Run YORU in a command prompt or miniconda prompt.
 
     ```
     conda activate yoru
-    cd "Peth/to/YORU/project/folder"
+    cd "Path/to/YORU/project/folder"
     python -m yoru
     ```
