@@ -6,9 +6,9 @@
 
    ```
   name: Experiment name
-  export: Folde path for video exporting
+  export: Folder path for video exporting
   export_name: Name of exporting videos
-  
+  s
   model:
    yolo_model_path: Path to YORU mode
   
