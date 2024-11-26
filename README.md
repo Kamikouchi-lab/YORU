@@ -8,10 +8,18 @@
 
 ## Features
 
-- TBA
+- Comprehensive Behavior Detection: Recognizes both single-animal and social behaviors, and allows for user-defined animal appearances using deep learning techniques.
+
+- Online/Offline Analysis: Supports real-time and post-experiment data analysis.
+
+- Closed-Loop Manipulation: Enables interactive experiments with live feedback control.
+
+- User-Friendly Interface: Provide the GUI-based software.
+
+- Customizable: Allows you to customize various hardware manipulations in closed-loop system.
 
 # Instructions
-[YORU Documents](https://kamikouchi-lab.github.io/YORU_doc/)
+For detailed documentation, visit the [YORU Documents](https://kamikouchi-lab.github.io/YORU_doc/)
 
 
 # Quick install
