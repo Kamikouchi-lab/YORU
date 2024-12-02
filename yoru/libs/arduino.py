@@ -57,7 +57,9 @@ class ser_recount:
     def __init__(self, comport="COM1", rate=115200):
         print("Start serial COM @" + comport)
         self.quit = False
-        self.ser = serial.Serial(comport, rate, tｓimeout=0.1, parity=serial.PARITY_NONE)
+        self.ser = serial.Serial(
+            comport, rate, tｓimeout=0.1, parity=serial.PARITY_NONE
+        )
         if 1:
             self.t1 = threading.Thread(target=self.fun_readline, args=[self.ser])
             self.t1.setDaemon(True)

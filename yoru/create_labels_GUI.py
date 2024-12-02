@@ -239,7 +239,6 @@ class model_eval_gui:
         yolo_det = yolo_analysis_image(self.m_dict)
         yolo_det.analyze_image()
 
-
     def quit_cb(self):
         print("quit_pushed")
         self.m_dict["quit"] = True

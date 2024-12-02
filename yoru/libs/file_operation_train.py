@@ -139,12 +139,12 @@ class file_dialog_tk:
 
 if __name__ == "__main__":
     d = {}
-    d[
-        "all_label_dir"
-    ] = "C:/Users/nokai/Desktop/230719_ando_copulation_detection_YORU/labels/labels_fit_chamber"
-    d[
-        "project_dir"
-    ] = "C:/Users/nokai/Desktop/230719_ando_copulation_detection_YORU/labels"
+    d["all_label_dir"] = (
+        "C:/Users/nokai/Desktop/230719_ando_copulation_detection_YORU/labels/labels_fit_chamber"
+    )
+    d["project_dir"] = (
+        "C:/Users/nokai/Desktop/230719_ando_copulation_detection_YORU/labels"
+    )
     d["quit"] = False
     fmrd = file_move_random(d)
     fmrd.move()

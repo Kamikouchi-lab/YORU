@@ -27,7 +27,9 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilenames(
             title="Select movie files",
-            filetypes=[("movie files", ".mp4 .wmv .avi .mov .mkv .m4v")],  # ファイルフィルタ
+            filetypes=[
+                ("movie files", ".mp4 .wmv .avi .mov .mkv .m4v")
+            ],  # ファイルフィルタ
             # initialdir = "./" # 自分自身のディレクトリ
         )
         root.destroy()
@@ -39,7 +41,9 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilenames(
             title="Select image files",
-            filetypes=[("image file", ".jpeg .jpg .tiff .png .gif")],  # ファイルフィルタ
+            filetypes=[
+                ("image file", ".jpeg .jpg .tiff .png .gif")
+            ],  # ファイルフィルタ
             # initialdir = "./" # 自分自身のディレクトリ
         )
         root.destroy()

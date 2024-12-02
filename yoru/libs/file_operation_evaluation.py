@@ -39,7 +39,9 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilenames(
             title="select YOLO model",
-            filetypes=[("image file", ".jpeg .jpg .tiff .png .gif")],  # ファイルフィルタ
+            filetypes=[
+                ("image file", ".jpeg .jpg .tiff .png .gif")
+            ],  # ファイルフィルタ
             # initialdir = "./" # 自分自身のディレクトリ
         )
         root.destroy()

@@ -92,11 +92,14 @@ class yolo_detection:
                             )
                             class_ids = result[:, 5].astype(int)
                             # class_names = [model.names[class_id] for class_id in class_ids]
-                            yoru_names_list = [self.m_dict["class_name_list"][i] for i in class_ids]
+                            yoru_names_list = [
+                                self.m_dict["class_name_list"][i] for i in class_ids
+                            ]
 
-                            
                             # object型のNumPy配列を作成
-                            yolo_results = np.empty((result.shape[0], result.shape[1] + 2), dtype=object)
+                            yolo_results = np.empty(
+                                (result.shape[0], result.shape[1] + 2), dtype=object
+                            )
 
                             # 座標部分をコピー
                             yolo_results[:, :-2] = result
