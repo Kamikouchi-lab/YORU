@@ -9,13 +9,6 @@ import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 
-# cwd = os.getcwd()
-# print(cwd)
-
-
-# for path in sys.path:
-#     print(path)
-
 sys.path.append("../yoru")
 
 
@@ -23,14 +16,6 @@ from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
 # try:
 from yoru.libs.file_operation_analysis import file_dialog_tk
 from yoru.libs.init_analysis import init_analysis
-
-# import yoru.app as YORU
-
-# except(ModuleNotFoundError):
-#     from libs.file_operation_analysis import file_dialog_tk
-#     from libs.init_analysis import init_analysis
-#     from libs.analysis import yolo_analysis, yolo_analysis_image
-#     import app as YORU
 
 
 class analyze_GUI:
@@ -96,7 +81,7 @@ class analyze_GUI:
             docking=True,
             docking_space=True,
         )
-        
+
         dpg.create_viewport(title="YORU - Video Analysis", width=800, height=800)
 
         # GUI-settings

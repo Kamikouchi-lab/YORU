@@ -26,7 +26,6 @@ default_condition_file_path = "./config/yoru_default.yaml"
 condition_file_path = default_condition_file_path
 
 
-
 def create_default_json():
     log_dir = "./logs"
     log_file_path = f"{log_dir}/condition_file_log.json"

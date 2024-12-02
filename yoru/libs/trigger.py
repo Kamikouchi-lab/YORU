@@ -7,7 +7,6 @@ import time
 import serial
 import serial.tools.list_ports
 
-
 sys.path.append("../yoru")
 
 import yoru.libs.arduino as ard
@@ -18,7 +17,6 @@ class yolo_trigger:
         print("== Trigger Start ==")
         self.m_dict = m_dict
         self.m_dict["Trigger"] = False
-        
 
     def init_trigger(self):
         while not self.m_dict.get("quit", False):
@@ -38,7 +36,7 @@ class yolo_trigger:
             #     print("No COM ....")
 
             #     time.sleep(1)
-                # continue
+            # continue
             except Exception as e:  # 具体的なエラーメッセージを出力
                 print(f"Error: {e}")
                 continue
@@ -60,7 +58,7 @@ class yolo_trigger:
                 print("Not turning on YOLO....")
                 time.sleep(1)
                 break
-        
+
         self.arduino_tri.close()
         self.arduino_tri = None
 
@@ -77,8 +75,8 @@ class trigger_python:
             try:
                 self.myArduino = ard.dio(comport=self.com, doCh_IDs=[self.pin])
             except PermissionError as e:
-                    print(f"Error: could not open port '{self.com}': {e}")
-                    self.myArduino = None
+                print(f"Error: could not open port '{self.com}': {e}")
+                self.myArduino = None
         else:
             self.myArduino = None
 
@@ -114,8 +112,10 @@ class trigger_python:
         self.trigger_instance = None
         print("Trigger instance set to None.")
 
+
 def __del__(self):
-        self.close()
+    self.close()
+
 
 class read_condition:
     def __init__(self, m_dict={}):

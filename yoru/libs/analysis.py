@@ -2,10 +2,10 @@ import os
 import time
 import tkinter as tk
 from tkinter import filedialog
-import matplotlib.pyplot as plt
 
 import cv2
 import dearpygui.dearpygui as dpg
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
@@ -60,7 +60,7 @@ class yolo_analysis:
             colormap[label_ids[i]] = tuple(rgb)
 
         return colormap
-    
+
     def drawing(self, img, box, conf, cls):
         # print(results)
         label = f"{self.class_names[int(cls)]} {conf:.2f}"
@@ -85,11 +85,10 @@ class yolo_analysis:
             thickness=5,
             lineType=cv2.LINE_4,
         )
-            # print(label)
+        # print(label)
         # self.m_dict["yolo_detection_farme"] = img
         # cv2.imshow('prj_view2', img)
         return img
-
 
     def analyze(self):
         dpg.disable_item("analyze_btn")
@@ -158,9 +157,9 @@ class yolo_analysis:
             while video.isOpened():
                 ret, frame = video.read()
                 if not ret:
-                    self.m_dict[
-                        "estimate_time"
-                    ] = f"Estimated remaining time: Processing"
+                    self.m_dict["estimate_time"] = (
+                        f"Estimated remaining time: Processing"
+                    )
                     dpg.set_value("analy_time", self.m_dict["estimate_time"])
                     break
 
@@ -174,15 +173,15 @@ class yolo_analysis:
 
                 yolo_result = yolo_model(frame)
 
-                
-                    # yolo_result.render()  # render()は検出結果を描画します
-                    # result_frame = yolo_result.ims[0]
-                    # フレームを出力動画に書き込む
-
+                # yolo_result.render()  # render()は検出結果を描画します
+                # result_frame = yolo_result.ims[0]
+                # フレームを出力動画に書き込む
 
                 cur_center_pos = []
                 result = []
-                for *box, conf, cls in yolo_result.xyxy[0]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
+                for *box, conf, cls in yolo_result.xyxy[
+                    0
+                ]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
                     x_center = (box[0].item() + box[2].item()) / 2
                     y_center = (box[1].item() + box[3].item()) / 2
                     class_name = self.class_names[int(cls.item())]
@@ -208,7 +207,7 @@ class yolo_analysis:
                     if self.m_dict["create_video"]:
                         # 検出結果の描画
                         frame = self.drawing(frame, box, conf, cls)
-                
+
                 if self.m_dict["create_video"]:
                     out.write(frame)
 
@@ -256,9 +255,9 @@ class yolo_analysis:
 
                 # 残りの処理時間の見積もり
                 remaining_time_estimate = avg_process_time * remaining_frames
-                self.m_dict[
-                    "estimate_time"
-                ] = f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
+                self.m_dict["estimate_time"] = (
+                    f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
+                )
                 dpg.set_value("analy_time", self.m_dict["estimate_time"])
 
             # リストをデータフレームに変換
@@ -353,9 +352,9 @@ class yolo_analysis:
             frame = cv2.flip(frame, 0)
 
             if not ret:
-                self.m_dict[
-                    "cr_estimate_time"
-                ] = f"Estimated remaining time: Processing"
+                self.m_dict["cr_estimate_time"] = (
+                    f"Estimated remaining time: Processing"
+                )
                 dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
                 break
 
@@ -384,9 +383,9 @@ class yolo_analysis:
 
             # 残りの処理時間の見積もり
             remaining_time_estimate = avg_process_time * remaining_frames
-            self.m_dict[
-                "cr_estimate_time"
-            ] = f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
+            self.m_dict["cr_estimate_time"] = (
+                f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
+            )
             dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
 
         cap.release()
@@ -402,11 +401,11 @@ class yolo_analysis_image:
         self.img_path_list = self.m_dict["input_path_image"]
         self.out_path = self.m_dict["output_path"]
         print("init")
-    
+
     def drawing(self, img, box, conf, cls):
         # print(results)
         label = f"{self.class_names[int(cls)]} {conf:.2f}"
-            # label = f"{name} {conf:.2f}
+        # label = f"{name} {conf:.2f}
 
         cv2.rectangle(
             img,
@@ -427,11 +426,10 @@ class yolo_analysis_image:
             thickness=5,
             lineType=cv2.LINE_4,
         )
-            # print(label)
+        # print(label)
         # self.m_dict["yolo_detection_farme"] = img
         # cv2.imshow('prj_view2', img)
         return img
-    
 
     def get_colormap(self, label_names, colormap_name):
         colormap = {}
@@ -481,7 +479,9 @@ class yolo_analysis_image:
 
             yolo_result = yolo_model(frame)
 
-            for *box, conf, cls in yolo_result.xyxy[0]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
+            for *box, conf, cls in yolo_result.xyxy[
+                0
+            ]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
                 x_center = (box[0].item() + box[2].item()) / 2
                 y_center = (box[1].item() + box[3].item()) / 2
                 class_name = self.class_names[int(cls.item())]
@@ -509,7 +509,6 @@ class yolo_analysis_image:
                 self.out_path, file_name_without_ext + "_render.png"
             )
             cv2.imwrite(result_file_path, result_frame)
-
 
         # リストをデータフレームに変換
         df_results = pd.DataFrame(

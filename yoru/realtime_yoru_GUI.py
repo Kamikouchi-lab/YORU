@@ -389,7 +389,7 @@ class camGUI:
         if tf:  # streaming start
             dt = datetime.datetime.now()
             fnhead = dpg.get_value("fileName")
-            self.currentLogFileName = fnhead + dt.strftime("%Y%m%d-%H%M%S_%f") 
+            self.currentLogFileName = fnhead + dt.strftime("%Y%m%d-%H%M%S_%f")
             # self.currentLogFile = open(
             #     self.m_dict["export"] + "/" + self.currentLogFileName, "a+"
             # )

@@ -94,13 +94,15 @@ class trigger_condition:
                 calibration_pos_rd = self.cam2proj_point_coord(pos_rd)
                 calibration_pos_center = self.cam2proj_point_coord(pos_center)
 
-                cv2.rectangle(proj_image,
+                cv2.rectangle(
+                    proj_image,
                     pt1=calibration_pos_lt,
                     pt2=calibration_pos_rd,
                     color=(0, 255, 0),
                     thickness=-1,
                     lineType=cv2.LINE_4,
-                    shift=0)
+                    shift=0,
+                )
                 # cv2.circle(
                 #     proj_image,
                 #     center=calibration_pos_center,

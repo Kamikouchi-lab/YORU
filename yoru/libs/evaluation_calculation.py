@@ -181,7 +181,6 @@ class ModelValidation:
 
         return recall, precision
 
-
     def calculate_ap(self, recalls, precisions):
         """Interpolated AP - VOC 2010 way"""
         # 並び替える
@@ -202,7 +201,6 @@ class ModelValidation:
         ap = np.sum((recalls[indices + 1] - recalls[indices]) * precisions[indices + 1])
 
         return ap
-
 
 
 class Evaluator(ModelValidation):
@@ -305,7 +303,6 @@ class Evaluator(ModelValidation):
             precisions_dict,
         )
 
-
     def read_boxes_txt(self, box_path):
         boxes_list = []
 
@@ -377,7 +374,7 @@ class Evaluator(ModelValidation):
             file_content += f"{class_name2}({class_num2}): {count2}\n"
 
         return file_content
-    
+
     def count_correct_predictions(self, labels, predictions):
         """
         ラベルと予測ラベルの一致をカウントします。重複するラベルにも対応しています。
@@ -388,7 +385,6 @@ class Evaluator(ModelValidation):
         for label in label_counts:
             correct += min(label_counts[label], prediction_counts.get(label, 0))
         return correct
-
 
     def calculate_precision_recall(self, directory):
         total_labels = 0
@@ -409,19 +405,29 @@ class Evaluator(ModelValidation):
                         total_labels += len(labels)
                         total_predictions += len(predictions)
 
-                        correct_predictions += self.count_correct_predictions(labels, predictions)
+                        correct_predictions += self.count_correct_predictions(
+                            labels, predictions
+                        )
 
         if total_labels > 0 and total_predictions > 0:
             recall = correct_predictions / total_labels
             precision = correct_predictions / total_predictions
-            return precision, recall, total_labels, total_predictions, correct_predictions
+            return (
+                precision,
+                recall,
+                total_labels,
+                total_predictions,
+                correct_predictions,
+            )
         else:
             return 0, 0, 0, 0, 0
 
     def run_evaluation(self, image_directory):
         # ディレクトリ内の全ての画像を取得
 
-        precision, recall, total_labels, total_predictions, correct_predictions = self.calculate_precision_recall(image_directory)
+        precision, recall, total_labels, total_predictions, correct_predictions = (
+            self.calculate_precision_recall(image_directory)
+        )
 
         image_files = [
             f
@@ -456,8 +462,6 @@ class Evaluator(ModelValidation):
         with open(info_directory, "w") as file:
             file.write(file_contents)
 
-
-
         filename = os.path.basename(self.m_dict["model_path"])
         model_base_name = os.path.splitext(filename)[0]
 
@@ -486,8 +490,6 @@ class Evaluator(ModelValidation):
             self.m_dict["result_dir"], model_base_name + "_iou_results" + ".csv"
         )
         iou_dataframe.to_csv(result_directory_iou)
-
-
 
         # 結果の描写
         self.drawing_graph(

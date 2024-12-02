@@ -1,10 +1,10 @@
 import datetime
 import re
+import sys
 import time
 
 import numpy as np
 import torch
-import sys
 
 sys.path.append("../yoru")
 from yoru.libs.util import loadingParam
@@ -31,7 +31,7 @@ class init_asovi:
         self.m_dict["export"] = self.conf["export"]
         self.m_dict["curLog"] = "hoge.txt"
         self.m_dict["total_time"] = 0
- 
+
         # camera or screencapture
         self.m_dict["stream_MSS"] = self.conf["capture_style"]["stream_MSS"]
 
