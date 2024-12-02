@@ -3,12 +3,23 @@
 <img src="logos/YORU_logo.png" width="40%">
 <img src="docs/imgs/title_movie.gif" width="50%">
 
-“YORU” (Your Optimal Recognition Utility) is an open source animal behavior recognition system using Python. YORU can detect animal behaviors not only single-aminal behaviors but also social beahviors. YORU also provide online/offline analysis and closed-loop manipulation.
+“YORU” (Your Optimal Recognition Utility) is an open-source animal behavior recognition system using Python. YORU can detect animal behaviors, not only single-animal behaviors but also social behaviors. YORU also provides online/offline analysis and closed-loop manipulation.
 
 
 ## Features
 
-- TBA
+- Comprehensive Behavior Detection: Recognizes both single-animal and social behaviors, and allows for user-defined animal appearances using deep learning techniques.
+
+- Online/Offline Analysis: Supports real-time and post-experiment data analysis.
+
+- Closed-Loop Manipulation: Enables interactive experiments with live feedback control.
+
+- User-Friendly Interface: Provide the GUI-based software.
+
+- Customizable: Allows you to customize various hardware manipulations in closed-loop system.
+
+# Instructions
+For detailed documentation, visit the [YORU Documents](https://kamikouchi-lab.github.io/YORU_doc/)
 
 
 # Quick install
@@ -23,10 +34,10 @@
 3. Create a virtual environment using [YORU.yml](YORU.yml) in command prompt or Anaconda prompt.
    
      ```
-     conda env create -f "Peth/to/YORU.yml"
+     conda env create -f "Path/to/YORU.yml"
      ```
 
-4. Activate the virtual environment in command prompt or Anaconda prompt.
+4. Activate the virtual environment in the command prompt or Anaconda prompt.
 
      ```
      conda activate yoru
@@ -42,7 +53,7 @@
 
     - (torch, torchvision and torchaudio will be installed.)
 
-6. Run YORU in command prompt or Anaconda prompt.
+6. Run YORU in the command prompt or Anaconda prompt.
 
     ```
     conda activate yoru
@@ -51,7 +62,7 @@
     ```
 
 
-# Learn to YORU
+# Learn about YORU
 - Learn step-by-step: [Tutorial](docs/overview.md)
 
 - Learn by reading: TBA
@@ -69,6 +80,10 @@
 - CPU: Intel Core i9 (11th)
 - GPU: NVIDIA RTX 3080
 - Memory: DDR4 32 GB
+
+# Reference
+ - Yamanouchi, H. M., Takeuchi, R. F., Chiba, N., Hashimoto, K., Shimizu, T., Tanaka, R., & Kamikouchi, A. (2024). YORU: social behavior detection based on user-defined animal appearance using deep learning. bioRxiv (p. 2024.11.12.623320). https://doi.org/10.1101/2024.11.12.623320
+
 
 # License:
 

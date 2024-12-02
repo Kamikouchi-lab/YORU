@@ -12,7 +12,7 @@
 
     > Check for flips, etc., and adjust vertical and horizontal flips if any are present.
 
-5. Push the "YOLO analysis" and start analyzing.
+5. Push the "YOLO analysis" and start an analysis.
 
     > If you check "Create videos", YORU will save the videos shown in the box.
 
