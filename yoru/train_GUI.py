@@ -98,7 +98,7 @@ class yolo_train:
                 )
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="Load YOLO project",
+                    label="Load YORU project",
                     tag="load_btn",
                     width=150,
                     height=30,
@@ -110,10 +110,10 @@ class yolo_train:
                     tag="pro_name",
                     default_value="",
                     width=200,
-                    hint="YOLO project name",
+                    hint="YORU project name",
                 )
                 dpg.add_button(
-                    label="Create YOLO project",
+                    label="Create YORU project",
                     tag="cre_btn",
                     width=150,
                     height=30,
