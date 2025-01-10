@@ -1,36 +1,41 @@
-﻿name: yoru
+name: yoru
 channels:
   - defaults
+  - conda-forge
 dependencies:
-  - python=3.8
+  - python=3.9
   - pip
+  - setuptools
+  - wheel
 
   - pip:
-      - eel
-      - numpy
-      - dearpygui
-      - opencv-python
-      - pyglet
-      - pyfirmata
-      - PyYaml
-      - pandas
-      - nidaqmx
-      - pynput
-      - labelImg
-      - munkres
-      - matplotlib
-      - gitpython
-      - Pillow
-      - psutil
-      - scipy
-      - requests
+      - eel==0.16.0
+      - nidaqmx==0.9.0
+      - numpy==1.24.4
+      - dearpygui==1.11.1
+      - opencv-python==4.10.0.82
+      - pyglet==2.0.15
+      - pyfirmata==1.1.0
+      - Pyyaml==6.0.1
+      - pandas==2.0.3
+      - pynput==1.7.7
+      - labelImg==1.8.6
+      - munkres==1.1.4
+      - matplotlib==3.7.5
+      - gitpython==3.1.43
+      - Pillow==10.3.0
+      - psutil==5.9.8
+      - scipy==1.10.1
+      - seaborn==0.13.2
+      - requests==2.32.3
       - thop
-      - tqdm
+      - tqdm==4.66.4
       - ultralytics==8.2.52
-      - mss
-      - scikit-image
-      - imgui
-      - PyOpenGL
-      - PyOpenGL_accelerate
-      - pyserial
-      - pywin32
+      - ultralytics-thop==2.0.0
+      - mss==9.0.1
+      - scikit-image==0.21.0
+      - imgui==2.0.0
+      - PyOpenGL==3.1.7
+      - PyOpenGL_accelerate==3.1.7
+      - pyserial==3.5
+      - pywin32==306
