@@ -45,10 +45,10 @@ For detailed documentation, visit the [YORU Documents](https://kamikouchi-lab.gi
     
 5. Install [Pytorch](https://pytorch.org) depending on the CUDA versions.
 
-    - For CUDA==11.8
+    - For CUDA==12.1
 
     ```
-    conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+    pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
     ```
 
     - (torch, torchvision and torchaudio will be installed.)
