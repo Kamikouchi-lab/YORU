@@ -263,6 +263,14 @@ class analyze_GUI:
                     tag="h_flip_state",
                     callback=lambda: self.h_flip_cb(),
                 )
+
+                dpg.add_text(label="threshold", default_value="      Confidence threshold")
+                dpg.add_input_text(
+                    tag="conf_threshold",
+                    default_value=self.m_dict["threshold"],
+                    width=150,
+                    callback=lambda: self.in_thresh(),
+                )
             dpg.add_separator()
             dpg.add_text(label="title2", default_value="start analyzing")
             with dpg.group(horizontal=True):
@@ -490,6 +498,10 @@ class analyze_GUI:
     def tracking_condition(self):
         tf = dpg.get_value("tracking_state")
         self.m_dict["tracking_state"] = tf
+    
+    def in_thresh(self):
+        tf = dpg.get_value("conf_threshold")
+        self.m_dict["threshold"] = float(tf)
 
     def __del__(self):
         print("=== GUI window quit ===")

@@ -179,9 +179,9 @@ class yolo_analysis:
 
                 cur_center_pos = []
                 result = []
-                for *box, conf, cls in yolo_result.xyxy[
-                    0
-                ]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
+                for *box, conf, cls in yolo_result.xyxy[0]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
+                    if conf.item() <  self.m_dict["threshold"]: 
+                        break
                     x_center = (box[0].item() + box[2].item()) / 2
                     y_center = (box[1].item() + box[3].item()) / 2
                     class_name = self.class_names[int(cls.item())]

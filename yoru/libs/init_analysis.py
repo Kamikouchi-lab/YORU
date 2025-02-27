@@ -23,6 +23,8 @@ class init_analysis:
         self.m_dict["v_flip"] = False
         self.m_dict["h_flip"] = False
 
+        self.m_dict["threshold"] = 0.3
+
     def __del__(self):
         print("== Initialization finished ==.")
 
