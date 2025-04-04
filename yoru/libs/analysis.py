@@ -21,22 +21,26 @@ class yolo_analysis:
         print("init")
 
     def cal_id(self, pre_mat, cur_mat):
-        actual_cur_num = len(cur_mat)
-        actual_pre_num = len(pre_mat)
+        pre_mat_calculate = pre_mat.copy()
+        cur_mat_calculate = cur_mat.copy()
 
-        while len(cur_mat) > len(pre_mat):
-            pre_mat.append((-1000, -1000))
-        while len(pre_mat) > len(cur_mat):
-            cur_mat.append((-1000, -1000))
+
+        actual_cur_num = len(cur_mat_calculate)
+        actual_pre_num = len(pre_mat_calculate)
+
+        while len(cur_mat_calculate) > len(pre_mat_calculate):
+            pre_mat_calculate.append((-1000, -1000))
+        while len(pre_mat_calculate) > len(cur_mat_calculate):
+            cur_mat_calculate.append((-1000, -1000))
 
         if actual_cur_num < 1:
             return None
-        pre_mat = torch.tensor(pre_mat).type(torch.float64)
-        cur_mat = torch.tensor(cur_mat).type(torch.float64)
+        pre_mat_calculate = torch.tensor(pre_mat_calculate).type(torch.float64)
+        cur_mat_calculate = torch.tensor(cur_mat_calculate).type(torch.float64)
 
         # print(pre_mat , "pre_mat")
         # print(cur_mat , "cur_mat")
-        matrix = torch.cdist(pre_mat, cur_mat)
+        matrix = torch.cdist(pre_mat_calculate, cur_mat_calculate)
         matrix = matrix.numpy()
         match_mat = Munkres().compute(matrix)
 
@@ -61,30 +65,64 @@ class yolo_analysis:
 
         return colormap
 
-    def drawing(self, img, box, conf, cls):
-        # print(results)
-        label = f"{self.class_names[int(cls)]} {conf:.2f}"
-        # label = f"{name} {conf:.2f}
+    def drawing(self, result, img):
+        for res_frame_no, *res_box, res_x_center, res_y_center, res_conf, res_cls , res_class_name in result:
+        
+            # print(results)
+            label = f"{res_class_name} {res_conf:.2f}"
+            # label = f"{name} {conf:.2f}
 
-        cv2.rectangle(
-            img,
-            pt1=(int(box[0]), int(box[1])),
-            pt2=(int(box[2]), int(box[3])),
-            color=self.colormap[int(cls)],
-            thickness=4,
-            lineType=cv2.LINE_4,
-            shift=0,
-        )
-        cv2.putText(
-            img,
-            text=label,
-            org=(int(box[0]), int(box[1]) - 10),
-            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=1.5,
-            color=self.colormap[int(cls)],
-            thickness=5,
-            lineType=cv2.LINE_4,
-        )
+            cv2.rectangle(
+                img,
+                pt1=(int(res_box[0]), int(res_box[1])),
+                pt2=(int(res_box[2]), int(res_box[3])),
+                color=self.colormap[int(res_cls)],
+                thickness=4,
+                lineType=cv2.LINE_4,
+                shift=0,
+            )
+            cv2.putText(
+                img,
+                text=label,
+                org=(int(res_box[0]), int(res_box[1]) - 10),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=1.5,
+                color=self.colormap[int(res_cls)],
+                thickness=5,
+                lineType=cv2.LINE_4,
+            )
+        # print(label)
+        # self.m_dict["yolo_detection_farme"] = img
+        # cv2.imshow('prj_view2', img)
+        return img
+
+    def tracking_drawing(self, result, img):
+        for res_frame_no, *res_box, res_x_center, res_y_center, res_conf, res_cls , res_class_name, tracking_id in result:
+        
+            # print(results)
+            label = f"{res_class_name} {res_conf:.2f}"
+            label += f" id:{tracking_id}"
+            # label = f"{name} {conf:.2f}
+
+            cv2.rectangle(
+                img,
+                pt1=(int(res_box[0]), int(res_box[1])),
+                pt2=(int(res_box[2]), int(res_box[3])),
+                color=self.colormap[int(res_cls)],
+                thickness=4,
+                lineType=cv2.LINE_4,
+                shift=0,
+            )
+            cv2.putText(
+                img,
+                text=label,
+                org=(int(res_box[0]), int(res_box[1]) - 10),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=1.5,
+                color=self.colormap[int(res_cls)],
+                thickness=5,
+                lineType=cv2.LINE_4,
+            )
         # print(label)
         # self.m_dict["yolo_detection_farme"] = img
         # cv2.imshow('prj_view2', img)
@@ -203,20 +241,14 @@ class yolo_analysis:
                     )
 
                     cur_center_pos.append((x_center, y_center))
-
-                    if self.m_dict["create_video"]:
-                        # 検出結果の描画
-                        frame = self.drawing(frame, box, conf, cls)
-
-                if self.m_dict["create_video"]:
-                    out.write(frame)
+                    # print(x_center, y_center)
 
                 if self.m_dict["tracking_state"]:
                     # トラッキングの実装
                     id_matrix = self.cal_id(pre_center_pos, cur_center_pos)
                     cur_ids = []
                     # if id_matrix is None:
-                    # print(id_matrix)
+                    # print(cur_center_pos)
                     if id_matrix is not None:
                         # id_matrixを今のフレームで並び替える
                         id_matrix.sort(
@@ -226,6 +258,7 @@ class yolo_analysis:
                             if ids[0] == -1 or ids[1] == -1:
                                 cur_ids.append(global_counter)
                                 global_counter += 1
+                                # print(str(global_counter))
                             else:
                                 if 0 <= ids[0] < len(pre_ids):
                                     cur_ids.append(pre_ids[ids[0]])
@@ -233,12 +266,21 @@ class yolo_analysis:
                                     # 範囲外の場合の処理（例：新しいIDを割り当てる）
                                     cur_ids.append(global_counter)
                                     global_counter += 1
+                                    # print("b")
                         # リストの結合
                         result = [x + [y] for x, y in zip(result, cur_ids)]
                         # print(result)
 
                     pre_ids = cur_ids
                     pre_center_pos = cur_center_pos
+                
+                
+                if self.m_dict["create_video"]:
+                    if self.m_dict["tracking_state"]:
+                        frame = self.tracking_drawing(result, frame)
+                    else:
+                        frame = self.drawing(result, frame)
+                    out.write(frame)
 
                 frame_count += 1
                 result_list = result_list + result
