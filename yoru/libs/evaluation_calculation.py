@@ -21,6 +21,7 @@ class yolo_analysis_image:
         self.m_dict = m_dict
         self.yolo_model_path = self.m_dict["model_path"]
         self.data_path = self.m_dict["data_dir"]
+        print(self.m_dict)
         print("init")
 
     def analyze_image(self):
@@ -34,8 +35,10 @@ class yolo_analysis_image:
             if hasattr(yolo_model, "module")
             else yolo_model.names
         )
+        print(class_names)
 
         search_path = os.path.join(self.data_path, "*.png")
+        print(search_path)
         img_path_list = glob.glob(search_path)
         image_count = len(img_path_list)
 
