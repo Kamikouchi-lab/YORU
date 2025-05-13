@@ -206,52 +206,52 @@ class model_eval_gui:
 
     def load_pr_dir(self):
         print("load project")
-        file_path = self.m_dict["config_file_path"]
-        if not os.path.exists(file_path):
+        cfg = self.m_dict["config_file_path"]
+        if not os.path.exists(cfg):
             print("Don't find a project")
             return None
-        with open(file_path, "r") as yf:
+
+        with open(cfg, "r") as yf:
             data = yaml.safe_load(yf)
-            self.m_dict["project_dir"] = data["project_dir"]
-            if data.get("evaluation_info_date"):
-                self.m_dict["datas_dir"] = data["evaluate_datas_dir"]
-                self.m_dict["result_dir"] = data["evaluate_result_dir"]
-                self.m_dict["pr_curve_dir"] = data["evaluate_pr_curve_dir"]
+        self.m_dict["project_dir"] = data["project_dir"]
 
-            else:
-                folder_name = self.m_dict["project_dir"] + "/model_evaluation"
-                i = 1
-                while os.path.exists(folder_name):
-                    folder_name = os.path.join(
-                        self.m_dict["project_dir"], "/model_evaluation_" + str(i)
-                    )
-                    i += 1
-                os.makedirs(folder_name)
-                print(folder_name)
-                self.m_dict["datas_dir"] = os.path.join(folder_name, "data")
-                os.makedirs(self.m_dict["datas_dir"])
+        if data.get("evaluation_info_date"):
+            # 既存の evaluation 情報を読み込む
+            self.m_dict["data_dir"]      = data["evaluate_data_dir"]
+            self.m_dict["result_dir"]    = data["evaluate_result_dir"]
+            self.m_dict["pr_curve_dir"]  = data["evaluate_pr_curve_dir"]
+        else:
+            # project_dir の下に model_evaluation フォルダを作成
+            base = os.path.join(self.m_dict["project_dir"], "model_evaluation")
+            folder_name = base
+            i = 1
+            # 既にあれば suffix を付ける
+            while os.path.exists(folder_name):
+                folder_name = f"{base}_{i}"
+                i += 1
+            os.makedirs(folder_name, exist_ok=True)
 
-                self.m_dict["result_dir"] = os.path.join(folder_name, "results")
-                os.makedirs(self.m_dict["result_dir"])
+            # data/results/pr_curves ディレクトリを下につくる
+            self.m_dict["data_dir"]     = os.path.join(folder_name, "data")
+            os.makedirs(self.m_dict["data_dir"], exist_ok=True)
 
-                self.m_dict["pr_curve_dir"] = os.path.join(
-                    self.m_dict["result_dir"], "pr_curves"
-                )
-                os.makedirs(self.m_dict["pr_curve_dir"])
+            self.m_dict["result_dir"]   = os.path.join(folder_name, "results")
+            os.makedirs(self.m_dict["result_dir"], exist_ok=True)
 
-                with open(file_path, "a") as yf:
-                    yaml.dump(
-                        {
-                            "evaluate_result_dir": self.m_dict["result_dir"],
-                            "evaluate_datas_dir": self.m_dict["datas_dir"],
-                            "evaluate_pr_curve_dir": self.m_dict["pr_curve_dir"],
-                            "evaluation_info_date": datetime.date.today(),
-                        },
-                        yf,
-                    )
-                print("add class info in yaml file")
+            self.m_dict["pr_curve_dir"] = os.path.join(self.m_dict["result_dir"], "pr_curves")
+            os.makedirs(self.m_dict["pr_curve_dir"], exist_ok=True)
 
-            print(f"load complete")
+            # YAML に追記
+            with open(cfg, "a") as yf:
+                yaml.dump({
+                    "evaluate_result_dir":    self.m_dict["result_dir"],
+                    "evaluate_data_dir":      self.m_dict["data_dir"],
+                    "evaluate_pr_curve_dir":  self.m_dict["pr_curve_dir"],
+                    "evaluation_info_date":   datetime.date.today(),
+                }, yf)
+            print("add class info in yaml file")
+
+        print("load complete")
 
     def grab_bt(self):
         subprocess.call(["python", "grab_gui.py"])

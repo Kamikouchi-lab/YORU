@@ -470,7 +470,7 @@ def main(confFileName):
 
 
 if __name__ == "__main__":
-    confFileName = "./config/yoru_demo_display.yaml"
+    confFileName = "./config/yoru_default.yaml"
     main(confFileName)
 
     # with Manager() as manager:

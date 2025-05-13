@@ -17,10 +17,10 @@ capture_style:
 
 trigger:
  trigger_threshold_configuration: 0.5
- trigger_class: 'person'
+ trigger_class: 'cell phone'
 
- Arduino_COM: 'COM3'
- trigger_style: "straight_firmata"
+ Arduino_COM: 'None'
+ trigger_style: "straight"
  
 hardware:
  use_camera: True
