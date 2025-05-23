@@ -15,7 +15,6 @@ from turtle import Screen
 import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
-import pyglet
 
 # try:
 
@@ -420,8 +419,7 @@ class camGUI:
 
         # Check if Python is in the process of shutting down
         if not sys.is_finalizing():
-            pyglet.app.exit()
-
+            pass
 
 def main(confFileName):
     with Manager() as manager:
