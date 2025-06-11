@@ -126,7 +126,7 @@ class yoru_train:
                 dpg.add_text(default_value="Step2: Screenshot GUI     ")
                 dpg.add_text(tag="step2_state", default_value="Yet")
             dpg.add_button(
-                label="Run Grab GUI",
+                label="Run YORU Frame Capture",
                 tag="grab_btn",
                 width=150,
                 height=30,
