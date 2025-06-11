@@ -34,7 +34,7 @@ from yoru.libs.init_train import init_train, loadingParam
 #     from yoru.libs.init_train import init_train, loadingParam
 
 
-class yolo_train:
+class yoru_train:
     def __init__(self, m_dict={}):
         self.m_dict = m_dict
         self.fd_tk = file_dialog_tk(self.m_dict)
@@ -435,7 +435,7 @@ def main():
         # initialize m_dict with init_analysis
         init = init_train(m_dict=d)
 
-        gui = yolo_train(m_dict=d)
+        gui = yoru_train(m_dict=d)
         process_pool = []
         prc_gui = Process(target=gui.run)
         process_pool.append(prc_gui)  # <-- this line was added
