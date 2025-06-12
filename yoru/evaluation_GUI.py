@@ -118,7 +118,7 @@ class model_eval_gui:
             dpg.add_separator()
             dpg.add_text(default_value="Step2: YORU Frame Capture")
             dpg.add_button(
-                label="YORU Frame Capture",
+                label="Run YORU Frame Capture",
                 tag="grab_btn",
                 width=150,
                 height=30,
