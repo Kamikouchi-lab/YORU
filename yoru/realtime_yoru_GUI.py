@@ -194,7 +194,7 @@ class camGUI:
                     enabled=True,
                 )
             dpg.add_checkbox(
-                label="YOLO detection",
+                label="YORU detection",
                 default_value=False,
                 tag="yolocheckbox",
                 callback=lambda: self.yolo_condition(),
