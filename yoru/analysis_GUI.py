@@ -157,10 +157,10 @@ class analyze_GUI:
                 )
                 dpg.add_text(tag="image_num_state", default_value="    none")
             dpg.add_separator()
-            dpg.add_text(label="title2", default_value="start analyzing")
+            dpg.add_text(label="title2", default_value="Start analyzing")
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="YOLO analysis images",
+                    label="YORU analysis images",
                     tag="analyze_img_btn",
                     width=100,
                     height=30,
@@ -275,7 +275,7 @@ class analyze_GUI:
             dpg.add_text(label="title2", default_value="start analyzing")
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="YOLO analysis",
+                    label="YORU analysis",
                     tag="analyze_btn",
                     width=100,
                     height=30,
