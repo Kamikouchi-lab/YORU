@@ -106,8 +106,8 @@ class analyze_GUI:
 
         # imager-window
         # images analysis window
-        with dpg.window(label="Analyzing images", id=imager_window2):
-            dpg.add_text(default_value="Analyzing images")
+        with dpg.window(label="Analyzing Images", id=imager_window2):
+            dpg.add_text(default_value="Analyzing Images")
             with dpg.group(horizontal=True):
                 dpg.add_text(label="Model path", default_value="Model Path")
                 dpg.add_input_text(
@@ -188,7 +188,7 @@ class analyze_GUI:
 
         # movie analysis window
         with dpg.window(label="Analyzing Movies", id=imager_window1):
-            dpg.add_text(default_value="Analyzing movies")
+            dpg.add_text(default_value="Analyzing Movies")
             with dpg.group(horizontal=True):
                 dpg.add_text(label="Model path", default_value="Model Path")
                 dpg.add_input_text(
