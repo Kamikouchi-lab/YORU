@@ -254,12 +254,12 @@ class analyze_GUI:
                 )
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="vertical flip",
+                    label="Vertical flip",
                     tag="v_flip_state",
                     callback=lambda: self.v_flip_cb(),
                 )
                 dpg.add_button(
-                    label="horizontal flip",
+                    label="Horizontal flip",
                     tag="h_flip_state",
                     callback=lambda: self.h_flip_cb(),
                 )
