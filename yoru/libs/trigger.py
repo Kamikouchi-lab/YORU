@@ -76,7 +76,10 @@ class trigger_python:
                 self.myArduino = ard.dio(comport=self.com, doCh_IDs=[self.pin])
             except PermissionError as e:
                 print(f"Error: could not open port '{self.com}': {e}")
+                if self.myArduino:
+                    self.myArduino.close()        # ard.dio の close メソッド
                 self.myArduino = None
+            
         else:
             self.myArduino = None
 
@@ -107,9 +110,14 @@ class trigger_python:
 
     def close(self):
         if self.myArduino:
-            self.myArduino.writeDO_all(0)
-            print("Arduino connection closed.")
-        self.trigger_instance = None
+
+            try:
+                self.myArduino.writeDO_all(0)
+
+            finally:
+                self.myArduino.close()
+                print("Arduino connection closed.")
+            self.trigger_instance = None
         print("Trigger instance set to None.")
 
 

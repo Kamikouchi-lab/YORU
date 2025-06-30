@@ -468,7 +468,7 @@ def main(confFileName):
 
 
 if __name__ == "__main__":
-    confFileName = "./config/yoru_default.yaml"
+    confFileName = "C:/Users/nokai/Desktop/yoru_default.yaml"
     main(confFileName)
 
     # with Manager() as manager:
