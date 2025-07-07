@@ -1,0 +1,28 @@
+name: fly_copulation_project   # Experimental name
+  export: /Path/to/result/directory/   # Output folder for videos and experiment information
+  export_name: fly_copulation_real_time_analysis   # Specifying the file name of the output video
+  
+model:
+ yolo_detection: False   # If you want to start YORU's inference immediately after starting YORU's real-time process, set this to True.
+ yolo_model_path: Path to YORU model   # Specify the YORU model (.pt file)
+ Trigger: False
+
+capture_style:
+ stream_MSS: False   # When using the screen capture function, set to True.
+  
+trigger:
+ trigger_threshold_configuration: 0.3   # Confidence threshold when detecting YORU
+ trigger_class: copulation   # Which action class to trigger
+
+ Arduino_COM: “COM3”   # COM to which Arduino is connected
+ trigger_pin: 13   # Specifying pin numbers for outputting TTL signals with Arduino
+ trigger_style: standard_arduino   # Select which trigger plugin to use
+ 
+hardware:
+ use_camera: True   # Specify whether to use the camera
+ camera_id: 0   # Specifying the camera ID
+ camera_width: 640   # Specify the width (px) of images captured by the camera.
+ camera_height: 480   # Specifying the height (px) of images captured by the camera
+ camera_scale: 1   # If you want to change the scale of the camera image, change this setting.
+ camera_fps: 30   # Specifying camera fps
+ camera_imshow: False   # When set to True, the opencv window opens.
