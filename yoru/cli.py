@@ -28,7 +28,7 @@ Examples:
 """
     parser = argparse.ArgumentParser(
         prog="yoru",
-        description="YORU — YOLO-based Real-time Understanding",
+        description="YORU - Your Optimal Recognition Utility",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         epilog=examples,
     )
