@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "YORU Condition Config",
+  "type": "object",
+  "required": ["model", "capture_style", "trigger", "hardware"],
+  "properties": {
+    "name": { "type": ["string", "null"] },
+    "export": { "type": ["string", "null"] },
+    "export_name": { "type": ["string", "null"] },
+    "model": {
+      "type": "object",
+      "properties": {
+        "yolo_detection": { "type": ["boolean", "null"] },
+        "enable_yolo":    { "type": ["boolean", "null"] },
+        "yolo_model_path":{ "type": ["string", "null"] },
+        "model_path":     { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "capture_style": {
+      "type": "object",
+      "properties": {
+        "stream_MSS":     { "type": ["boolean", "object", "null"] },
+        "screen_capture": { "type": ["boolean", "object", "null"] },
+        "stream_capture": { "type": ["boolean", "object", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "trigger": {
+      "type": "object",
+      "properties": {
+        "trigger_class":  { "type": ["string", "null"] },
+        "class":          { "type": ["string", "null"] },
+        "trigger_threshold_configuration": { "type": ["number", "object", "null"] },
+        "trigger_threshold_confidence":    { "type": ["number", "null"] },
+        "confidence_threshold":            { "type": ["number", "null"] },
+        "threshold":                       { "type": ["number", "null"] },
+        "Arduino_COM":   { "type": ["string", "null"] },
+        "arduino_com":   { "type": ["string", "null"] },
+        "com_port":      { "type": ["string", "null"] },
+        "trigger_pin":   { "type": ["integer", "string", "null"] },
+        "pin":           { "type": ["integer", "string", "null"] },
+        "trigger_style": { "type": ["string", "null"] },
+        "plugin":        { "type": ["string", "null"] },
+        "style":         { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "hardware": {
+      "type": "object",
+      "required": ["use_camera", "camera_id", "camera_width", "camera_height", "camera_fps"],
+      "properties": {
+        "use_camera":   { "type": ["boolean", "integer"] },
+        "camera_id":    { "type": ["integer", "string"] },
+        "camera_width": { "type": ["integer", "string"] },
+        "camera_height":{ "type": ["integer", "string"] },
+        "camera_fps":   { "type": ["integer", "number", "string"] }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
