@@ -2,7 +2,9 @@ import sys
 
 sys.path.append("../yoru")
 
-from yoru.app import main
+# yoru/__main__.py
+from yoru.cli import main as cli_main
 
-print("Initializing YORU.....")
-main()
+if __name__ == "__main__":
+    raise SystemExit(cli_main())
+
