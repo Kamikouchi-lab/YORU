@@ -9,8 +9,6 @@ __pycache__/
 # model file
 *.pt
 
-# Dearpy gui files
-*.ini
 
 #calibration_files
 *.npy
