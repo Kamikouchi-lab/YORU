@@ -9,8 +9,6 @@ __pycache__/
 # model file
 *.pt
 
-# Dearpy gui files
-*.ini
 
 #calibration_files
 *.npy
@@ -175,4 +173,8 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-others/
+
+logs/
+
+custom_layout_grab.ini
+custom_layout_analysis.ini
