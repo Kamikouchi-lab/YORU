@@ -254,7 +254,7 @@ class model_eval_gui:
         print("load complete")
 
     def grab_bt(self):
-        subprocess.call(["python", "grab_gui.py"])
+        subprocess.call(["python", "./yoru/grab_GUI.py"])
 
     def labelImg_bt(self):
         subprocess.call(["labelImg"])
