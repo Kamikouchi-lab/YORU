@@ -1,0 +1,32 @@
+name: fruit_fly_copulation
+
+root: 'C:/Users/nokai/desktop/'
+
+export: 'fruit_fly_copulation/'
+export_name: 'copulation_innervation_task_01'
+
+
+model:
+ yolo_detection: False
+ yolo_model_path: "C:/Users/nokai/Desktop/fruit_fly_copulation_dataset/detection_model/best.pt"
+ Trigger: False
+
+capture_style:
+ stream_MSS: True
+
+
+trigger:
+ trigger_threshold_configuration: 0.5
+ trigger_class: 'wing_extension'
+
+ Arduino_COM: 13
+ trigger_style: "standard_arduino"
+ 
+hardware:
+ use_camera: True
+ camera_id: 0
+ camera_width: 640
+ camera_height: 480
+ camera_scale: 1
+ camera_fps: 30
+ camera_imshow: False # opencv-window

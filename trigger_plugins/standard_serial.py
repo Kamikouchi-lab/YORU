@@ -24,3 +24,4 @@ class trigger_condition:
             self.ser.write(b"1")
         else:
             self.ser.write(b"0")
+            +
