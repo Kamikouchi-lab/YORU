@@ -26,3 +26,6 @@
 3. Run "Real-time Process".
 
 4. Operate Real-time Process GUI.
+
+
+<img src="./imgs/screenshots_description-05.png" width="100%">

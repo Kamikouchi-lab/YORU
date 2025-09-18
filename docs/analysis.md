@@ -17,3 +17,5 @@
     > If you check "Create videos", YORU will save the videos shown in the box.
 
     > If you check "Tracking algorithm", YORU will save the IDs in the results csv file.
+
+<img src="./imgs/screenshots_description-04.png" width="100%">

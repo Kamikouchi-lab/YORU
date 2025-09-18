@@ -18,20 +18,21 @@
 
 - Customizable: Allows you to customize various hardware manipulations in closed-loop system.
 
-# Instructions
-For detailed documentation, visit the [YORU Documents](https://kamikouchi-lab.github.io/YORU_doc/)
-
-
 # Quick install
+
+Follow these steps to install YORU quickly:
+
 1. Download or clone the YORU project.
     ```
     cd "Path/to/download"
     git clone https://github.com/Kamikouchi-lab/YORU.git 
     ```
 
-2. Install the GPU driver and [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit).
+2. Install the appropriate GPU driver and the [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit).
 
-3. Create a virtual environment using [YORU.yml](YORU.yml) in command prompt or Anaconda prompt.
+3. Create a virtual environment.
+
+    Use [YORU.yml](https://github.com/Kamikouchi-lab/YORU/blob/main/YORU.yml) file to create a conda environment:
    
      ```
      conda env create -f "Path/to/YORU.yml"
@@ -43,17 +44,26 @@ For detailed documentation, visit the [YORU Documents](https://kamikouchi-lab.gi
      conda activate yoru
      ```
     
-5. Install [Pytorch](https://pytorch.org) depending on the CUDA versions.
+5. Install [Pytorch](https://pytorch.org) corresponding to the CUDA versions.
 
-    - For CUDA==12.1
+    - For CUDA==11.8
+
+    ```
+    pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu118
+    ```
+
+   - For CUDA==12.1
 
     ```
     pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
     ```
+    
 
     - (torch, torchvision and torchaudio will be installed.)
 
 6. Run YORU in the command prompt or Anaconda prompt.
+
+    Navigate to the YORU project folder and execute:
 
     ```
     conda activate yoru
@@ -63,9 +73,11 @@ For detailed documentation, visit the [YORU Documents](https://kamikouchi-lab.gi
 
 
 # Learn about YORU
-- Learn step-by-step: [Tutorial](docs/overview.md)
+- [User guides](https://kamikouchi-lab.github.io/YORU_doc/guides/01-install/)
 
-- Learn by reading: TBA
+- [Step-by-step Tutorial](https://kamikouchi-lab.github.io/YORU_doc/tutorial/01-preparation-tutorial/)
+
+- [Testing Guide](https://kamikouchi-lab.github.io/YORU_doc/devnotes/yoru-test/)
 
 # Requirements
 
@@ -73,7 +85,8 @@ For detailed documentation, visit the [YORU Documents](https://kamikouchi-lab.gi
 - Windows 10 or later
 
 ## Hardware
-- Memory: 16 GB or more
+- Memory: 16 GB RAM or more
+- GPU: NVIDIA GPU compatible with the required CUDA version
 
 ### Development environments
 - OS: Windows 11
@@ -96,3 +109,4 @@ This project includes code from the following repositories:
 - [LabelImg](https://github.com/HumanSignal/labelImg): Licensed under the MIT License
 
 - [yolov5](https://github.com/ultralytics/yolov5): Licensed under the AGPL-3.0 License
+
