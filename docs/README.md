@@ -15,7 +15,7 @@
 
     See [Closed-loop system](closed-loop.md)
 
-# YORU documentations
+# YORU documents
 - [Home](../README.md)
 - [Overview](overview.md)
 - [Install YORU](install.md)
