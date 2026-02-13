@@ -67,7 +67,7 @@ Follow these steps to install YORU quickly:
 
     ```
     conda activate yoru
-    cd "Peth/to/YORU/project/folder"
+    cd "Path/to/YORU/project/folder"
     python -m yoru
     ```
 
@@ -95,7 +95,8 @@ Follow these steps to install YORU quickly:
 - Memory: DDR4 32 GB
 
 # Reference
- - Yamanouchi, H. M., Takeuchi, R. F., Chiba, N., Hashimoto, K., Shimizu, T., Tanaka, R., & Kamikouchi, A. (2024). YORU: social behavior detection based on user-defined animal appearance using deep learning. bioRxiv (p. 2024.11.12.623320). https://doi.org/10.1101/2024.11.12.623320
+ - Yamanouchi, H. M., Takeuchi, R. F., Chiba, N., Hashimoto, K., Shimizu, T., Osakada, F., Tanaka, R., & Kamikouchi, A. (2026). YORU: Animal behavior detection with object-based approach for real-time closed-loop feedback. *Science Advances*, 12(7). https://doi.org/10.1126/sciadv.adw2109
+
 
 
 # License:
