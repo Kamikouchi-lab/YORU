@@ -71,6 +71,13 @@ Follow these steps to install YORU quickly:
     python -m yoru
     ```
 
+7. etc.
+
+    To check CUDA version in your environment:
+    ```
+    nvidia-smi
+    ```
+
 
 # Learn about YORU
 - [User guides](https://kamikouchi-lab.github.io/YORU_doc/guides/01-install/)

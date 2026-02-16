@@ -13,7 +13,6 @@ import eel
 sys.path.append("../yoru")
 
 # try:
-from yoru import analysis_GUI, evaluation_GUI, realtime_yoru_GUI, train_GUI
 
 # except(ModuleNotFoundError):
 #     import analysis_GUI
@@ -59,8 +58,14 @@ def load_condition_file():
 def run_cam_gui_YMH():
     global condition_file_path
     if os.path.isfile(condition_file_path):
-        realtime_yoru_GUI.main(condition_file_path)
-        # subprocess.Popen(["python", "cam_gui_YMH.py"])
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                f"from yoru import realtime_yoru_GUI; realtime_yoru_GUI.main(r'{condition_file_path}')",
+            ],
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
     else:
         print("not find config file")
 
@@ -107,25 +112,32 @@ def print_file_path():
 
 @eel.expose
 def run_analysis_gui():
-    analysis_GUI.main()
-    # subprocess.Popen(["Python", "analy_GUI.py"])
+    subprocess.Popen(
+        [sys.executable, "-c", "from yoru import analysis_GUI; analysis_GUI.main()"],
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
+    )
 
 
 @eel.expose
 def run_train_gui():
-    train_GUI.main()
+    subprocess.Popen(
+        [sys.executable, "-c", "from yoru import train_GUI; train_GUI.main()"],
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
+    )
 
 
 @eel.expose
 def run_evaluate_gui():
-    evaluation_GUI.main()
-    # subprocess.call(["python", "model_eval_gui.py"])
+    subprocess.Popen(
+        [sys.executable, "-c", "from yoru import evaluation_GUI; evaluation_GUI.main()"],
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
+    )
 
 
 def main():
     load_condition_file()  # 設定ファイルを読み込む
     eel.init("web")
-    eel.start("gui_home.html", size=(1024, 768), port=8080)
+    eel.start("gui_home.html", size=(1024, 768), port=8889)
 
 
 if __name__ == "__main__":
