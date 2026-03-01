@@ -1,7 +1,6 @@
 import os
 import subprocess
 import sys
-from cProfile import label
 from multiprocessing import Manager, Process
 
 import dearpygui.dearpygui as dpg
@@ -13,11 +12,10 @@ import yaml
 
 sys.path.append("../yoru")
 
-from yoru.grab_GUI import main as grab_main
 # try:
 from yoru.libs.create_yaml_train import create_project
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
-from yoru.libs.init_train import init_train, loadingParam
+from yoru.libs.init_train import init_train
 
 # import yoru.app as YORU
 
@@ -309,7 +307,7 @@ class yoru_train:
             dpg.enable_item("move_label_images")
             dpg.set_value("step1_state", "Complete!!")
         else:
-            print(f"The project already exists.")
+            print("The project already exists.")
             dpg.enable_item("move_label_images")
 
     def load_pr_dir(self):
@@ -326,7 +324,7 @@ class yoru_train:
                 self.m_dict["project_dir"] + "/all_label_images"
             )
             dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
-            print(f"load complete")
+            print("load complete")
             dpg.enable_item("move_label_images")
             dpg.set_value("step1_state", "Complete!!")
 

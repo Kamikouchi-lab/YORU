@@ -71,6 +71,24 @@ Follow these steps to install YORU quickly:
     python -m yoru
     ```
 
+7. etc.
+
+    To check CUDA version in your environment:
+    ```
+    nvidia-smi
+    ```
+## Install via uv
+Although not all functionality has been tested, installation via uv can be performed using the project.toml file below.
+[project.toml](https://github.com/Kamikouchi-lab/YORU/blob/uv_install/pyproject.toml)
+
+copy and paste this file to your YORU folder and
+
+```
+cd "Path/to/YORU"
+uv init .
+uv sync
+python -m yoru
+```
 
 # Learn about YORU
 - [User guides](https://kamikouchi-lab.github.io/YORU_doc/guides/01-install/)

@@ -1,0 +1,72 @@
+[project]
+name = "yoru"
+version = "0.1.0"
+description = "YORU - Your Own Research Utility for real-time behavioral analysis"
+readme = "README.md"
+requires-python = ">=3.9,<3.10"
+dependencies = [
+    "eel==0.16.0",
+    "nidaqmx==0.9.0",
+    "numpy>=1.24.4",
+    "dearpygui==1.11.1",
+    "opencv-python==4.10.0.82",
+    "pyglet==2.0.15",
+    "pyfirmata==1.1.0",
+    "pyyaml==6.0.1",
+    "pandas==2.0.3",
+    "pynput==1.7.7",
+    "labelImg>=1.8",
+    "munkres==1.1.4",
+    "matplotlib==3.7.5",
+    "gitpython==3.1.43",
+    "pillow==10.3.0",
+    "psutil==5.9.8",
+    "scipy==1.10.1",
+    "seaborn==0.13.2",
+    "requests==2.32.3",
+    "thop",
+    "tqdm==4.66.4",
+    "ultralytics==8.2.52",
+    "ultralytics-thop==2.0.0",
+    "mss==9.0.1",
+    "scikit-image==0.21.0",
+    "imgui==2.0.0",
+    "pyopengl==3.1.7",
+    "pyopengl-accelerate==3.1.7",
+    "pyserial==3.5",
+    "pywin32==306",
+    "setuptools<70",
+    "torch>=2.0",
+    "torchvision>=0.15",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.0",
+]
+
+[project.scripts]
+yoru = "yoru.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest==7.4.0",
+]
+environments = ["sys_platform == 'win32'"]
+override-dependencies = [
+    "pyqt5-qt5==5.15.2",
+    "torch>=2.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
