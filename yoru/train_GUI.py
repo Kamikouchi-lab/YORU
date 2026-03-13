@@ -205,14 +205,26 @@ class yoru_train:
                 )
             dpg.add_text(default_value="Training condition")
             with dpg.group(horizontal=True):
-                dpg.add_text(label="weight", default_value="    Weight")
+                dpg.add_text(label="yolo_version", default_value="    YOLO Version")
                 dpg.add_combo(
-                    items=self.m_dict["weight_list"],
-                    tag="weight_list",
-                    default_value=self.m_dict["weight"],
+                    items=self.m_dict["yolo_version_list"],
+                    tag="yolo_version_combo",
+                    default_value=self.m_dict["yolo_version"],
                     width=150,
-                    callback=lambda: self.list_of_weight(),
+                    callback=lambda: self.select_version(),
                 )
+            with dpg.group(horizontal=True):
+                dpg.add_text(label="weight_size", default_value="    Model Size  ")
+                dpg.add_combo(
+                    items=self.m_dict["yolo_size_list"],
+                    tag="weight_size_combo",
+                    default_value=self.m_dict["yolo_size"],
+                    width=150,
+                    callback=lambda: self.select_size(),
+                )
+            with dpg.group(horizontal=True):
+                dpg.add_text(label="weight_disp", default_value="    Weight File ")
+                dpg.add_text(tag="weight_display_text", default_value=self.m_dict["weight"])
             with dpg.group(horizontal=True):
                 dpg.add_text(label="epoch_num", default_value="    Epoc")
                 dpg.add_input_text(
@@ -238,11 +250,11 @@ class yoru_train:
                     callback=lambda: self.in_batch(),
                 )
             dpg.add_button(
-                label="Train YOLOv5",
+                label="Train YOLO",
                 tag="str_btn",
                 width=100,
                 height=30,
-                callback=lambda: self.run_yolov5(),
+                callback=lambda: self.run_yolo(),
                 enabled=True,
             )
             dpg.add_separator()
@@ -361,9 +373,22 @@ class yoru_train:
             cr_project.add_class_info()
         dpg.set_value("step5_state", "Complete!!")
 
-    def list_of_weight(self):
-        tf = dpg.get_value("weight_list")
-        self.m_dict["weight"] = tf
+    def _build_weight(self) -> str:
+        """バージョンとサイズからウェイトファイル名を生成する。"""
+        prefix_map = {"YOLOv5": "yolov5", "YOLOv8": "yolov8", "YOLO11": "yolo11"}
+        prefix = prefix_map.get(self.m_dict.get("yolo_version", "YOLOv5"), "yolov5")
+        size = self.m_dict.get("yolo_size", "s")
+        return f"{prefix}{size}.pt"
+
+    def select_version(self):
+        self.m_dict["yolo_version"] = dpg.get_value("yolo_version_combo")
+        self.m_dict["weight"] = self._build_weight()
+        dpg.set_value("weight_display_text", self.m_dict["weight"])
+
+    def select_size(self):
+        self.m_dict["yolo_size"] = dpg.get_value("weight_size_combo")
+        self.m_dict["weight"] = self._build_weight()
+        dpg.set_value("weight_display_text", self.m_dict["weight"])
 
     def in_epoch(self):
         tf = dpg.get_value("epoc_num_in")
@@ -420,6 +445,47 @@ class yoru_train:
             print("error: ", e)
 
         dpg.set_value("step6_state", "Complete!!")
+
+    def run_yolo_ultralytics(self):
+        """Launch YOLOv8 / YOLO11 training via the ultralytics package."""
+        cmd = [
+            "python",
+            "./libs/train_ultralytics.py",
+            "--weights",
+            str(self.m_dict["weight"]),
+            "--data",
+            str(self.m_dict["yaml_path"]),
+            "--epochs",
+            str(self.m_dict["epoch"]),
+            "--imgsz",
+            str(self.m_dict["img"]),
+            "--batch",
+            str(self.m_dict["batch"]),
+            "--project",
+            str(self.m_dict["project_dir"]),
+        ]
+
+        cr_project = create_project(self.m_dict)
+        cr_project.add_training_info()
+        print("added the information in yaml file")
+
+        try:
+            subprocess.Popen(cmd)
+            print("start training (ultralytics)")
+        except Exception as e:
+            print("error: ", e)
+
+        dpg.set_value("step6_state", "Complete!!")
+
+    def run_yolo(self):
+        """Dispatch training to the correct backend based on the selected weight."""
+        weight = self.m_dict.get("weight", "")
+        weight_lower = weight.lower()
+        if "yolov8" in weight_lower or "yolo8" in weight_lower or \
+                "yolo11" in weight_lower or "yolov11" in weight_lower:
+            self.run_yolo_ultralytics()
+        else:
+            self.run_yolov5()
 
     def __del__(self):
         print("=== GUI window quit ===")

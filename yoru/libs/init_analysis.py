@@ -24,6 +24,7 @@ class init_analysis:
         self.m_dict["h_flip"] = False
 
         self.m_dict["threshold"] = 0.3
+        self.m_dict["tracking_exclude_classes"] = []
 
     def __del__(self):
         print("== Initialization finished ==.")

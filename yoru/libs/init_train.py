@@ -15,13 +15,30 @@ class init_train:
         self.m_dict["project_dir"] = "."
         self.m_dict["yaml_path"] = self.m_dict["project_dir"] + "/config.yaml"
         self.m_dict["weight_list"] = [
+            # YOLOv5
             "yolov5n.pt",
             "yolov5s.pt",
             "yolov5m.pt",
             "yolov5l.pt",
             "yolov5x.pt",
+            # YOLOv8
+            "yolov8n.pt",
+            "yolov8s.pt",
+            "yolov8m.pt",
+            "yolov8l.pt",
+            "yolov8x.pt",
+            # YOLO11
+            "yolo11n.pt",
+            "yolo11s.pt",
+            "yolo11m.pt",
+            "yolo11l.pt",
+            "yolo11x.pt",
         ]
         self.m_dict["weight"] = "yolov5s.pt"
+        self.m_dict["yolo_version_list"] = ["YOLOv5", "YOLOv8", "YOLO11"]
+        self.m_dict["yolo_version"] = "YOLOv5"
+        self.m_dict["yolo_size_list"] = ["n", "s", "m", "l", "x"]
+        self.m_dict["yolo_size"] = "s"
         self.m_dict["classes_path"] = "."
         self.m_dict["all_label_dir"] = self.m_dict["project_dir"] + "/all_label_images"
 

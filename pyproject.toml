@@ -26,7 +26,7 @@ dependencies = [
     "requests==2.32.3",
     "thop",
     "tqdm==4.66.4",
-    "ultralytics==8.2.52",
+    "ultralytics>=8.3.0",
     "ultralytics-thop==2.0.0",
     "mss==9.0.1",
     "scikit-image==0.21.0",

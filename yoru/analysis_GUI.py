@@ -16,6 +16,7 @@ from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
 # try:
 from yoru.libs.file_operation_analysis import file_dialog_tk
 from yoru.libs.init_analysis import init_analysis
+from yoru.libs.yolo_wrapper import load_yolo_model
 
 
 class analyze_GUI:
@@ -115,7 +116,7 @@ class analyze_GUI:
                 )
                 dpg.add_button(
                     label="Select File",
-                    callback=lambda: self.fd_tk.model_file_open(),
+                    callback=lambda: self.model_select_bt(),
                     enabled=True,
                 )
             with dpg.group(horizontal=True):
@@ -196,7 +197,7 @@ class analyze_GUI:
                 )
                 dpg.add_button(
                     label="Select File",
-                    callback=lambda: self.fd_tk.model_file_open(),
+                    callback=lambda: self.model_select_bt(),
                     enabled=True,
                 )
             with dpg.group(horizontal=True):
@@ -304,6 +305,15 @@ class analyze_GUI:
                         label="Analyze time",
                         tag="analy_time",
                         default_value=self.m_dict["estimate_time"],
+                    )
+            with dpg.group(tag="tracking_exclude_group", show=self.m_dict["tracking_state"]):
+                dpg.add_text(default_value="Exclude classes from tracking:")
+                with dpg.child_window(
+                    tag="tracking_class_checkboxes", height=90, width=300, border=True
+                ):
+                    dpg.add_text(
+                        tag="tracking_cls_placeholder",
+                        default_value="(load model first)",
                     )
             dpg.add_separator()
             with dpg.group(horizontal=False):
@@ -495,10 +505,46 @@ class analyze_GUI:
         tf = dpg.get_value("create_movie")
         self.m_dict["create_video"] = tf
 
+    def model_select_bt(self):
+        self.fd_tk.model_file_open()
+        self.update_class_list()
+
+    def update_class_list(self):
+        model_path = self.m_dict.get("model_path", "")
+        if not model_path or not os.path.isfile(str(model_path)):
+            return
+        try:
+            yolo_model = load_yolo_model(str(model_path))
+            class_names = yolo_model.names
+        except Exception as e:
+            print(f"Failed to load class names: {e}")
+            return
+        dpg.delete_item("tracking_class_checkboxes", children_only=True)
+        self.m_dict["tracking_exclude_classes"] = []
+        for cls_id, cls_name in class_names.items():
+            dpg.add_checkbox(
+                label=cls_name,
+                tag=f"exclude_cls_{cls_id}",
+                default_value=False,
+                parent="tracking_class_checkboxes",
+                callback=lambda s, a, u=cls_id: self.toggle_exclude_class(u, a),
+            )
+
+    def toggle_exclude_class(self, cls_id, value):
+        exclude = list(self.m_dict.get("tracking_exclude_classes", []))
+        if value:
+            if cls_id not in exclude:
+                exclude.append(cls_id)
+        else:
+            if cls_id in exclude:
+                exclude.remove(cls_id)
+        self.m_dict["tracking_exclude_classes"] = exclude
+
     def tracking_condition(self):
         tf = dpg.get_value("tracking_state")
         self.m_dict["tracking_state"] = tf
-    
+        dpg.configure_item("tracking_exclude_group", show=tf)
+
     def in_thresh(self):
         tf = dpg.get_value("conf_threshold")
         self.m_dict["threshold"] = float(tf)

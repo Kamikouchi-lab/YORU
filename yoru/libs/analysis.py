@@ -11,6 +11,8 @@ import pandas as pd
 import torch
 from munkres import Munkres
 
+from yoru.libs.yolo_wrapper import load_yolo_model
+
 
 class yolo_analysis:
     def __init__(self, m_dict):
@@ -134,16 +136,10 @@ class yolo_analysis:
 
         dpg.set_value("analy_time", "Estimated remaining time: calculating...")
         dpg.set_value("no_mov", "Leaving movies: calculating...")
-        yolo_model = torch.hub.load(
-            "./libs/yolov5", "custom", path=self.yolo_model_path, source="local"
-        )
+        yolo_model = load_yolo_model(self.yolo_model_path)
 
         # クラス名の取得
-        self.class_names = (
-            yolo_model.module.names
-            if hasattr(yolo_model, "module")
-            else yolo_model.names
-        )
+        self.class_names = yolo_model.names
 
         self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
@@ -217,31 +213,34 @@ class yolo_analysis:
 
                 cur_center_pos = []
                 result = []
+                result_excluded = []  # トラッキング対象外クラスの検出結果
+                exclude_classes = list(self.m_dict.get("tracking_exclude_classes", []))
                 for *box, conf, cls in yolo_result.xyxy[0]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
-                    if conf.item() <  self.m_dict["threshold"]: 
+                    if conf.item() <  self.m_dict["threshold"]:
                         break
                     x_center = (box[0].item() + box[2].item()) / 2
                     y_center = (box[1].item() + box[3].item()) / 2
                     class_name = self.class_names[int(cls.item())]
 
-                    # 結果をリストに保存
-                    result.append(
-                        [
-                            frame_count,
-                            box[0].item(),
-                            box[1].item(),
-                            box[2].item(),
-                            box[3].item(),
-                            x_center,
-                            y_center,
-                            conf.item(),
-                            cls.item(),
-                            class_name,
-                        ]
-                    )
+                    entry = [
+                        frame_count,
+                        box[0].item(),
+                        box[1].item(),
+                        box[2].item(),
+                        box[3].item(),
+                        x_center,
+                        y_center,
+                        conf.item(),
+                        cls.item(),
+                        class_name,
+                    ]
 
-                    cur_center_pos.append((x_center, y_center))
-                    # print(x_center, y_center)
+                    # トラッキングON かつ 除外クラスの場合は別リストへ
+                    if self.m_dict["tracking_state"] and int(cls.item()) in exclude_classes:
+                        result_excluded.append(entry)
+                    else:
+                        result.append(entry)
+                        cur_center_pos.append((x_center, y_center))
 
                 if self.m_dict["tracking_state"]:
                     # トラッキングの実装
@@ -273,6 +272,9 @@ class yolo_analysis:
 
                     pre_ids = cur_ids
                     pre_center_pos = cur_center_pos
+
+                    # 除外クラスはtracking_id=-1として追加
+                    result = result + [x + [-1] for x in result_excluded]
                 
                 
                 if self.m_dict["create_video"]:
@@ -356,9 +358,7 @@ class yolo_analysis:
 
     def create_video(self):
         dpg.set_value("cr_analy_time", "Estimated remaining time: calculating...")
-        yolo_model = torch.hub.load(
-            "./libs/yolov5", "custom", path=self.yolo_model_path, source="local"
-        )
+        yolo_model = load_yolo_model(self.yolo_model_path)
 
         # ファイル名の取得（拡張子なし）
         base_name = os.path.basename(self.mov_path)
@@ -488,16 +488,10 @@ class yolo_analysis_image:
 
         # dpg.set_value("analy_time", "Estimated remaining time: calculating...")
         # dpg.set_value("no_mov", "Leaving movies: calculating...")
-        yolo_model = torch.hub.load(
-            "./libs/yolov5", "custom", path=self.yolo_model_path, source="local"
-        )
+        yolo_model = load_yolo_model(self.yolo_model_path)
 
         # クラス名の取得
-        self.class_names = (
-            yolo_model.module.names
-            if hasattr(yolo_model, "module")
-            else yolo_model.names
-        )
+        self.class_names = yolo_model.names
 
         self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
