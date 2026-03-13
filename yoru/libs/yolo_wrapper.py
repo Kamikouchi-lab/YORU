@@ -47,14 +47,19 @@ def detect_model_type(model_path: str) -> str:
     if "yolov8" in name or "yolo8" in name:
         return "yolov8"
 
-    # For ambiguous names (e.g. "best.pt"), inspect the checkpoint to detect ultralytics models.
+    # For ambiguous names (e.g. "best.pt"), inspect the checkpoint contents.
     try:
         ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
-        model_obj = ckpt.get("ema") or ckpt.get("model") if isinstance(ckpt, dict) else None
-        if model_obj is not None:
-            module = type(model_obj).__module__ or ""
-            if "ultralytics" in module:
-                return "yolov8"  # UltralyticsWrapper handles both YOLOv8 and YOLO11
+        if isinstance(ckpt, dict):
+            # Torchvision checkpoints saved by train_torchvision.py embed 'model_type'
+            if "model_type" in ckpt:
+                return ckpt["model_type"]  # 'fasterrcnn', 'maskrcnn', or 'ssd'
+            # Ultralytics checkpoints embed the model object under 'ema' or 'model'
+            model_obj = ckpt.get("ema") or ckpt.get("model")
+            if model_obj is not None:
+                module = type(model_obj).__module__ or ""
+                if "ultralytics" in module:
+                    return "yolov8"  # UltralyticsWrapper handles both YOLOv8 and YOLO11
     except Exception:
         pass
 

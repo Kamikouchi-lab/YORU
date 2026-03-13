@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(xargs grep:*)",
+      "Bash(python -c \"import labelImg; print\\(labelImg.__file__\\)\")",
+      "Bash(pip show:*)",
+      "Read(//c/Users/hayam/**)",
+      "Bash(find c:/users/hayam/miniconda3/envs/yoru/lib/site-packages -name yolo_io.py -o -name YoloReader* -o -name yolo_reader*)",
+      "Bash(find c:/users/hayam/miniconda3/envs/yoru/lib/site-packages/labelImg -name LICENSE* -o -name COPYING*)",
+      "Bash(grep -v \"^$\\\\|^Name\\\\|^Version\\\\|^Summary\\\\|^Home\\\\|^Author\\\\|^License\\\\|^Location\\\\|^Requires\\\\|^Required\")",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(echo \"=== $f.py imports ===\")",
+      "Read(//c/users/hayam/miniconda3/envs/yoru/lib/site-packages/libs/**)",
+      "Bash(done)"
+    ]
+  }
+}
