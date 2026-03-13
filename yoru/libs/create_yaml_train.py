@@ -17,7 +17,7 @@ class create_project:
                     "train": self.m_dict["project_dir"] + "/train/",
                     "val": self.m_dict["project_dir"] + "/val/",
                     "yaml_path": file_path,
-                    "YOLO_ver": "yolov5",
+                    "Model": self.m_dict.get("weight", "yolov5s.pt"),
                     "system_ver": "0.1.0",
                     "create_date": datetime.date.today(),
                 },

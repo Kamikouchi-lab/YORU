@@ -205,25 +205,58 @@ class yoru_train:
                 )
             dpg.add_text(default_value="Training condition")
             with dpg.group(horizontal=True):
-                dpg.add_text(label="yolo_version", default_value="    YOLO Version")
+                dpg.add_text(default_value="    Model Family ")
                 dpg.add_combo(
-                    items=self.m_dict["yolo_version_list"],
-                    tag="yolo_version_combo",
-                    default_value=self.m_dict["yolo_version"],
+                    items=self.m_dict["model_family_list"],
+                    tag="model_family_combo",
+                    default_value=self.m_dict["model_family"],
                     width=150,
-                    callback=lambda: self.select_version(),
+                    callback=lambda: self.select_family(),
                 )
+            # --- YOLO options (shown by default) ---
+            with dpg.group(tag="yolo_options_group"):
+                with dpg.group(horizontal=True):
+                    dpg.add_text(default_value="    YOLO Version ")
+                    dpg.add_combo(
+                        items=self.m_dict["yolo_version_list"],
+                        tag="yolo_version_combo",
+                        default_value=self.m_dict["yolo_version"],
+                        width=150,
+                        callback=lambda: self.select_version(),
+                    )
+                with dpg.group(horizontal=True):
+                    dpg.add_text(default_value="    Model Size   ")
+                    dpg.add_combo(
+                        items=self.m_dict["yolo_size_list"],
+                        tag="weight_size_combo",
+                        default_value=self.m_dict["yolo_size"],
+                        width=150,
+                        callback=lambda: self.select_size(),
+                    )
+            # --- RT-DETR options (hidden by default) ---
+            with dpg.group(tag="rtdetr_options_group", show=False):
+                with dpg.group(horizontal=True):
+                    dpg.add_text(default_value="    Model Size   ")
+                    dpg.add_combo(
+                        items=self.m_dict["rtdetr_size_list"],
+                        tag="rtdetr_size_combo",
+                        default_value=self.m_dict["rtdetr_size"],
+                        width=150,
+                        callback=lambda: self.select_rtdetr_size(),
+                    )
+            # --- Torchvision options (hidden by default) ---
+            with dpg.group(tag="tv_options_group", show=False):
+                with dpg.group(horizontal=True):
+                    dpg.add_text(default_value="    Backbone     ")
+                    dpg.add_combo(
+                        items=self.m_dict["tv_backbone_list"],
+                        tag="tv_backbone_combo",
+                        default_value=self.m_dict["tv_backbone"],
+                        width=150,
+                        callback=lambda: self.select_backbone(),
+                    )
             with dpg.group(horizontal=True):
-                dpg.add_text(label="weight_size", default_value="    Model Size  ")
-                dpg.add_combo(
-                    items=self.m_dict["yolo_size_list"],
-                    tag="weight_size_combo",
-                    default_value=self.m_dict["yolo_size"],
-                    width=150,
-                    callback=lambda: self.select_size(),
-                )
-            with dpg.group(horizontal=True):
-                dpg.add_text(label="weight_disp", default_value="    Weight File ")
+                dpg.add_text(default_value="    Weight File ")
                 dpg.add_text(tag="weight_display_text", default_value=self.m_dict["weight"])
             with dpg.group(horizontal=True):
                 dpg.add_text(label="epoch_num", default_value="    Epoc")
@@ -250,7 +283,7 @@ class yoru_train:
                     callback=lambda: self.in_batch(),
                 )
             dpg.add_button(
-                label="Train YOLO",
+                label="Train Model",
                 tag="str_btn",
                 width=100,
                 height=30,
@@ -335,6 +368,15 @@ class yoru_train:
             self.m_dict["all_label_dir"] = (
                 self.m_dict["project_dir"] + "/all_label_images"
             )
+            # Model キー（旧 YOLO_ver キーも後方互換として対応）
+            saved_model = data.get("Model") or data.get("YOLO_ver")
+            if saved_model:
+                # 旧形式 ("yolov5" など拡張子なし) の場合はデフォルトウェイトに変換
+                if not saved_model.endswith(".pt"):
+                    prefix_map = {"yolov5": "yolov5s", "yolov8": "yolov8s", "yolo11": "yolo11s"}
+                    saved_model = prefix_map.get(saved_model, saved_model) + ".pt"
+                self.m_dict["weight"] = saved_model
+                dpg.set_value("weight_display_text", saved_model)
             dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
             print("load complete")
             dpg.enable_item("move_label_images")
@@ -374,11 +416,43 @@ class yoru_train:
         dpg.set_value("step5_state", "Complete!!")
 
     def _build_weight(self) -> str:
-        """バージョンとサイズからウェイトファイル名を生成する。"""
-        prefix_map = {"YOLOv5": "yolov5", "YOLOv8": "yolov8", "YOLO11": "yolo11"}
-        prefix = prefix_map.get(self.m_dict.get("yolo_version", "YOLOv5"), "yolov5")
-        size = self.m_dict.get("yolo_size", "s")
-        return f"{prefix}{size}.pt"
+        """選択中のモデルファミリー・バージョン・サイズからウェイトファイル名を生成する。"""
+        family = self.m_dict.get("model_family", "YOLO")
+        if family == "YOLO":
+            prefix_map = {"YOLOv5": "yolov5", "YOLOv8": "yolov8", "YOLO11": "yolo11"}
+            prefix = prefix_map.get(self.m_dict.get("yolo_version", "YOLOv5"), "yolov5")
+            size = self.m_dict.get("yolo_size", "s")
+            return f"{prefix}{size}.pt"
+        elif family == "RT-DETR":
+            size = self.m_dict.get("rtdetr_size", "l")
+            return f"rtdetr-{size}.pt"
+        elif family == "Faster R-CNN":
+            return "fasterrcnn_resnet50_best.pt"
+        elif family == "Mask R-CNN":
+            return "maskrcnn_resnet50_best.pt"
+        elif family == "SSD":
+            return "ssd_vgg16_best.pt"
+        return "yolov5s.pt"
+
+    def select_family(self):
+        family = dpg.get_value("model_family_combo")
+        self.m_dict["model_family"] = family
+
+        # Show/hide family-specific option groups
+        dpg.configure_item("yolo_options_group",   show=(family == "YOLO"))
+        dpg.configure_item("rtdetr_options_group", show=(family == "RT-DETR"))
+        dpg.configure_item("tv_options_group",     show=(family in ("Faster R-CNN", "Mask R-CNN", "SSD")))
+
+        # Update backbone list for torchvision models
+        from yoru.libs.init_train import MODEL_FAMILY_CONFIG
+        if family in MODEL_FAMILY_CONFIG and "backbones" in MODEL_FAMILY_CONFIG[family]:
+            backbones = MODEL_FAMILY_CONFIG[family]["backbones"]
+            dpg.configure_item("tv_backbone_combo", items=backbones)
+            self.m_dict["tv_backbone"] = backbones[0]
+            dpg.set_value("tv_backbone_combo", backbones[0])
+
+        self.m_dict["weight"] = self._build_weight()
+        dpg.set_value("weight_display_text", self.m_dict["weight"])
 
     def select_version(self):
         self.m_dict["yolo_version"] = dpg.get_value("yolo_version_combo")
@@ -387,6 +461,16 @@ class yoru_train:
 
     def select_size(self):
         self.m_dict["yolo_size"] = dpg.get_value("weight_size_combo")
+        self.m_dict["weight"] = self._build_weight()
+        dpg.set_value("weight_display_text", self.m_dict["weight"])
+
+    def select_rtdetr_size(self):
+        self.m_dict["rtdetr_size"] = dpg.get_value("rtdetr_size_combo")
+        self.m_dict["weight"] = self._build_weight()
+        dpg.set_value("weight_display_text", self.m_dict["weight"])
+
+    def select_backbone(self):
+        self.m_dict["tv_backbone"] = dpg.get_value("tv_backbone_combo")
         self.m_dict["weight"] = self._build_weight()
         dpg.set_value("weight_display_text", self.m_dict["weight"])
 
@@ -477,15 +561,52 @@ class yoru_train:
 
         dpg.set_value("step6_state", "Complete!!")
 
+    def run_torchvision(self):
+        """Launch Faster R-CNN / Mask R-CNN / SSD training via train_torchvision.py."""
+        family_to_model = {
+            "Faster R-CNN": "fasterrcnn",
+            "Mask R-CNN":   "maskrcnn",
+            "SSD":          "ssd",
+        }
+        model_type = family_to_model[self.m_dict.get("model_family", "Faster R-CNN")]
+
+        cmd = [
+            "python",
+            "./libs/train_torchvision.py",
+            "--model",   model_type,
+            "--data",    str(self.m_dict["yaml_path"]),
+            "--epochs",  str(self.m_dict["epoch"]),
+            "--batch",   str(self.m_dict["batch"]),
+            "--project", str(self.m_dict["project_dir"]),
+        ]
+
+        cr_project = create_project(self.m_dict)
+        cr_project.add_training_info()
+        print("added the information in yaml file")
+
+        try:
+            subprocess.Popen(cmd)
+            print(f"start training ({model_type})")
+        except Exception as e:
+            print("error: ", e)
+
+        dpg.set_value("step6_state", "Complete!!")
+
     def run_yolo(self):
-        """Dispatch training to the correct backend based on the selected weight."""
-        weight = self.m_dict.get("weight", "")
-        weight_lower = weight.lower()
-        if "yolov8" in weight_lower or "yolo8" in weight_lower or \
-                "yolo11" in weight_lower or "yolov11" in weight_lower:
+        """Dispatch training to the correct backend based on the selected model family."""
+        family = self.m_dict.get("model_family", "YOLO")
+
+        if family in ("Faster R-CNN", "Mask R-CNN", "SSD"):
+            self.run_torchvision()
+        elif family == "RT-DETR":
             self.run_yolo_ultralytics()
         else:
-            self.run_yolov5()
+            weight = self.m_dict.get("weight", "").lower()
+            if "yolov8" in weight or "yolo8" in weight or \
+                    "yolo11" in weight or "yolov11" in weight:
+                self.run_yolo_ultralytics()
+            else:
+                self.run_yolov5()
 
     def __del__(self):
         print("=== GUI window quit ===")

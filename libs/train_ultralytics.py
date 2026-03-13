@@ -11,6 +11,9 @@ Called by train_GUI.py via subprocess:
 """
 
 import argparse
+import warnings
+
+warnings.filterwarnings("ignore", message=".*does not have a deterministic implementation.*")
 
 
 def main():
@@ -25,9 +28,12 @@ def main():
     parser.add_argument("--project", default=".",           help="Project output directory")
     args = parser.parse_args()
 
-    from ultralytics import YOLO
-
-    model = YOLO(args.weights)
+    if "rtdetr" in args.weights.lower():
+        from ultralytics import RTDETR
+        model = RTDETR(args.weights)
+    else:
+        from ultralytics import YOLO
+        model = YOLO(args.weights)
     model.train(
         data=args.data,
         epochs=args.epochs,

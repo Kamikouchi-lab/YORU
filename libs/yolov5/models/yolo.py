@@ -207,7 +207,11 @@ class BaseModel(nn.Module):
         m = self.model[-1]  # Detect()
         if isinstance(m, (Detect, Segment)):
             m.stride = fn(m.stride)
+            if not hasattr(m, "grid"):
+                m.grid = [torch.empty(0)] * m.nl
             m.grid = list(map(fn, m.grid))
+            if not hasattr(m, "anchor_grid") or not isinstance(m.anchor_grid, list):
+                m.anchor_grid = [torch.empty(0)] * m.nl
             if isinstance(m.anchor_grid, list):
                 m.anchor_grid = list(map(fn, m.anchor_grid))
         return self
