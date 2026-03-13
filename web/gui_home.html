@@ -24,6 +24,7 @@
             <img src="../image/YORU_realtime_button.png" alt="Real-time Behavior Detection" onclick="runProgram3()">
             <button onclick="showFileDialog()">Select</button>
             <p id="file-path">ここに文字が表示されます</p>
+            <button onclick="runConfigCreator()">Create new config →</button>
         </div>
     </div>
 
@@ -68,6 +69,12 @@
     <script type="text/javascript">
         function runProgram4() {
             eel.run_evaluate_gui();
+        }
+    </script>
+
+    <script type="text/javascript">
+        function runConfigCreator() {
+            eel.run_config_creator_gui();
         }
     </script>
 

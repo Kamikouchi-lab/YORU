@@ -134,6 +134,14 @@ def run_evaluate_gui():
     )
 
 
+@eel.expose
+def run_config_creator_gui():
+    subprocess.Popen(
+        [sys.executable, "-c", "from yoru import config_creator_GUI; config_creator_GUI.main()"],
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
+    )
+
+
 def main():
     load_condition_file()  # 設定ファイルを読み込む
     eel.init("web")
