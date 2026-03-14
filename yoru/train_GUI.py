@@ -3,6 +3,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from multiprocessing import Manager, Process
 
 import dearpygui.dearpygui as dpg
@@ -46,168 +47,192 @@ class yoru_train:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Training", width=940, height=850)
+        dpg.create_viewport(title="YORU - Training", width=960, height=870)
         imager_window = dpg.generate_uuid()
 
-        # theme
+        # ── Global theme ──────────────────────────────────────────────────────
         with dpg.theme() as global_theme:
             with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_Tab, (55, 140, 23), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_TabHovered,
-                    (100, 140, 23),
-                    category=dpg.mvThemeCat_Core,
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_TitleBg, (200, 140, 23), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_Text, (230, 230, 230), category=dpg.mvThemeCat_Core
-                )
-
-                dpg.add_theme_style(
-                    dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core
-                )
+                # Backgrounds
+                dpg.add_theme_color(dpg.mvThemeCol_WindowBg,            (28, 30, 33),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ChildBg,             (35, 37, 40),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg,             (45, 47, 52),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered,      (60, 63, 68),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive,       (55, 58, 63),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_PopupBg,             (32, 34, 37),     category=dpg.mvThemeCat_Core)
+                # Title bar
+                dpg.add_theme_color(dpg.mvThemeCol_TitleBg,             (35, 37, 40),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive,       (45, 120, 18),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TitleBgCollapsed,    (28, 30, 33),     category=dpg.mvThemeCat_Core)
+                # Tabs
+                dpg.add_theme_color(dpg.mvThemeCol_Tab,                 (45, 120, 18),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TabHovered,          (80, 170, 35),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TabActive,           (65, 150, 25),    category=dpg.mvThemeCat_Core)
+                # Buttons (default: muted green)
+                dpg.add_theme_color(dpg.mvThemeCol_Button,              (45, 85, 45),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered,       (65, 115, 65),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive,        (35, 70, 35),     category=dpg.mvThemeCat_Core)
+                # Scrollbar
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg,         (22, 24, 27),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrab,       (60, 63, 68),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabHovered,(80, 83, 90),     category=dpg.mvThemeCat_Core)
+                # Separator / text
+                dpg.add_theme_color(dpg.mvThemeCol_Separator,           (65, 70, 75),     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Text,                (220, 223, 228),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TextDisabled,        (100, 103, 108),  category=dpg.mvThemeCat_Core)
+                # Style
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding,  5,      category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_WindowRounding,  6,      category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_ChildRounding,   5,      category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_GrabRounding,    4,      category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing,     8, 6,   category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FramePadding,    6, 4,   category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding,  12, 10,  category=dpg.mvThemeCat_Core)
 
         dpg.bind_theme(global_theme)
 
-        # add a font registry
-        # with dpg.font_registry():
-        #     # first argument ids the path to the .ttf or .otf file
-        #     default_font = dpg.add_font("./fonts/myriad-pro-cufonfonts/MYRIADPRO-REGULAR.OTF", 15)
-        # # set font of specific widget
-        # dpg.bind_font(default_font)
+        # ── Per-widget themes ─────────────────────────────────────────────────
+        with dpg.theme() as _complete_theme:
+            with dpg.theme_component(dpg.mvText):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (75, 210, 75),  category=dpg.mvThemeCat_Core)
+        self._complete_theme = _complete_theme
 
-        # imager-window
+        with dpg.theme() as _yet_theme:
+            with dpg.theme_component(dpg.mvText):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (180, 175, 60), category=dpg.mvThemeCat_Core)
+        self._yet_theme = _yet_theme
 
+        with dpg.theme() as _error_theme:
+            with dpg.theme_component(dpg.mvText):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (210, 60, 60),  category=dpg.mvThemeCat_Core)
+        self._error_theme = _error_theme
+
+        with dpg.theme() as _train_btn_theme:
+            with dpg.theme_component(dpg.mvButton):
+                dpg.add_theme_color(dpg.mvThemeCol_Button,        (30, 140, 50),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (50, 180, 70),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive,  (20, 110, 38),  category=dpg.mvThemeCat_Core)
+        self._train_btn_theme = _train_btn_theme
+
+        with dpg.theme() as _quit_btn_theme:
+            with dpg.theme_component(dpg.mvButton):
+                dpg.add_theme_color(dpg.mvThemeCol_Button,        (130, 38, 38),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (170, 55, 55),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive,  (100, 28, 28),  category=dpg.mvThemeCat_Core)
+        self._quit_btn_theme = _quit_btn_theme
+
+        with dpg.theme() as _home_btn_theme:
+            with dpg.theme_component(dpg.mvButton):
+                dpg.add_theme_color(dpg.mvThemeCol_Button,        (38, 70, 130),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (55, 95, 170),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive,  (28, 55, 100),  category=dpg.mvThemeCat_Core)
+        self._home_btn_theme = _home_btn_theme
+
+        # ── Main window ───────────────────────────────────────────────────────
         with dpg.window(label="YORU - Train", id=imager_window):
+            # Step 1
             with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Step1: Creating project     ")
+                dpg.add_text(default_value="Step 1: Creating project")
+                dpg.add_spacer(width=8)
                 dpg.add_text(tag="step1_state", default_value="Yet")
             with dpg.group(horizontal=True):
-                dpg.add_text(label="project_dir", default_value="Project Directory")
-                dpg.add_input_text(
-                    tag="project_path", readonly=True, hint="Path/to/project"
-                )
-                dpg.add_button(
-                    label="Select Directory",
-                    callback=lambda: self.fd_tk.pro_dir_open(),
-                    enabled=True,
-                )
+                dpg.add_text(default_value="Project Directory")
+                dpg.add_input_text(tag="project_path", readonly=True, hint="Path/to/project", width=300)
+                dpg.add_button(label="Select Directory", callback=lambda: self.fd_tk.pro_dir_open(), enabled=True)
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="Load YORU project",
-                    tag="load_btn",
-                    width=150,
-                    height=30,
-                    callback=lambda: self.load_pr_dir(),
-                    enabled=True,
+                    label="Load YORU project", tag="load_btn",
+                    width=150, height=30, callback=lambda: self.load_pr_dir(), enabled=True,
                 )
-                dpg.add_text(default_value="     or     ")
-                dpg.add_input_text(
-                    tag="pro_name",
-                    default_value="",
-                    width=200,
-                    hint="YORU project name",
-                )
+                dpg.add_text(default_value="  or  ")
+                dpg.add_input_text(tag="pro_name", default_value="", width=200, hint="YORU project name")
                 dpg.add_button(
-                    label="Create YORU project",
-                    tag="cre_btn",
-                    width=150,
-                    height=30,
-                    callback=lambda: self.create_pr_dir(),
-                    enabled=True,
+                    label="Create YORU project", tag="cre_btn",
+                    width=160, height=30, callback=lambda: self.create_pr_dir(), enabled=True,
                 )
+            dpg.add_spacer(height=4)
             dpg.add_separator()
+            dpg.add_spacer(height=4)
 
+            # Step 2
             with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Step2: Screenshot GUI     ")
+                dpg.add_text(default_value="Step 2: Screenshot GUI")
+                dpg.add_spacer(width=8)
                 dpg.add_text(tag="step2_state", default_value="Yet")
             dpg.add_button(
-                label="Run YORU Frame Capture",
-                tag="grab_btn",
-                width=150,
-                height=30,
-                callback=lambda: self.grab_bt(),
-                enabled=True,
+                label="Run YORU Frame Capture", tag="grab_btn",
+                width=180, height=30, callback=lambda: self.grab_bt(), enabled=True,
             )
+            dpg.add_spacer(height=4)
             dpg.add_separator()
+            dpg.add_spacer(height=4)
+
+            # Step 3
             with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Step3: Labeling     ")
+                dpg.add_text(default_value="Step 3: Labeling")
+                dpg.add_spacer(width=8)
                 dpg.add_text(tag="step3_state", default_value="Yet")
             dpg.add_button(
-                label="Run LabelImg",
-                tag="labelimg_btn",
-                width=150,
-                height=30,
-                callback=lambda: self.labelImg_bt(),
-                enabled=True,
+                label="Run LabelImg", tag="labelimg_btn",
+                width=150, height=30, callback=lambda: self.labelImg_bt(), enabled=True,
             )
+            dpg.add_spacer(height=4)
             dpg.add_separator()
+            dpg.add_spacer(height=4)
+
+            # Step 4
             with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Step4: Prepare image and txt flies     ")
+                dpg.add_text(default_value="Step 4: Prepare images and label files")
+                dpg.add_spacer(width=8)
                 dpg.add_text(tag="step4_state", default_value="Yet")
-            with dpg.group(indent=40):
+            with dpg.group(indent=20):
                 dpg.add_button(
-                    label="Move Label Images",
-                    tag="move_label_images",
-                    callback=lambda: self.flie_move_bt(),
-                    enabled=False,
+                    label="Move Label Images", tag="move_label_images",
+                    callback=lambda: self.flie_move_bt(), enabled=False,
                 )
                 dpg.add_text(
                     "-project_name\n"
                     "     |-all_label_images - classes.txt\n"
                     "     |-train   ~80% of labeled data\n"
                     "     |  |- images - *.png\n"
-                    "     |  |\n"
                     "     |  |- labels - *.txt\n"
-                    "     |\n"
                     "     |- val    ~20% of labeled data\n"
                     "         |- images - *.png\n"
-                    "         |\n"
                     "         |- labels - *.txt\n"
                 )
+            dpg.add_spacer(height=4)
             dpg.add_separator()
+            dpg.add_spacer(height=4)
+
+            # Step 5
             with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Step5: Creating yaml file     ")
+                dpg.add_text(default_value="Step 5: Creating YAML file")
+                dpg.add_spacer(width=8)
                 dpg.add_text(tag="step5_state", default_value="Yet")
             with dpg.group(horizontal=True):
-                dpg.add_text(label="class_path_in", default_value="classes.txt Path")
-                dpg.add_input_text(
-                    tag="classes_path", readonly=True, hint="Path/to/classes.txt"
-                )
-                dpg.add_button(
-                    label="Select Path",
-                    callback=lambda: self.fd_tk.class_txt_open(),
-                    enabled=True,
-                )
+                dpg.add_text(default_value="classes.txt Path")
+                dpg.add_input_text(tag="classes_path", readonly=True, hint="Path/to/classes.txt", width=300)
+                dpg.add_button(label="Select Path", callback=lambda: self.fd_tk.class_txt_open(), enabled=True)
             dpg.add_button(
-                label="Add class info in YAML file",
-                tag="cre_yaml_btn",
-                width=200,
-                height=30,
-                callback=lambda: self.add_class_file(),
-                enabled=True,
+                label="Add class info in YAML file", tag="cre_yaml_btn",
+                width=220, height=30, callback=lambda: self.add_class_file(), enabled=True,
             )
+            dpg.add_spacer(height=4)
             dpg.add_separator()
+            dpg.add_spacer(height=4)
+
+            # Step 6
             with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Step6: Train dataset     ")
+                dpg.add_text(default_value="Step 6: Train dataset")
+                dpg.add_spacer(width=8)
                 dpg.add_text(tag="step6_state", default_value="Yet")
             with dpg.group(horizontal=True):
-                dpg.add_text(label="yaml_path", default_value="YAML Path")
-                dpg.add_input_text(
-                    tag="yaml_file_path", readonly=True, hint="Path/to/config.yaml"
-                )
-                dpg.add_button(
-                    label="Select File",
-                    callback=lambda: self.fd_tk.dataset_file_open(),
-                    enabled=True,
-                )
+                dpg.add_text(default_value="YAML Path")
+                dpg.add_input_text(tag="yaml_file_path", readonly=True, hint="Path/to/config.yaml", width=300)
+                dpg.add_button(label="Select File", callback=lambda: self.fd_tk.dataset_file_open(), enabled=True)
             dpg.add_text(default_value="Training conditions")
             with dpg.group(horizontal=True):
-                # --- Left column: Model settings ---
+                # Left column: Model settings
                 with dpg.group():
                     dpg.add_text("[ Model ]")
                     with dpg.group(horizontal=True):
@@ -219,7 +244,7 @@ class yoru_train:
                             width=150,
                             callback=lambda: self.select_family(),
                         )
-                    # --- YOLO options (shown by default) ---
+                    # YOLO options (shown by default)
                     with dpg.group(tag="yolo_options_group"):
                         with dpg.group(horizontal=True):
                             dpg.add_text(default_value="  YOLO Version  ")
@@ -239,7 +264,7 @@ class yoru_train:
                                 width=150,
                                 callback=lambda: self.select_size(),
                             )
-                    # --- RT-DETR options (hidden by default) ---
+                    # RT-DETR options (hidden by default)
                     with dpg.group(tag="rtdetr_options_group", show=False):
                         with dpg.group(horizontal=True):
                             dpg.add_text(default_value="  Model Size    ")
@@ -250,7 +275,7 @@ class yoru_train:
                                 width=150,
                                 callback=lambda: self.select_rtdetr_size(),
                             )
-                    # --- Torchvision options (hidden by default) ---
+                    # Torchvision options (hidden by default)
                     with dpg.group(tag="tv_options_group", show=False):
                         with dpg.group(horizontal=True):
                             dpg.add_text(default_value="  Backbone      ")
@@ -267,7 +292,7 @@ class yoru_train:
 
                 dpg.add_spacer(width=30)
 
-                # --- Right column: Training parameters ---
+                # Right column: Training parameters
                 with dpg.group():
                     dpg.add_text("[ Training Params ]")
                     with dpg.group(horizontal=True):
@@ -294,35 +319,56 @@ class yoru_train:
                             width=120,
                             callback=lambda: self.in_batch(),
                         )
+
+            dpg.add_spacer(height=8)
             dpg.add_button(
-                label="Train Model",
-                tag="str_btn",
-                width=100,
-                height=30,
-                callback=lambda: self.run_yolo(),
-                enabled=True,
+                label="Train Model", tag="str_btn",
+                width=150, height=35, callback=lambda: self.run_yolo(), enabled=True,
             )
+            dpg.add_spacer(height=4)
             with dpg.group(horizontal=True):
-                dpg.add_text(default_value="    Progress: ")
+                dpg.add_text(default_value="Progress: ")
                 dpg.add_text(tag="train_progress_text", default_value="---")
-            dpg.add_progress_bar(tag="train_progress_bar", default_value=0.0, width=400)
+                dpg.add_spacer(width=20)
+                dpg.add_text(default_value="Remaining: ")
+                dpg.add_text(tag="train_eta_text", default_value="---")
+            dpg.add_progress_bar(tag="train_progress_bar", default_value=0.0, width=450)
+            dpg.add_spacer(height=4)
             dpg.add_separator()
-            with dpg.group(horizontal=False):
+            dpg.add_spacer(height=6)
+
+            # Bottom buttons
+            with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="Quit",
-                    tag="quit_btn",
-                    callback=lambda: self.quit_cb(),
-                    enabled=True,
+                    label="Back to Home", tag="home_btn",
+                    width=120, height=30, callback=lambda: self.home_cb(), enabled=True,
                 )
+                dpg.add_spacer(width=10)
                 dpg.add_button(
-                    label="Back to home",
-                    tag="home_btn",
-                    callback=lambda: self.home_cb(),
-                    enabled=True,
+                    label="Quit", tag="quit_btn",
+                    width=80, height=30, callback=lambda: self.quit_cb(), enabled=True,
                 )
+
+        # ── Bind per-widget themes ────────────────────────────────────────────
+        dpg.bind_item_theme("str_btn",  self._train_btn_theme)
+        dpg.bind_item_theme("quit_btn", self._quit_btn_theme)
+        dpg.bind_item_theme("home_btn", self._home_btn_theme)
+        for _tag in ["step1_state", "step2_state", "step3_state",
+                     "step4_state", "step5_state", "step6_state"]:
+            dpg.bind_item_theme(_tag, self._yet_theme)
 
         dpg.setup_dearpygui()
         dpg.show_viewport()
+
+    def _set_step_state(self, tag: str, state: str) -> None:
+        """Update a step state text and apply the matching color theme."""
+        dpg.set_value(tag, state)
+        if state == "Complete!!":
+            dpg.bind_item_theme(tag, self._complete_theme)
+        elif state == "Error":
+            dpg.bind_item_theme(tag, self._error_theme)
+        else:
+            dpg.bind_item_theme(tag, self._yet_theme)
 
     def plot_callback(self) -> None:
         epoch = self.m_dict.get("train_epoch", 0)
@@ -331,10 +377,22 @@ class yoru_train:
             progress = epoch / total
             dpg.set_value("train_progress_bar", progress)
             dpg.set_value("train_progress_text", f"Epoch {epoch} / {total}")
+            eta_sec = self.m_dict.get("train_eta_seconds", None)
+            if eta_sec is not None and epoch > 0:
+                h = int(eta_sec) // 3600
+                m = (int(eta_sec) % 3600) // 60
+                s = int(eta_sec) % 60
+                if h > 0:
+                    dpg.set_value("train_eta_text", f"{h}h {m:02d}m {s:02d}s")
+                elif m > 0:
+                    dpg.set_value("train_eta_text", f"{m}m {s:02d}s")
+                else:
+                    dpg.set_value("train_eta_text", f"{s}s")
         if self.m_dict.get("training_done", False):
-            dpg.set_value("step6_state", "Complete!!")
+            self._set_step_state("step6_state", "Complete!!")
             dpg.set_value("train_progress_bar", 1.0)
             dpg.set_value("train_progress_text", "Done!")
+            dpg.set_value("train_eta_text", "0s")
             self.m_dict["training_done"] = False
 
     def run(self):
@@ -376,7 +434,7 @@ class yoru_train:
 
             dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
             dpg.enable_item("move_label_images")
-            dpg.set_value("step1_state", "Complete!!")
+            self._set_step_state("step1_state", "Complete!!")
         else:
             print("The project already exists.")
             dpg.enable_item("move_label_images")
@@ -435,7 +493,7 @@ class yoru_train:
         # --- Step1: プロジェクト読み込み完了 ---
         dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
         dpg.enable_item("move_label_images")
-        dpg.set_value("step1_state", "Complete!!")
+        self._set_step_state("step1_state", "Complete!!")
 
         # --- モデル/ウェイトの復元 (training_date があれば weights キーを優先) ---
         saved_model = data.get("weights") or data.get("Model") or data.get("YOLO_ver")
@@ -467,7 +525,7 @@ class yoru_train:
                 for f in os.listdir(all_label_dir)
             )
             if has_images:
-                dpg.set_value("step2_state", "Complete!!")
+                self._set_step_state("step2_state", "Complete!!")
 
             # --- Step3: all_label_images に classes.txt 以外の .txt があればラベリング完了 ---
             has_labels = any(
@@ -475,12 +533,12 @@ class yoru_train:
                 for f in os.listdir(all_label_dir)
             )
             if has_labels:
-                dpg.set_value("step3_state", "Complete!!")
+                self._set_step_state("step3_state", "Complete!!")
 
         # --- Step4: train/images にファイルがあれば移動済み ---
         train_images_dir = self.m_dict["project_dir"] + "/train/images"
         if os.path.exists(train_images_dir) and os.listdir(train_images_dir):
-            dpg.set_value("step4_state", "Complete!!")
+            self._set_step_state("step4_state", "Complete!!")
             dpg.disable_item("move_label_images")
 
         # --- Step5: クラス情報が登録済みなら classes_path を復元して完了表示 ---
@@ -489,11 +547,11 @@ class yoru_train:
             if os.path.exists(classes_txt):
                 self.m_dict["classes_path"] = classes_txt
                 dpg.set_value("classes_path", classes_txt)
-            dpg.set_value("step5_state", "Complete!!")
+            self._set_step_state("step5_state", "Complete!!")
 
         # --- Step6: 学習済みなら完了表示 ---
         if data.get("training_date"):
-            dpg.set_value("step6_state", "Complete!!")
+            self._set_step_state("step6_state", "Complete!!")
 
         print("load complete")
 
@@ -501,14 +559,14 @@ class yoru_train:
         # print("quit_pushed")
         # self.m_dict["quit"] = True
         subprocess.call(["python", "./yoru/grab_GUI.py"])
-        dpg.set_value("step2_state", "Complete!!")
+        self._set_step_state("step2_state", "Complete!!")
         # dpg.destroy_context()  # <-- moved from __del__
 
     def labelImg_bt(self):
         # print("quit_pushed")
         # self.m_dict["quit"] = True
         subprocess.call(["labelImg"])
-        dpg.set_value("step3_state", "Complete!!")
+        self._set_step_state("step3_state", "Complete!!")
         # dpg.destroy_context()  # <-- moved from __del__
 
     def quit_cb(self):
@@ -528,7 +586,7 @@ class yoru_train:
             self.m_dict["classes_path"]
         ):
             cr_project.add_class_info()
-        dpg.set_value("step5_state", "Complete!!")
+        self._set_step_state("step5_state", "Complete!!")
 
     def _build_weight(self) -> str:
         """選択中のモデルファミリー・バージョン・サイズからウェイトファイル名を生成する。"""
@@ -598,7 +656,7 @@ class yoru_train:
         print(self.m_dict["all_label_dir"])
         self.fmrd.move()
         dpg.disable_item("move_label_images")
-        dpg.set_value("step4_state", "Complete!!")
+        self._set_step_state("step4_state", "Complete!!")
 
     def in_img(self):
         tf = dpg.get_value("img_num_in")
@@ -617,6 +675,10 @@ class yoru_train:
 
         self.m_dict["train_epoch"] = 0
         self.m_dict["train_total_epoch"] = total_epochs
+        self.m_dict["train_eta_seconds"] = None
+
+        start_time = None
+        start_epoch = 0
 
         for raw_line in proc.stdout:
             line = ansi_re.sub("", raw_line).rstrip()
@@ -625,8 +687,17 @@ class yoru_train:
             if m:
                 current = int(m.group(1))
                 total   = int(m.group(2))
+                if start_time is None:
+                    start_time = time.monotonic()
+                    start_epoch = current - 1
                 self.m_dict["train_epoch"]       = current
                 self.m_dict["train_total_epoch"] = total
+                elapsed = time.monotonic() - start_time
+                completed = current - start_epoch
+                remaining = total - current
+                if completed > 0:
+                    sec_per_epoch = elapsed / completed
+                    self.m_dict["train_eta_seconds"] = sec_per_epoch * remaining
 
         proc.wait()
         self.m_dict["train_epoch"]   = self.m_dict.get("train_total_epoch", total_epochs)
@@ -636,7 +707,7 @@ class yoru_train:
         # train
         cmd = [
             "python",
-            "./libs/yolov5/train.py",
+            "./yoru/libs/yolov5/train.py",
             "--imgsz",
             str(self.m_dict["img"]),
             "--batch-size",
@@ -676,13 +747,13 @@ class yoru_train:
             t.start()
         except Exception as e:
             print("error: ", e)
-            dpg.set_value("step6_state", "Error")
+            self._set_step_state("step6_state", "Error")
 
     def run_yolo_ultralytics(self):
         """Launch YOLOv8 / YOLO11 training via the ultralytics package."""
         cmd = [
             "python",
-            "./libs/train_ultralytics.py",
+            "./yoru/libs/train_ultralytics.py",
             "--weights",
             str(self.m_dict["weight"]),
             "--data",
@@ -717,7 +788,7 @@ class yoru_train:
             t.start()
         except Exception as e:
             print("error: ", e)
-            dpg.set_value("step6_state", "Error")
+            self._set_step_state("step6_state", "Error")
 
     def run_torchvision(self):
         """Launch Faster R-CNN / Mask R-CNN / SSD training via train_torchvision.py."""
@@ -730,7 +801,7 @@ class yoru_train:
 
         cmd = [
             "python",
-            "./libs/train_torchvision.py",
+            "./yoru/libs/train_torchvision.py",
             "--model",   model_type,
             "--data",    str(self.m_dict["yaml_path"]),
             "--epochs",  str(self.m_dict["epoch"]),
@@ -758,7 +829,7 @@ class yoru_train:
             t.start()
         except Exception as e:
             print("error: ", e)
-            dpg.set_value("step6_state", "Error")
+            self._set_step_state("step6_state", "Error")
 
     def run_yolo(self):
         """Dispatch training to the correct backend based on the selected model family."""

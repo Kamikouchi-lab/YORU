@@ -1,7 +1,7 @@
 """Training script for YOLOv8 / YOLO11 via the ultralytics package.
 
 Called by train_GUI.py via subprocess:
-    python ./libs/train_ultralytics.py \
+    python ./yoru/libs/train_ultralytics.py \
         --weights yolov8s.pt \
         --data    path/to/config.yaml \
         --epochs  300 \

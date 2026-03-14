@@ -25,6 +25,7 @@ def test_condition_yaml_shape(repo_root: Path):
     model = cfg["model"]; assert isinstance(model, dict)
     assert _has_any(model, "yolo_detection", "enable_yolo")
     assert _has_any(model, "yolo_model_path", "model_path")
+    assert _has_any(model, "yolo_model_type", "model_type")
 
     cap = cfg["capture_style"]; assert isinstance(cap, dict)
     assert _has_any(cap, "stream_MSS", "screen_capture", "stream_capture")

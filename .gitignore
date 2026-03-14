@@ -182,3 +182,6 @@ custom_layout_evaluater_gui.ini
 desktop.ini
 
 others/
+
+.claude/
+.history/

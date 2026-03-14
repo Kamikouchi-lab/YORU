@@ -83,7 +83,67 @@ class analyze_GUI:
             docking_space=True,
         )
 
-        dpg.create_viewport(title="YORU - Video Analysis", width=800, height=800)
+        dpg.create_viewport(title="YORU - Video Analysis", width=900, height=860)
+
+        # Theme
+        with dpg.theme() as global_theme:
+            with dpg.theme_component(dpg.mvAll):
+                # Backgrounds
+                dpg.add_theme_color(dpg.mvThemeCol_WindowBg,              (18, 24, 42),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ChildBg,               (22, 30, 52),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_PopupBg,               (22, 30, 52),    category=dpg.mvThemeCat_Core)
+                # Title bar
+                dpg.add_theme_color(dpg.mvThemeCol_TitleBg,               (25, 70, 130),   category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive,         (35, 95, 165),   category=dpg.mvThemeCat_Core)
+                # Tabs
+                dpg.add_theme_color(dpg.mvThemeCol_Tab,                   (25, 70, 130),   category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TabHovered,            (50, 115, 185),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TabActive,             (45, 110, 180),  category=dpg.mvThemeCat_Core)
+                # Buttons
+                dpg.add_theme_color(dpg.mvThemeCol_Button,                (35, 95, 165),   category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered,         (55, 125, 200),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive,          (20, 70, 140),   category=dpg.mvThemeCat_Core)
+                # Frame (inputs, combos, checkboxes)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg,               (30, 42, 68),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered,        (38, 55, 88),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive,         (45, 65, 100),   category=dpg.mvThemeCat_Core)
+                # Slider
+                dpg.add_theme_color(dpg.mvThemeCol_SliderGrab,            (60, 130, 210),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_SliderGrabActive,      (85, 160, 235),  category=dpg.mvThemeCat_Core)
+                # Scrollbar
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg,           (18, 24, 42),    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrab,         (45, 80, 140),   category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabHovered,  (60, 100, 165),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabActive,   (75, 120, 185),  category=dpg.mvThemeCat_Core)
+                # Separator & check
+                dpg.add_theme_color(dpg.mvThemeCol_Separator,             (50, 85, 140),   category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_CheckMark,             (80, 180, 240),  category=dpg.mvThemeCat_Core)
+                # Text
+                dpg.add_theme_color(dpg.mvThemeCol_Text,                  (230, 230, 230), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_TextDisabled,          (120, 140, 170), category=dpg.mvThemeCat_Core)
+                # Header / collapsible
+                dpg.add_theme_color(dpg.mvThemeCol_Header,                (35, 80, 145),   category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered,         (50, 100, 170),  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_HeaderActive,          (25, 65, 125),   category=dpg.mvThemeCat_Core)
+                # Plot (progress bar fill)
+                dpg.add_theme_color(dpg.mvThemeCol_PlotHistogram,         (35, 120, 200),  category=dpg.mvThemeCat_Core)
+                # Style vars
+                dpg.add_theme_style(dpg.mvStyleVar_WindowRounding,  6,     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding,    12, 10, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding,    5,     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FramePadding,     6,  4,  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing,      8,  6,  category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_GrabRounding,     4,     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_GrabMinSize,      12,    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_TabRounding,      4,     category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_ScrollbarRounding, 4,    category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_ChildRounding,    5,     category=dpg.mvThemeCat_Core)
+        dpg.bind_theme(global_theme)
+
+        # Section header theme (accent-colored text)
+        with dpg.theme() as _sec_hdr_theme:
+            with dpg.theme_component(dpg.mvText):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (100, 180, 240), category=dpg.mvThemeCat_Core)
 
         # GUI-settings
         with dpg.texture_registry(show=False):
@@ -105,125 +165,142 @@ class analyze_GUI:
         imager_window1 = dpg.generate_uuid()
         imager_window2 = dpg.generate_uuid()
 
-        # imager-window
-        # images analysis window
+        # --- Analyzing Images window ---
         with dpg.window(label="Analyzing Images", id=imager_window2):
-            dpg.add_text(default_value="Analyzing Images")
+            # Setup
+            dpg.bind_item_theme(dpg.add_text(default_value="Setup"), _sec_hdr_theme)
+            dpg.add_separator()
             with dpg.group(horizontal=True):
-                dpg.add_text(label="Model path", default_value="Model Path")
+                dpg.add_text(default_value="Model Path      ")
                 dpg.add_input_text(
-                    tag="Model_path_2", readonly=True, hint="Path/to/model"
+                    tag="Model_path_2", readonly=True, hint="Path/to/model", width=250
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
                     label="Select File",
                     callback=lambda: self.model_select_bt(),
-                    enabled=True,
                 )
             with dpg.group(horizontal=True):
-                dpg.add_text(label="Images path", default_value="Images Path")
+                dpg.add_text(default_value="Images Path     ")
                 dpg.add_input_text(
-                    tag="input_image_path", readonly=True, hint="Path/to/images"
+                    tag="input_image_path", readonly=True, hint="Path/to/images", width=250
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
-                    label="Select Images",
+                    label="Select Files",
                     callback=lambda: self.image_select_bt(),
-                    enabled=True,
                 )
             with dpg.group(horizontal=True):
-                dpg.add_text(label="Output Dir", default_value="Result Directory")
+                dpg.add_text(default_value="Result Directory")
                 dpg.add_input_text(
                     tag="Output_Directory_Path2",
                     readonly=True,
                     hint="Path/to/result/directory",
+                    width=250,
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
-                    label="Select File",
+                    label="Select Directory",
                     callback=lambda: self.fd_tk.Out_dir_open(),
-                    enabled=True,
                 )
+            # Preview
+            dpg.add_spacer(height=4)
+            dpg.bind_item_theme(dpg.add_text(default_value="Preview"), _sec_hdr_theme)
             dpg.add_separator()
-            dpg.add_text(label="title", default_value="Preview")
             dpg.add_image("imwin_tag1", width=400, height=400)
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="Previous image",
+                    label="< Previous",
                     tag="previous_image",
                     callback=lambda: self.previous_image_bt(),
                 )
-                dpg.add_text(label="space1", default_value="     ")
+                dpg.add_spacer(width=8)
                 dpg.add_button(
-                    label="Next image",
+                    label="Next >",
                     tag="next_image",
                     callback=lambda: self.next_image_bt(),
                 )
-                dpg.add_text(tag="image_num_state", default_value="    none")
+                dpg.add_spacer(width=8)
+                dpg.add_text(tag="image_num_state", default_value="none")
+            # Analysis
+            dpg.add_spacer(height=4)
+            dpg.bind_item_theme(dpg.add_text(default_value="Start Analyzing"), _sec_hdr_theme)
             dpg.add_separator()
-            dpg.add_text(label="title2", default_value="Start analyzing")
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="YORU analysis images",
+                    label="Run Analysis",
                     tag="analyze_img_btn",
-                    width=100,
+                    width=120,
                     height=30,
                     callback=lambda: self.analyze_image(),
-                    enabled=True,
                 )
+                dpg.add_spacer(width=8)
                 with dpg.group(horizontal=False):
-                    dpg.add_text(
-                        label="Analyze state", tag="analy_state", default_value="none"
+                    dpg.add_text(tag="analy_state", default_value="Ready")
+                    dpg.add_progress_bar(
+                        tag="image_progress_bar",
+                        default_value=0.0,
+                        width=300,
+                        overlay="0%",
                     )
+            # Navigation
+            dpg.add_spacer(height=4)
             dpg.add_separator()
-            with dpg.group(horizontal=False):
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Back to Home",
+                    tag="home_btn_2",
+                    callback=lambda: self.home_cb(),
+                )
+                dpg.add_spacer(width=8)
                 dpg.add_button(
                     label="Quit",
                     tag="quit_btn_2",
                     callback=lambda: self.quit_cb(),
-                    enabled=True,
-                )
-                dpg.add_button(
-                    label="Back to home",
-                    tag="home_btn_2",
-                    callback=lambda: self.home_cb(),
-                    enabled=True,
                 )
 
-        # movie analysis window
+        # --- Analyzing Movies window ---
         with dpg.window(label="Analyzing Movies", id=imager_window1):
-            dpg.add_text(default_value="Analyzing Movies")
+            # Setup
+            dpg.bind_item_theme(dpg.add_text(default_value="Setup"), _sec_hdr_theme)
+            dpg.add_separator()
             with dpg.group(horizontal=True):
-                dpg.add_text(label="Model path", default_value="Model Path")
+                dpg.add_text(default_value="Model Path      ")
                 dpg.add_input_text(
-                    tag="Model_path", readonly=True, hint="Path/to/model"
+                    tag="Model_path", readonly=True, hint="Path/to/model", width=250
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
                     label="Select File",
                     callback=lambda: self.model_select_bt(),
-                    enabled=True,
                 )
             with dpg.group(horizontal=True):
-                dpg.add_text(label="Movie path", default_value="Movie Path")
+                dpg.add_text(default_value="Movie Path      ")
                 dpg.add_input_text(
-                    tag="Input file Path", readonly=True, hint="Path/to/movies"
+                    tag="Input file Path", readonly=True, hint="Path/to/movies", width=250
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
-                    label="Select File",
+                    label="Select Files",
                     callback=lambda: self.movie_select_bt(),
-                    enabled=True,
                 )
             with dpg.group(horizontal=True):
-                dpg.add_text(label="Output Dir", default_value="Result Directory")
+                dpg.add_text(default_value="Result Directory")
                 dpg.add_input_text(
                     tag="Output_Directory_Path",
                     readonly=True,
                     hint="Path/to/result/directory",
+                    width=250,
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
-                    label="Select File",
+                    label="Select Directory",
                     callback=lambda: self.fd_tk.Out_dir_open(),
-                    enabled=True,
                 )
+            # Preview
+            dpg.add_spacer(height=4)
+            dpg.bind_item_theme(dpg.add_text(default_value="Preview"), _sec_hdr_theme)
             dpg.add_separator()
-            dpg.add_text(label="title", default_value="Preview")
             dpg.add_image("imwin_tag0", width=400, height=400)
             dpg.add_slider_int(
                 label=" Frame",
@@ -237,76 +314,85 @@ class analyze_GUI:
             )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(
-                    label="streaming movie",
+                    label="Streaming",
                     default_value=False,
                     tag="streamingChkBox",
                     callback=lambda: self.stream_cb(),
                     enabled=False,
                 )
-                dpg.add_text(
-                    label="speed_explanation", default_value="    Streaming speed"
-                )
+                dpg.add_spacer(width=12)
+                dpg.add_text(default_value="Speed")
                 dpg.add_combo(
                     items=[1, 2, 5, 10, 20, 50, 100, 200, 500],
                     tag="speed_list",
                     default_value=1,
-                    width=150,
+                    width=100,
                     callback=lambda: self.list_of_speed(),
                 )
-            with dpg.group(horizontal=True):
+                dpg.add_spacer(width=12)
                 dpg.add_button(
-                    label="Vertical flip",
+                    label="Vertical Flip",
                     tag="v_flip_state",
                     callback=lambda: self.v_flip_cb(),
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
-                    label="Horizontal flip",
+                    label="Horizontal Flip",
                     tag="h_flip_state",
                     callback=lambda: self.h_flip_cb(),
                 )
-
-                dpg.add_text(label="threshold", default_value="      Confidence threshold")
+            with dpg.group(horizontal=True):
+                dpg.add_text(default_value="Confidence Threshold")
+                dpg.add_spacer(width=8)
                 dpg.add_input_text(
                     tag="conf_threshold",
                     default_value=self.m_dict["threshold"],
-                    width=150,
+                    width=100,
                     callback=lambda: self.in_thresh(),
                 )
+            # Analysis
+            dpg.add_spacer(height=4)
+            dpg.bind_item_theme(dpg.add_text(default_value="Start Analyzing"), _sec_hdr_theme)
             dpg.add_separator()
-            dpg.add_text(label="title2", default_value="start analyzing")
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="YORU analysis",
+                    label="Run Analysis",
                     tag="analyze_btn",
-                    width=100,
+                    width=120,
                     height=30,
                     callback=lambda: self.analyze_movie(),
-                    enabled=True,
                 )
+                dpg.add_spacer(width=8)
                 dpg.add_checkbox(
-                    label="Create videos    ",
+                    label="Create Video",
                     tag="create_movie",
                     default_value=self.m_dict["create_video"],
                     callback=lambda: self.create_condition(),
                 )
+                dpg.add_spacer(width=8)
                 dpg.add_checkbox(
-                    label="Tracking algorithm       ",
+                    label="Tracking",
                     tag="tracking_state",
                     default_value=self.m_dict["tracking_state"],
                     callback=lambda: self.tracking_condition(),
                 )
-                with dpg.group(horizontal=False):
-                    dpg.add_text(
-                        label="No of movies",
-                        tag="no_mov",
-                        default_value=self.m_dict["no_movies"],
-                    )
-                    dpg.add_text(
-                        label="Analyze time",
-                        tag="analy_time",
-                        default_value=self.m_dict["estimate_time"],
-                    )
+            with dpg.group(horizontal=False):
+                dpg.add_text(
+                    tag="no_mov",
+                    default_value=self.m_dict["no_movies"],
+                )
+                dpg.add_text(
+                    tag="analy_time",
+                    default_value=self.m_dict["estimate_time"],
+                )
+                dpg.add_progress_bar(
+                    tag="movie_progress_bar",
+                    default_value=0.0,
+                    width=300,
+                    overlay="0%",
+                )
             with dpg.group(tag="tracking_exclude_group", show=self.m_dict["tracking_state"]):
+                dpg.add_spacer(height=4)
                 dpg.add_text(default_value="Exclude classes from tracking:")
                 with dpg.child_window(
                     tag="tracking_class_checkboxes", height=90, width=300, border=True
@@ -315,19 +401,20 @@ class analyze_GUI:
                         tag="tracking_cls_placeholder",
                         default_value="(load model first)",
                     )
+            # Navigation
+            dpg.add_spacer(height=4)
             dpg.add_separator()
-            with dpg.group(horizontal=False):
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Back to Home",
+                    tag="home_btn",
+                    callback=lambda: self.home_cb(),
+                )
+                dpg.add_spacer(width=8)
                 dpg.add_button(
                     label="Quit",
                     tag="quit_btn",
                     callback=lambda: self.quit_cb(),
-                    enabled=True,
-                )
-                dpg.add_button(
-                    label="Back to home",
-                    tag="home_btn",
-                    callback=lambda: self.home_cb(),
-                    enabled=True,
                 )
 
         dpg.setup_dearpygui()

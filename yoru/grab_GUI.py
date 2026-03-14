@@ -69,36 +69,67 @@ class grab_gui:
         )
         dpg.create_viewport(title="YORU - Frame Capture", width=960, height=900)
 
+        # Theme
+        with dpg.theme() as global_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_TitleBg, (25, 70, 130), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_TitleBgActive, (35, 95, 165), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_Tab, (25, 70, 130), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_TabHovered, (50, 115, 185), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_Button, (35, 95, 165), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_ButtonHovered, (55, 120, 195), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_Text, (230, 230, 230), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_ItemSpacing, 8, 6, category=dpg.mvThemeCat_Core
+                )
+        dpg.bind_theme(global_theme)
+
         # GUI-settings
         with dpg.texture_registry(show=False):
-            # imgwhite = np.ones((self.frameSize[1], self.frameSize[0], 3), np.uint8)
             dpg.add_dynamic_texture(
                 width=600,
                 height=600,
                 default_value=self.frame_to_data(self.frame_re),
                 tag="imwin_tag0",
             )
-            # dpg.add_raw_texture(
-            #     width=600,
-            #     height=600,
-            #     default_value=self.frame_to_data(self.frame_re),
-            #     tag="imwin_tag0",
-            #     format=dpg.mvFormat_Float_rgb,
-            # )
         imager_window = dpg.generate_uuid()
-        with dpg.window(label="Image window", id=imager_window):
-            dpg.add_text(label="space1", default_value="    ")
+        with dpg.window(label="Frame Capture", id=imager_window):
+            # Video Source
+            dpg.add_text(default_value="Video Source")
+            dpg.add_separator()
             with dpg.group(horizontal=True):
-                dpg.add_text(label="video_dir", default_value="Video file path")
+                dpg.add_text(default_value="Video Path      ")
                 dpg.add_input_text(
-                    tag="video_path", readonly=True, hint="Path/to/movie"
+                    tag="video_path", readonly=True, hint="Path/to/movie", width=350
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
                     label="Select Video",
                     callback=lambda: self.file_open(),
                     enabled=True,
                 )
-            dpg.add_text(label="space2", default_value="    ")
+
+            # Preview
+            dpg.add_spacer(height=4)
+            dpg.add_text(default_value="Preview")
+            dpg.add_separator()
             dpg.add_image("imwin_tag0", width=600, height=600)
             dpg.add_slider_int(
                 label=" Frame",
@@ -112,66 +143,80 @@ class grab_gui:
             )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(
-                    label="streaming movie",
+                    label="Streaming",
                     default_value=False,
                     tag="streamingChkBox",
                     callback=lambda: self.stream_cb(),
                     enabled=False,
                 )
-                dpg.add_button(
-                    tag="plus_frame",
-                    label="+ frame",
-                    callback=lambda: self.advance_frame_bt(),
-                )
+                dpg.add_spacer(width=12)
                 dpg.add_button(
                     tag="minus_frame",
-                    label="- frame",
+                    label="< Prev",
                     callback=lambda: self.reverse_frame_bt(),
                 )
+                dpg.add_button(
+                    tag="plus_frame",
+                    label="Next >",
+                    callback=lambda: self.advance_frame_bt(),
+                )
+                dpg.add_spacer(width=8)
+                dpg.add_text(default_value="Speed")
                 dpg.add_combo(
                     items=[1, 2, 5, 10, 20, 50, 100, 200, 500],
                     tag="speed_list",
                     default_value=1,
-                    width=150,
+                    width=80,
                     callback=lambda: self.list_of_speed(),
                 )
 
+            # Save Frame
+            dpg.add_spacer(height=4)
+            dpg.add_text(default_value="Save Frame")
+            dpg.add_separator()
             with dpg.group(horizontal=True):
-                dpg.add_text(label="grab_dir", default_value="Save Directory")
+                dpg.add_text(default_value="Save Directory  ")
                 dpg.add_input_text(
-                    tag="grab_path", readonly=True, hint="Path/to/save/frame"
+                    tag="grab_path", readonly=True, hint="Path/to/save/frame", width=350
                 )
+                dpg.add_spacer(width=4)
                 dpg.add_button(
                     label="Select Directory",
                     callback=lambda: self.select_grab_dir(),
                     enabled=True,
                 )
             with dpg.group(horizontal=True):
-                dpg.add_text(label="grab_name", default_value="Frame name")
+                dpg.add_text(default_value="Frame Name      ")
                 dpg.add_input_text(
                     tag="save_name", default_value="", width=200, hint="Save frame name"
                 )
+            dpg.add_spacer(height=4)
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="Grab Current Frame", callback=lambda: self.grab_btn_cb()
+                    label="Grab Current Frame",
+                    width=160,
+                    height=30,
+                    callback=lambda: self.grab_btn_cb(),
                 )
+                dpg.add_spacer(width=8)
                 dpg.add_text(
-                    label="Counter",
                     tag="count_frames",
-                    default_value=str(self.grab_count) + " frames",
+                    default_value=str(self.grab_count) + " frames grabbed",
                 )
+                dpg.add_spacer(width=8)
                 dpg.add_button(
-                    label="Count reset", callback=lambda: self.count_reset_bt()
+                    label="Reset Count", callback=lambda: self.count_reset_bt()
                 )
 
+            # Navigation
+            dpg.add_spacer(height=4)
             dpg.add_separator()
-            with dpg.group(horizontal=False):
-                dpg.add_button(
-                    label="Quit",
-                    tag="quit_btn",
-                    callback=lambda: self.quit_cb(),
-                    enabled=True,
-                )
+            dpg.add_button(
+                label="Quit",
+                tag="quit_btn",
+                callback=lambda: self.quit_cb(),
+                enabled=True,
+            )
 
         # setup
         dpg.setup_dearpygui()

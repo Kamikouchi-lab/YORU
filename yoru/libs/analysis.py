@@ -187,6 +187,8 @@ class yolo_analysis:
 
             result_list = []
             pre_ids = []
+            dpg.set_value("movie_progress_bar", 0.0)
+            dpg.configure_item("movie_progress_bar", overlay="0%")
 
             while video.isOpened():
                 ret, frame = video.read()
@@ -287,6 +289,10 @@ class yolo_analysis:
                 frame_count += 1
                 result_list = result_list + result
 
+                progress = frame_count / total_frames if total_frames > 0 else 0.0
+                dpg.set_value("movie_progress_bar", progress)
+                dpg.configure_item("movie_progress_bar", overlay=f"{int(progress * 100)}%")
+
                 end_time = time.time()  # 処理終了時間
                 process_time = end_time - start_time  # このフレームの処理時間
                 process_times.append(process_time)  # 処理時間をリストに保存
@@ -353,6 +359,8 @@ class yolo_analysis:
         self.m_dict["no_movies"] = "Leaving movies: none"
         dpg.set_value("analy_time", self.m_dict["estimate_time"])
         dpg.set_value("no_mov", self.m_dict["no_movies"])
+        dpg.set_value("movie_progress_bar", 1.0)
+        dpg.configure_item("movie_progress_bar", overlay="Done")
         dpg.enable_item("analyze_btn")
         dpg.enable_item("create_movie")
 
@@ -486,8 +494,10 @@ class yolo_analysis_image:
     def analyze_image(self):
         dpg.disable_item("analyze_img_btn")
 
-        # dpg.set_value("analy_time", "Estimated remaining time: calculating...")
-        # dpg.set_value("no_mov", "Leaving movies: calculating...")
+        dpg.set_value("analy_state", "Analyzing...")
+        dpg.set_value("image_progress_bar", 0.0)
+        dpg.configure_item("image_progress_bar", overlay="0%")
+
         yolo_model = load_yolo_model(self.yolo_model_path)
 
         # クラス名の取得
@@ -502,7 +512,7 @@ class yolo_analysis_image:
         # 指定の出力ディレクトリに新しいファイル名を結合
         file_path = os.path.join(self.out_path, "image_analysis_results" + ".csv")
 
-        for self.img_path in self.img_path_list:
+        for image_index, self.img_path in enumerate(self.img_path_list):
             base_name = os.path.basename(self.img_path)
             file_name_without_ext = os.path.splitext(base_name)[0]
 
@@ -546,6 +556,10 @@ class yolo_analysis_image:
             )
             cv2.imwrite(result_file_path, result_frame)
 
+            progress = (image_index + 1) / image_count if image_count > 0 else 0.0
+            dpg.set_value("image_progress_bar", progress)
+            dpg.configure_item("image_progress_bar", overlay=f"{image_index + 1}/{image_count}")
+
         # リストをデータフレームに変換
         df_results = pd.DataFrame(
             result_list,
@@ -565,10 +579,9 @@ class yolo_analysis_image:
         # csvとして出力
         df_results.to_csv(file_path, index=False)
 
-        # dpg.set_value("no_mov", self.m_dict["no_movies"])
-
-        # dpg.set_value("analy_time", self.m_dict["estimate_time"])
-        # dpg.set_value("no_mov", self.m_dict["no_movies"])
+        dpg.set_value("analy_state", "Done!")
+        dpg.set_value("image_progress_bar", 1.0)
+        dpg.configure_item("image_progress_bar", overlay="Done")
         dpg.enable_item("analyze_img_btn")
 
 

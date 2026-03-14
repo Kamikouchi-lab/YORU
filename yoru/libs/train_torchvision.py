@@ -1,7 +1,7 @@
 """Training script for Faster R-CNN, Mask R-CNN, and SSD using YOLO-format labels.
 
 Called by train_GUI.py via subprocess:
-    python ./libs/train_torchvision.py \\
+    python ./yoru/libs/train_torchvision.py \\
         --model   fasterrcnn \\
         --data    path/to/config.yaml \\
         --epochs  50 \\

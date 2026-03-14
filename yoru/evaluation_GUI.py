@@ -79,11 +79,36 @@ class model_eval_gui:
         )
         dpg.create_viewport(title="YORU - Evaluation", width=960, height=900)
 
+        # theme
+        with dpg.theme() as global_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_Tab, (55, 140, 23), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_TabHovered,
+                    (100, 140, 23),
+                    category=dpg.mvThemeCat_Core,
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_TitleBg, (200, 140, 23), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_Text, (230, 230, 230), category=dpg.mvThemeCat_Core
+                )
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core
+                )
+
+        dpg.bind_theme(global_theme)
+
         # GUI-settings
 
         imager_window = dpg.generate_uuid()
         with dpg.window(label="Evaluater window", id=imager_window):
-            dpg.add_text(default_value="Step1: Load project and model file")
+            with dpg.group(horizontal=True):
+                dpg.add_text(default_value="Step1: Load project and model file     ")
+                dpg.add_text(tag="step1_state", default_value="Yet")
             with dpg.group(horizontal=True):
                 dpg.add_text(
                     label="Select Project Config file",
@@ -116,7 +141,9 @@ class model_eval_gui:
                 enabled=True,
             )
             dpg.add_separator()
-            dpg.add_text(default_value="Step2: YORU Frame Capture")
+            with dpg.group(horizontal=True):
+                dpg.add_text(default_value="Step2: YORU Frame Capture     ")
+                dpg.add_text(tag="step2_state", default_value="Yet")
             dpg.add_button(
                 label="Run YORU Frame Capture",
                 tag="grab_btn",
@@ -126,7 +153,9 @@ class model_eval_gui:
                 enabled=True,
             )
             dpg.add_separator()
-            dpg.add_text(default_value="Step3: Labeling")
+            with dpg.group(horizontal=True):
+                dpg.add_text(default_value="Step3: Labeling     ")
+                dpg.add_text(tag="step3_state", default_value="Yet")
             dpg.add_button(
                 label="Run LabelImg",
                 tag="labelimg_btn",
@@ -136,7 +165,9 @@ class model_eval_gui:
                 enabled=True,
             )
             dpg.add_separator()
-            dpg.add_text(default_value="Step4: Create YOLO data")
+            with dpg.group(horizontal=True):
+                dpg.add_text(default_value="Step4: Create YOLO data     ")
+                dpg.add_text(tag="step4_state", default_value="Yet")
             dpg.add_button(
                 label="Prediction",
                 tag="yolo_detection_bt",
@@ -146,8 +177,9 @@ class model_eval_gui:
                 enabled=True,
             )
             dpg.add_separator()
-            dpg.add_text(default_value="Step5: Evaluate Model")
-
+            with dpg.group(horizontal=True):
+                dpg.add_text(default_value="Step5: Evaluate Model     ")
+                dpg.add_text(tag="step5_state", default_value="Yet")
             dpg.add_button(
                 label="Calculate APs",
                 tag="cal_aps_btn",
@@ -252,20 +284,25 @@ class model_eval_gui:
             print("add class info in yaml file")
 
         print("load complete")
+        dpg.set_value("step1_state", "Complete!!")
 
     def grab_bt(self):
         subprocess.call(["python", "./yoru/grab_GUI.py"])
+        dpg.set_value("step2_state", "Complete!!")
 
     def labelImg_bt(self):
         subprocess.call(["labelImg"])
+        dpg.set_value("step3_state", "Complete!!")
 
     def yolo_detection(self):
         yolo_det = yolo_analysis_image(self.m_dict)
         yolo_det.analyze_image()
+        dpg.set_value("step4_state", "Complete!!")
 
     def cal_aps_btn(self):
         evaluator = Evaluator(self.m_dict)
         evaluator.run_evaluation(self.m_dict["data_dir"])
+        dpg.set_value("step5_state", "Complete!!")
 
     def quit_cb(self):
         print("quit_pushed")
