@@ -1,6 +1,8 @@
 import os
+import re
 import subprocess
 import sys
+import threading
 from multiprocessing import Manager, Process
 
 import dearpygui.dearpygui as dpg
@@ -147,26 +149,26 @@ class yoru_train:
             with dpg.group(horizontal=True):
                 dpg.add_text(default_value="Step4: Prepare image and txt flies     ")
                 dpg.add_text(tag="step4_state", default_value="Yet")
-            dpg.add_button(
-                label="Move Label Imgaes",
-                tag="move_label_images",
-                callback=lambda: self.flie_move_bt(),
-                enabled=False,
-            )
-            dpg.add_text(
-                "    -project_name\n"
-                "         |-all_label_images - classes.txt\n"
-                "         |-train   ~80% of labeled data\n"
-                "         |  |- images - *.png\n"
-                "         |  | \n"
-                "         |  |- labels - *.txt\n"
-                "         | \n"
-                "         |- val    ~20% of labeled data\n"
-                "             |- images - *.png\n"
-                "             |    \n"
-                "             |- labels - *.txt\n"
-                "\n"
-            )
+            with dpg.group(indent=40):
+                dpg.add_button(
+                    label="Move Label Images",
+                    tag="move_label_images",
+                    callback=lambda: self.flie_move_bt(),
+                    enabled=False,
+                )
+                dpg.add_text(
+                    "-project_name\n"
+                    "     |-all_label_images - classes.txt\n"
+                    "     |-train   ~80% of labeled data\n"
+                    "     |  |- images - *.png\n"
+                    "     |  |\n"
+                    "     |  |- labels - *.txt\n"
+                    "     |\n"
+                    "     |- val    ~20% of labeled data\n"
+                    "         |- images - *.png\n"
+                    "         |\n"
+                    "         |- labels - *.txt\n"
+                )
             dpg.add_separator()
             with dpg.group(horizontal=True):
                 dpg.add_text(default_value="Step5: Creating yaml file     ")
@@ -203,85 +205,95 @@ class yoru_train:
                     callback=lambda: self.fd_tk.dataset_file_open(),
                     enabled=True,
                 )
-            dpg.add_text(default_value="Training condition")
+            dpg.add_text(default_value="Training conditions")
             with dpg.group(horizontal=True):
-                dpg.add_text(default_value="    Model Family ")
-                dpg.add_combo(
-                    items=self.m_dict["model_family_list"],
-                    tag="model_family_combo",
-                    default_value=self.m_dict["model_family"],
-                    width=150,
-                    callback=lambda: self.select_family(),
-                )
-            # --- YOLO options (shown by default) ---
-            with dpg.group(tag="yolo_options_group"):
-                with dpg.group(horizontal=True):
-                    dpg.add_text(default_value="    YOLO Version ")
-                    dpg.add_combo(
-                        items=self.m_dict["yolo_version_list"],
-                        tag="yolo_version_combo",
-                        default_value=self.m_dict["yolo_version"],
-                        width=150,
-                        callback=lambda: self.select_version(),
-                    )
-                with dpg.group(horizontal=True):
-                    dpg.add_text(default_value="    Model Size   ")
-                    dpg.add_combo(
-                        items=self.m_dict["yolo_size_list"],
-                        tag="weight_size_combo",
-                        default_value=self.m_dict["yolo_size"],
-                        width=150,
-                        callback=lambda: self.select_size(),
-                    )
-            # --- RT-DETR options (hidden by default) ---
-            with dpg.group(tag="rtdetr_options_group", show=False):
-                with dpg.group(horizontal=True):
-                    dpg.add_text(default_value="    Model Size   ")
-                    dpg.add_combo(
-                        items=self.m_dict["rtdetr_size_list"],
-                        tag="rtdetr_size_combo",
-                        default_value=self.m_dict["rtdetr_size"],
-                        width=150,
-                        callback=lambda: self.select_rtdetr_size(),
-                    )
-            # --- Torchvision options (hidden by default) ---
-            with dpg.group(tag="tv_options_group", show=False):
-                with dpg.group(horizontal=True):
-                    dpg.add_text(default_value="    Backbone     ")
-                    dpg.add_combo(
-                        items=self.m_dict["tv_backbone_list"],
-                        tag="tv_backbone_combo",
-                        default_value=self.m_dict["tv_backbone"],
-                        width=150,
-                        callback=lambda: self.select_backbone(),
-                    )
-            with dpg.group(horizontal=True):
-                dpg.add_text(default_value="    Weight File ")
-                dpg.add_text(tag="weight_display_text", default_value=self.m_dict["weight"])
-            with dpg.group(horizontal=True):
-                dpg.add_text(label="epoch_num", default_value="    Epoc")
-                dpg.add_input_text(
-                    tag="epoc_num_in",
-                    default_value=self.m_dict["epoch"],
-                    width=150,
-                    callback=lambda: self.in_epoch(),
-                )
-            with dpg.group(horizontal=True):
-                dpg.add_text(label="img_num", default_value="    Image size (width)")
-                dpg.add_input_text(
-                    tag="img_num_in",
-                    default_value=self.m_dict["img"],
-                    width=150,
-                    callback=lambda: self.in_img(),
-                )
-            with dpg.group(horizontal=True):
-                dpg.add_text(label="batch_num", default_value="    batch")
-                dpg.add_input_text(
-                    tag="batch_num_in",
-                    default_value=self.m_dict["batch"],
-                    width=150,
-                    callback=lambda: self.in_batch(),
-                )
+                # --- Left column: Model settings ---
+                with dpg.group():
+                    dpg.add_text("[ Model ]")
+                    with dpg.group(horizontal=True):
+                        dpg.add_text(default_value="  Model Family  ")
+                        dpg.add_combo(
+                            items=self.m_dict["model_family_list"],
+                            tag="model_family_combo",
+                            default_value=self.m_dict["model_family"],
+                            width=150,
+                            callback=lambda: self.select_family(),
+                        )
+                    # --- YOLO options (shown by default) ---
+                    with dpg.group(tag="yolo_options_group"):
+                        with dpg.group(horizontal=True):
+                            dpg.add_text(default_value="  YOLO Version  ")
+                            dpg.add_combo(
+                                items=self.m_dict["yolo_version_list"],
+                                tag="yolo_version_combo",
+                                default_value=self.m_dict["yolo_version"],
+                                width=150,
+                                callback=lambda: self.select_version(),
+                            )
+                        with dpg.group(horizontal=True):
+                            dpg.add_text(default_value="  Model Size    ")
+                            dpg.add_combo(
+                                items=self.m_dict["yolo_size_list"],
+                                tag="weight_size_combo",
+                                default_value=self.m_dict["yolo_size"],
+                                width=150,
+                                callback=lambda: self.select_size(),
+                            )
+                    # --- RT-DETR options (hidden by default) ---
+                    with dpg.group(tag="rtdetr_options_group", show=False):
+                        with dpg.group(horizontal=True):
+                            dpg.add_text(default_value="  Model Size    ")
+                            dpg.add_combo(
+                                items=self.m_dict["rtdetr_size_list"],
+                                tag="rtdetr_size_combo",
+                                default_value=self.m_dict["rtdetr_size"],
+                                width=150,
+                                callback=lambda: self.select_rtdetr_size(),
+                            )
+                    # --- Torchvision options (hidden by default) ---
+                    with dpg.group(tag="tv_options_group", show=False):
+                        with dpg.group(horizontal=True):
+                            dpg.add_text(default_value="  Backbone      ")
+                            dpg.add_combo(
+                                items=self.m_dict["tv_backbone_list"],
+                                tag="tv_backbone_combo",
+                                default_value=self.m_dict["tv_backbone"],
+                                width=150,
+                                callback=lambda: self.select_backbone(),
+                            )
+                    with dpg.group(horizontal=True):
+                        dpg.add_text(default_value="  Weight File   ")
+                        dpg.add_text(tag="weight_display_text", default_value=self.m_dict["weight"])
+
+                dpg.add_spacer(width=30)
+
+                # --- Right column: Training parameters ---
+                with dpg.group():
+                    dpg.add_text("[ Training Params ]")
+                    with dpg.group(horizontal=True):
+                        dpg.add_text(default_value="  Epoch         ")
+                        dpg.add_input_text(
+                            tag="epoc_num_in",
+                            default_value=self.m_dict["epoch"],
+                            width=120,
+                            callback=lambda: self.in_epoch(),
+                        )
+                    with dpg.group(horizontal=True):
+                        dpg.add_text(default_value="  Image Size    ")
+                        dpg.add_input_text(
+                            tag="img_num_in",
+                            default_value=self.m_dict["img"],
+                            width=120,
+                            callback=lambda: self.in_img(),
+                        )
+                    with dpg.group(horizontal=True):
+                        dpg.add_text(default_value="  Batch         ")
+                        dpg.add_input_text(
+                            tag="batch_num_in",
+                            default_value=self.m_dict["batch"],
+                            width=120,
+                            callback=lambda: self.in_batch(),
+                        )
             dpg.add_button(
                 label="Train Model",
                 tag="str_btn",
@@ -290,6 +302,10 @@ class yoru_train:
                 callback=lambda: self.run_yolo(),
                 enabled=True,
             )
+            with dpg.group(horizontal=True):
+                dpg.add_text(default_value="    Progress: ")
+                dpg.add_text(tag="train_progress_text", default_value="---")
+            dpg.add_progress_bar(tag="train_progress_bar", default_value=0.0, width=400)
             dpg.add_separator()
             with dpg.group(horizontal=False):
                 dpg.add_button(
@@ -309,7 +325,17 @@ class yoru_train:
         dpg.show_viewport()
 
     def plot_callback(self) -> None:
-        a = 1
+        epoch = self.m_dict.get("train_epoch", 0)
+        total = self.m_dict.get("train_total_epoch", 0)
+        if total > 0:
+            progress = epoch / total
+            dpg.set_value("train_progress_bar", progress)
+            dpg.set_value("train_progress_text", f"Epoch {epoch} / {total}")
+        if self.m_dict.get("training_done", False):
+            dpg.set_value("step6_state", "Complete!!")
+            dpg.set_value("train_progress_bar", 1.0)
+            dpg.set_value("train_progress_text", "Done!")
+            self.m_dict["training_done"] = False
 
     def run(self):
         self.startDPG()
@@ -355,6 +381,44 @@ class yoru_train:
             print("The project already exists.")
             dpg.enable_item("move_label_images")
 
+    def _restore_model_ui(self, weight: str) -> None:
+        """ウェイトファイル名からモデルファミリー/バージョン/サイズのUIを復元する。"""
+        w = weight.lower()
+        if w.startswith("yolov5"):
+            family, version, size = "YOLO", "YOLOv5", w[6] if len(w) > 6 else "s"
+        elif w.startswith("yolov8"):
+            family, version, size = "YOLO", "YOLOv8", w[6] if len(w) > 6 else "s"
+        elif w.startswith("yolo11"):
+            family, version, size = "YOLO", "YOLO11", w[6] if len(w) > 6 else "s"
+        elif w.startswith("rtdetr-"):
+            family, version, size = "RT-DETR", None, w[7] if len(w) > 7 else "l"
+        elif w.startswith("fasterrcnn"):
+            family, version, size = "Faster R-CNN", None, None
+        elif w.startswith("maskrcnn"):
+            family, version, size = "Mask R-CNN", None, None
+        elif w.startswith("ssd"):
+            family, version, size = "SSD", None, None
+        else:
+            return
+
+        self.m_dict["model_family"] = family
+        dpg.set_value("model_family_combo", family)
+        dpg.configure_item("yolo_options_group",   show=(family == "YOLO"))
+        dpg.configure_item("rtdetr_options_group", show=(family == "RT-DETR"))
+        dpg.configure_item("tv_options_group",
+                           show=(family in ("Faster R-CNN", "Mask R-CNN", "SSD")))
+
+        if family == "YOLO" and version:
+            self.m_dict["yolo_version"] = version
+            dpg.set_value("yolo_version_combo", version)
+            if size and size in self.m_dict.get("yolo_size_list", []):
+                self.m_dict["yolo_size"] = size
+                dpg.set_value("weight_size_combo", size)
+        elif family == "RT-DETR" and size:
+            if size in self.m_dict.get("rtdetr_size_list", []):
+                self.m_dict["rtdetr_size"] = size
+                dpg.set_value("rtdetr_size_combo", size)
+
     def load_pr_dir(self):
         print("load project")
         self.m_dict["project_dir"] = self.m_dict["project_path"]
@@ -364,23 +428,74 @@ class yoru_train:
             return None
         with open(file_path, "r") as yf:
             data = yaml.safe_load(yf)
-            self.m_dict["yaml_path"] = data["yaml_path"]
-            self.m_dict["all_label_dir"] = (
-                self.m_dict["project_dir"] + "/all_label_images"
+
+        self.m_dict["yaml_path"] = data["yaml_path"]
+        self.m_dict["all_label_dir"] = self.m_dict["project_dir"] + "/all_label_images"
+
+        # --- Step1: プロジェクト読み込み完了 ---
+        dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
+        dpg.enable_item("move_label_images")
+        dpg.set_value("step1_state", "Complete!!")
+
+        # --- モデル/ウェイトの復元 (training_date があれば weights キーを優先) ---
+        saved_model = data.get("weights") or data.get("Model") or data.get("YOLO_ver")
+        if saved_model:
+            if not saved_model.endswith(".pt"):
+                prefix_map = {"yolov5": "yolov5s", "yolov8": "yolov8s", "yolo11": "yolo11s"}
+                saved_model = prefix_map.get(saved_model, saved_model) + ".pt"
+            self.m_dict["weight"] = saved_model
+            dpg.set_value("weight_display_text", saved_model)
+            self._restore_model_ui(saved_model)
+
+        # --- 学習条件の復元 ---
+        if data.get("epochs") is not None:
+            self.m_dict["epoch"] = data["epochs"]
+            dpg.set_value("epoc_num_in", str(data["epochs"]))
+        if data.get("image_size") is not None:
+            self.m_dict["img"] = data["image_size"]
+            dpg.set_value("img_num_in", str(data["image_size"]))
+        if data.get("batch-size") is not None:
+            self.m_dict["batch"] = data["batch-size"]
+            dpg.set_value("batch_num_in", str(data["batch-size"]))
+
+        # --- Step2: all_label_images に画像があれば完了扱い ---
+        all_label_dir = self.m_dict["all_label_dir"]
+        if os.path.exists(all_label_dir):
+            img_exts = {".png", ".jpg", ".jpeg", ".bmp"}
+            has_images = any(
+                os.path.splitext(f)[1].lower() in img_exts
+                for f in os.listdir(all_label_dir)
             )
-            # Model キー（旧 YOLO_ver キーも後方互換として対応）
-            saved_model = data.get("Model") or data.get("YOLO_ver")
-            if saved_model:
-                # 旧形式 ("yolov5" など拡張子なし) の場合はデフォルトウェイトに変換
-                if not saved_model.endswith(".pt"):
-                    prefix_map = {"yolov5": "yolov5s", "yolov8": "yolov8s", "yolo11": "yolo11s"}
-                    saved_model = prefix_map.get(saved_model, saved_model) + ".pt"
-                self.m_dict["weight"] = saved_model
-                dpg.set_value("weight_display_text", saved_model)
-            dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
-            print("load complete")
-            dpg.enable_item("move_label_images")
-            dpg.set_value("step1_state", "Complete!!")
+            if has_images:
+                dpg.set_value("step2_state", "Complete!!")
+
+            # --- Step3: all_label_images に classes.txt 以外の .txt があればラベリング完了 ---
+            has_labels = any(
+                f.endswith(".txt") and f != "classes.txt"
+                for f in os.listdir(all_label_dir)
+            )
+            if has_labels:
+                dpg.set_value("step3_state", "Complete!!")
+
+        # --- Step4: train/images にファイルがあれば移動済み ---
+        train_images_dir = self.m_dict["project_dir"] + "/train/images"
+        if os.path.exists(train_images_dir) and os.listdir(train_images_dir):
+            dpg.set_value("step4_state", "Complete!!")
+            dpg.disable_item("move_label_images")
+
+        # --- Step5: クラス情報が登録済みなら classes_path を復元して完了表示 ---
+        if data.get("add_class_info_date"):
+            classes_txt = all_label_dir + "/classes.txt"
+            if os.path.exists(classes_txt):
+                self.m_dict["classes_path"] = classes_txt
+                dpg.set_value("classes_path", classes_txt)
+            dpg.set_value("step5_state", "Complete!!")
+
+        # --- Step6: 学習済みなら完了表示 ---
+        if data.get("training_date"):
+            dpg.set_value("step6_state", "Complete!!")
+
+        print("load complete")
 
     def grab_bt(self):
         # print("quit_pushed")
@@ -493,6 +608,30 @@ class yoru_train:
         tf = dpg.get_value("batch_num_in")
         self.m_dict["batch"] = tf
 
+    def _monitor_training(self, proc, total_epochs: int) -> None:
+        """Read subprocess stdout line by line, parse epoch progress, update m_dict."""
+        # Matches: "Epoch [1/50]" (torchvision) or "      1/100 " (ultralytics/yolov5)
+        torchvision_re = re.compile(r"Epoch\s*\[\s*(\d+)/(\d+)\s*\]")
+        ultralytics_re = re.compile(r"^\s+(\d+)/(\d+)\s")
+        ansi_re = re.compile(r"\x1b\[[0-9;]*[mK]")
+
+        self.m_dict["train_epoch"] = 0
+        self.m_dict["train_total_epoch"] = total_epochs
+
+        for raw_line in proc.stdout:
+            line = ansi_re.sub("", raw_line).rstrip()
+            print(line)  # pass-through to console
+            m = torchvision_re.search(line) or ultralytics_re.match(line)
+            if m:
+                current = int(m.group(1))
+                total   = int(m.group(2))
+                self.m_dict["train_epoch"]       = current
+                self.m_dict["train_total_epoch"] = total
+
+        proc.wait()
+        self.m_dict["train_epoch"]   = self.m_dict.get("train_total_epoch", total_epochs)
+        self.m_dict["training_done"] = True
+
     def run_yolov5(self):
         # train
         cmd = [
@@ -522,13 +661,22 @@ class yoru_train:
         print("added the information in yaml file")
 
         try:
-            # subprocessを使用して学習スクリプトを非同期で実行します。
-            subprocess.Popen(cmd)
-            print("start training ")
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
+            print("start training")
+            total = int(self.m_dict.get("epoch", 300))
+            t = threading.Thread(target=self._monitor_training, args=(proc, total), daemon=True)
+            t.start()
         except Exception as e:
             print("error: ", e)
-
-        dpg.set_value("step6_state", "Complete!!")
+            dpg.set_value("step6_state", "Error")
 
     def run_yolo_ultralytics(self):
         """Launch YOLOv8 / YOLO11 training via the ultralytics package."""
@@ -554,12 +702,22 @@ class yoru_train:
         print("added the information in yaml file")
 
         try:
-            subprocess.Popen(cmd)
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
             print("start training (ultralytics)")
+            total = int(self.m_dict.get("epoch", 300))
+            t = threading.Thread(target=self._monitor_training, args=(proc, total), daemon=True)
+            t.start()
         except Exception as e:
             print("error: ", e)
-
-        dpg.set_value("step6_state", "Complete!!")
+            dpg.set_value("step6_state", "Error")
 
     def run_torchvision(self):
         """Launch Faster R-CNN / Mask R-CNN / SSD training via train_torchvision.py."""
@@ -585,12 +743,22 @@ class yoru_train:
         print("added the information in yaml file")
 
         try:
-            subprocess.Popen(cmd)
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
             print(f"start training ({model_type})")
+            total = int(self.m_dict.get("epoch", 50))
+            t = threading.Thread(target=self._monitor_training, args=(proc, total), daemon=True)
+            t.start()
         except Exception as e:
             print("error: ", e)
-
-        dpg.set_value("step6_state", "Complete!!")
+            dpg.set_value("step6_state", "Error")
 
     def run_yolo(self):
         """Dispatch training to the correct backend based on the selected model family."""
