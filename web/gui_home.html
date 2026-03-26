@@ -27,6 +27,9 @@
         </div>
     </div>
 
+    <div id="error-display" style="display:none; margin:16px; padding:12px; background:#2d1111; border:1px solid #cc3333; border-radius:6px; color:#ff6666; max-height:300px; overflow-y:auto; font-size:13px;">
+        <h3 style="margin:0 0 8px 0; color:#ff4444;">Error Log</h3>
+    </div>
 
     <script type="text/javascript">
         function runProgram1() {
@@ -62,6 +65,17 @@
 
         function showFileDialog() {
             eel.show_file_dialog();
+        }
+
+        eel.expose(displayError);
+        function displayError(guiName, errorMsg) {
+            var errorDiv = document.getElementById('error-display');
+            var timestamp = new Date().toLocaleTimeString();
+            var entry = document.createElement('div');
+            entry.className = 'error-entry';
+            entry.innerHTML = '<strong>[' + timestamp + '] ' + guiName + '</strong><pre>' + errorMsg + '</pre>';
+            errorDiv.prepend(entry);
+            errorDiv.style.display = 'block';
         }
     </script>
 

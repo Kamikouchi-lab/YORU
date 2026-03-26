@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from tkinter import Tk, filedialog
 
@@ -23,6 +24,28 @@ sys.path.append("../yoru")
 
 default_condition_file_path = "./config/yoru_default.yaml"
 condition_file_path = default_condition_file_path
+
+
+def _run_gui_subprocess(command, gui_name):
+    """GUIサブプロセスを実行し、エラーがあればEel経由でフロントに通知する"""
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    stdout, stderr = proc.communicate()
+    if proc.returncode != 0:
+        error_msg = stderr.strip() if stderr.strip() else stdout.strip()
+        eel.displayError(gui_name, error_msg)
+
+
+def _launch_gui(command, gui_name):
+    """バックグラウンドスレッドでGUIサブプロセスを起動する"""
+    thread = threading.Thread(
+        target=_run_gui_subprocess, args=(command, gui_name), daemon=True
+    )
+    thread.start()
 
 
 def create_default_json():
@@ -57,17 +80,17 @@ def load_condition_file():
 @eel.expose
 def run_cam_gui_YMH():
     global condition_file_path
-    if os.path.isfile(condition_file_path):
-        subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                f"from yoru import realtime_yoru_GUI; realtime_yoru_GUI.main(r'{condition_file_path}')",
-            ],
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
-    else:
-        print("not find config file")
+    if not os.path.isfile(condition_file_path):
+        eel.displayError("Real-time GUI", "Config file not found: " + condition_file_path)
+        return
+    _launch_gui(
+        [
+            sys.executable,
+            "-c",
+            f"from yoru import realtime_yoru_GUI; realtime_yoru_GUI.main(r'{condition_file_path}')",
+        ],
+        "Real-time GUI",
+    )
 
 
 @eel.expose
@@ -112,25 +135,25 @@ def print_file_path():
 
 @eel.expose
 def run_analysis_gui():
-    subprocess.Popen(
+    _launch_gui(
         [sys.executable, "-c", "from yoru import analysis_GUI; analysis_GUI.main()"],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
+        "Analysis GUI",
     )
 
 
 @eel.expose
 def run_train_gui():
-    subprocess.Popen(
+    _launch_gui(
         [sys.executable, "-c", "from yoru import train_GUI; train_GUI.main()"],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
+        "Train GUI",
     )
 
 
 @eel.expose
 def run_evaluate_gui():
-    subprocess.Popen(
+    _launch_gui(
         [sys.executable, "-c", "from yoru import evaluation_GUI; evaluation_GUI.main()"],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
+        "Evaluate GUI",
     )
 
 
