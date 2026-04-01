@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import os
 import re
 import subprocess
@@ -9,25 +12,18 @@ from multiprocessing import Manager, Process
 import dearpygui.dearpygui as dpg
 import yaml
 
-# if __name__ == "__main__":
-# Run directly
-
-
-sys.path.append("../yoru")
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from yoru.libs.create_yaml_train import create_project
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.init_train import init_train
-# else:
-#     # from .libs import threshold
-#     from .libs.create_yaml_train import create_project
-#     from yoru.libs.file_operation_train import file_move_random, file_dialog_tk
-#     from yoru.libs.init_train import init_train, loadingParam
 
 
 class yoru_train:
-    def __init__(self, m_dict={}):
-        self.m_dict = m_dict
+    def __init__(self, m_dict=None):
+        self.m_dict = m_dict if m_dict is not None else {}
         self.fd_tk = file_dialog_tk(self.m_dict)
 
     def startDPG(self):
@@ -727,7 +723,7 @@ class yoru_train:
             self._set_step_state("step6_state", "Error")
 
     def __del__(self):
-        print("=== GUI window quit ===")
+        pass
 
 
 def main():

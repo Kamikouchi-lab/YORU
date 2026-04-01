@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
+import logging
 import os
 import subprocess
 import sys
@@ -8,27 +12,33 @@ import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 
-sys.path.append("../yoru")
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 
 from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
 # try:
 from yoru.libs.file_operation_analysis import file_dialog_tk
 from yoru.libs.init_analysis import init_analysis
-from yoru.libs.yolo_wrapper import load_yolo_model
+from yoru.libs.plugins import get_detector
+
+logger = logging.getLogger(__name__)
+
+PREVIEW_SIZE = 400
 
 
 class analyze_GUI:
-    def __init__(self, m_dict={}):
-        self.m_dict = m_dict
+    def __init__(self, m_dict=None):
+        self.m_dict = m_dict if m_dict is not None else {}
         self.fd_tk = file_dialog_tk(self.m_dict)
 
         self.file_path = "./web/image/YORU_logo.png"
 
         if self.file_path:
-            print("File: " + self.file_path)
+            logger.info("File: %s", self.file_path)
         else:
-            print("Open-file dialog")
+            logger.info("Open-file dialog")
 
         self.vid = cv2.imread(self.file_path)
         self.height, self.width, _ = self.vid.shape
@@ -41,34 +51,31 @@ class analyze_GUI:
 
     def process_frame(self):
         if self.width >= self.height:
-            self.im_win_width = 400
-            self.im_win_height = self.height * (400 / self.width)
+            self.im_win_width = PREVIEW_SIZE
+            self.im_win_height = self.height * (PREVIEW_SIZE / self.width)
         else:
-            self.im_win_width = self.width * (400 / self.height)
-            self.im_win_height = 400
+            self.im_win_width = self.width * (PREVIEW_SIZE / self.height)
+            self.im_win_height = PREVIEW_SIZE
 
         # 画面のフリップ
         if self.m_dict["v_flip"]:
             self.frame = cv2.flip(self.frame, 0)
-        else:
-            pass
 
         if self.m_dict["h_flip"]:
             self.frame = cv2.flip(self.frame, 1)
-        else:
-            pass
 
         # フレームのリサイズ
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
         # 新しいフレームの作成 (全て黒で埋められたフレーム)
-        base_frame = np.zeros((400, 400, 3), np.uint8)
+        base_frame = np.zeros((PREVIEW_SIZE, PREVIEW_SIZE, 3), np.uint8)
         # リサイズしたフレームを新しいフレームの中央に配置
         h, w = self.frame_re.shape[:2]
+        half = PREVIEW_SIZE // 2
         base_frame[
-            int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
-            int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
+            int(half - h / 2) : int(half + h / 2),
+            int(half - w / 2) : int(half + w / 2),
             :,
         ] = self.frame_re
         # 更新
@@ -147,15 +154,15 @@ class analyze_GUI:
         # GUI-settings
         with dpg.texture_registry(show=False):
             dpg.add_raw_texture(
-                width=400,
-                height=400,
+                width=PREVIEW_SIZE,
+                height=PREVIEW_SIZE,
                 default_value=self.frame_to_data(self.frame_re),
                 tag="imwin_tag0",
                 format=dpg.mvFormat_Float_rgb,
             )
             dpg.add_raw_texture(
-                width=400,
-                height=400,
+                width=PREVIEW_SIZE,
+                height=PREVIEW_SIZE,
                 default_value=self.frame_to_data(self.frame_re),
                 tag="imwin_tag1",
                 format=dpg.mvFormat_Float_rgb,
@@ -206,7 +213,7 @@ class analyze_GUI:
             dpg.add_spacer(height=4)
             dpg.bind_item_theme(dpg.add_text(default_value="Preview"), _sec_hdr_theme)
             dpg.add_separator()
-            dpg.add_image("imwin_tag1", width=400, height=400)
+            dpg.add_image("imwin_tag1", width=PREVIEW_SIZE, height=PREVIEW_SIZE)
             with dpg.group(horizontal=True):
                 dpg.add_button(
                     label="< Previous",
@@ -300,14 +307,14 @@ class analyze_GUI:
             dpg.add_spacer(height=4)
             dpg.bind_item_theme(dpg.add_text(default_value="Preview"), _sec_hdr_theme)
             dpg.add_separator()
-            dpg.add_image("imwin_tag0", width=400, height=400)
+            dpg.add_image("imwin_tag0", width=PREVIEW_SIZE, height=PREVIEW_SIZE)
             dpg.add_slider_int(
                 label=" Frame",
                 default_value=0,
                 min_value=0,
                 max_value=self.framecount - 2,
                 tag="frame_bar",
-                width=400,
+                width=PREVIEW_SIZE,
                 callback=lambda: self.slide_bar_cb(),
                 enabled=False,
             )
@@ -435,10 +442,14 @@ class analyze_GUI:
 
     def plot_callback(self) -> None:
         if dpg.get_value("streamingChkBox"):
-            if int(self.speed) + dpg.get_value("frame_bar") > self.framecount - 2:
+            try:
+                speed = int(self.speed)
+            except (ValueError, TypeError):
+                speed = 1
+            if speed + dpg.get_value("frame_bar") > self.framecount - 2:
                 dpg.set_value("frame_bar", 0)
             else:
-                dpg.set_value("frame_bar", int(self.speed) + dpg.get_value("frame_bar"))
+                dpg.set_value("frame_bar", speed + dpg.get_value("frame_bar"))
             self.slide_bar_cb()
 
     def slide_bar_cb(self):
@@ -451,9 +462,9 @@ class analyze_GUI:
 
     def file_open(self):
         if self.file_path:
-            print("File: " + self.file_path)
+            logger.info("File: %s", self.file_path)
         else:
-            print("Failed open files")
+            logger.warning("Failed open files")
 
         self.vid = cv2.VideoCapture(self.file_path)
         self.width = self.vid.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -462,7 +473,7 @@ class analyze_GUI:
         self.current_frame_num = 0
         self.status, self.frame = self.vid.read()
         self.process_frame()
-        print("Movie size: ", self.width, self.height)
+        logger.info("Movie size: %s x %s", self.width, self.height)
         dpg.configure_item("frame_bar", max_value=self.framecount - 2)
         dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
         dpg.enable_item("streamingChkBox")
@@ -470,13 +481,13 @@ class analyze_GUI:
 
     def file_open_image(self):
         if self.file_path_image:
-            print("File: " + self.file_path_image)
+            logger.info("File: %s", self.file_path_image)
         else:
-            print("Failed open image")
+            logger.warning("Failed open image")
         self.frame = cv2.imread(self.file_path_image)
         self.height, self.width, _ = self.frame.shape
         self.process_frame()
-        print("Image size: ", self.width, self.height)
+        logger.info("Image size: %s x %s", self.width, self.height)
         dpg.set_value("imwin_tag1", self.frame_to_data(self.frame_re))
 
     def stream_cb(self):
@@ -503,18 +514,20 @@ class analyze_GUI:
 
     def movie_select_bt(self):
         self.fd_tk.input_file_open()
-        self.file_path = self.m_dict["input_path"][0]
+        paths = self.m_dict.get("input_path", [])
+        if not paths:
+            return
+        self.file_path = paths[0]
         self.file_open()
 
     def image_select_bt(self):
         self.fd_tk.input_file_open_image()
+        images = self.m_dict.get("input_path_image", [])
+        if not images:
+            return
         self.current_image_num = 0
-        print(self.m_dict["input_path_image"])
-        self.file_path_image = self.m_dict["input_path_image"][
-            int(self.current_image_num)
-        ]
-        self.image_num = len(self.m_dict["input_path_image"]) - 1
-        print(self.image_num)
+        self.file_path_image = images[0]
+        self.image_num = len(images) - 1
         self.file_open_image()
 
     def v_flip_cb(self):
@@ -565,27 +578,27 @@ class analyze_GUI:
         self.file_open_image()
 
     def quit_cb(self):
-        print("quit_pushed")
+        logger.info("quit_pushed")
         self.m_dict["quit"] = True
         dpg.destroy_context()  # <-- moved from __del__
 
     def home_cb(self):
-        print("Back home")
+        logger.info("Back home")
         self.m_dict["back_to_home"] = True
         self.m_dict["quit"] = True
         dpg.destroy_context()  # <-- moved from __del__
 
     def analyze_movie(self):
-        print("Start analyzing ....")
+        logger.info("Start analyzing ....")
         self.yolo_analysis = yolo_analysis(self.m_dict)
         self.yolo_analysis.analyze()
-        print("Analysis complete!!")
+        logger.info("Analysis complete!!")
 
     def analyze_image(self):
-        print("Start analyzing ....")
+        logger.info("Start analyzing ....")
         self.yolo_analysis = yolo_analysis_image(self.m_dict)
         self.yolo_analysis.analyze_image()
-        print("Analysis complete!!")
+        logger.info("Analysis complete!!")
 
     def create_condition(self):
         tf = dpg.get_value("create_movie")
@@ -600,10 +613,10 @@ class analyze_GUI:
         if not model_path or not os.path.isfile(str(model_path)):
             return
         try:
-            yolo_model = load_yolo_model(str(model_path))
-            class_names = yolo_model.names
-        except Exception as e:
-            print(f"Failed to load class names: {e}")
+            detector = get_detector("auto", str(model_path))
+            class_names = detector.names
+        except (OSError, RuntimeError, ImportError) as e:
+            logger.error("Failed to load class names: %s", e)
             return
         dpg.delete_item("tracking_class_checkboxes", children_only=True)
         self.m_dict["tracking_exclude_classes"] = []
@@ -633,10 +646,13 @@ class analyze_GUI:
 
     def in_thresh(self):
         tf = dpg.get_value("conf_threshold")
-        self.m_dict["threshold"] = float(tf)
+        try:
+            self.m_dict["threshold"] = float(tf)
+        except (ValueError, TypeError):
+            pass
 
     def __del__(self):
-        print("=== GUI window quit ===")
+        logger.info("=== GUI window quit ===")
 
 
 def main():

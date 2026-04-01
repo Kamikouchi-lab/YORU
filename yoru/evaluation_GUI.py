@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import datetime
 import os
 import subprocess
@@ -11,9 +14,11 @@ import numpy as np
 import yaml
 from pynput import keyboard
 
-sys.path.append("../yoru")
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
-from yoru.libs.evaluation_calculation import Evaluator, yolo_analysis_image
+from yoru.libs.evaluation_calculation import Evaluator, EvaluationImageAnalyzer
 from yoru.libs.file_operation_create_label import file_dialog_tk
 from yoru.libs.init_evaluation import init_evaluater
 
@@ -288,7 +293,7 @@ class model_eval_gui:
         dpg.set_value("step3_state", "Complete!!")
 
     def yolo_detection(self):
-        yolo_det = yolo_analysis_image(self.m_dict)
+        yolo_det = EvaluationImageAnalyzer(self.m_dict)
         yolo_det.analyze_image()
         dpg.set_value("step4_state", "Complete!!")
 

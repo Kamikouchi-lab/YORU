@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import datetime
 import os
 import re
@@ -14,7 +17,9 @@ import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 
-sys.path.append("../yoru")
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from yoru.libs.detection import yolo_detection
 from yoru.libs.drawing import yolo_drawing

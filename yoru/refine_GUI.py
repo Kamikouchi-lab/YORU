@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
+import os
 import subprocess
 import sys
 import time
@@ -8,7 +12,9 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 from pynput import keyboard
 
-sys.path.append("../yoru")
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from yoru.libs.file_operation_grab import file_dialog_tk
 

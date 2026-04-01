@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 """YORU Real-time Config Creator GUI
 
 Creates a YAML configuration file for the real-time analysis workflow
@@ -17,7 +20,9 @@ import dearpygui.dearpygui as dpg
 import serial.tools.list_ports
 import yaml
 
-sys.path.append("../yoru")
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 
 class ConfigCreatorGUI:
@@ -320,10 +325,10 @@ class ConfigCreatorGUI:
     def _load_classes(self, model_path, model_type):
         """Load class names from the selected model in a background thread."""
         try:
-            from yoru.libs.yolo_wrapper import load_yolo_model
+            from yoru.libs.plugins import get_detector
 
-            model = load_yolo_model(model_path, model_type)
-            names_dict = model.names  # {0: "class0", 1: "class1", ...}
+            detector = get_detector(model_type if model_type != "auto" else "auto", model_path)
+            names_dict = detector.names  # {0: "class0", 1: "class1", ...}
             class_names = [names_dict[i] for i in sorted(names_dict.keys())]
             self.class_list = class_names + ["None"]
             dpg.configure_item("cfg_class_list_box", items=self.class_list)
@@ -431,7 +436,7 @@ class ConfigCreatorGUI:
         dpg.destroy_context()
 
     def __del__(self):
-        print("=== Config Creator GUI quit ===")
+        pass
 
 
 def main():
