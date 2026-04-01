@@ -3,7 +3,6 @@
 <head>
 
     <title>YORU (Your Optimal Recognition Utility)</title>
-    <script type="text/javascript" src="/eel.js"></script>
     <meta name="description" content="ページの紹介文">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/meyer-reset/2.0/reset.css">
@@ -29,43 +28,56 @@
     </div>
 
     <script type="text/javascript">
-        function runProgram1() {
-            eel.run_train_gui();
+        function waitForApi() {
+            return new Promise(function(resolve) {
+                if (window.pywebview && window.pywebview.api) {
+                    resolve();
+                    return;
+                }
+                window.addEventListener('pywebviewready', resolve);
+            });
         }
 
-        function runProgram2() {
-            eel.run_analysis_gui();
-        }
-
-        function runProgram3() {
-            eel.run_realtime_gui();
-        }
-
-        function runProgram4() {
-            eel.run_evaluate_gui();
-        }
-
-        eel.get_config_path()(function(result){
-            document.getElementById('file-path').innerText = result;
-        });
-
-        eel.expose(displayFilePath);
-        function displayFilePath(path) {
-            document.getElementById('file-path').innerText = path;
-        }
-
-        eel.expose(displayError);
         function displayError(message) {
             alert(message);
         }
 
-        function showFileDialog() {
-            eel.show_file_dialog();
+        async function runProgram1() {
+            await waitForApi();
+            window.pywebview.api.run_train_gui();
         }
 
-        function runConfigCreator() {
-            eel.run_config_creator_gui();
+        async function runProgram2() {
+            await waitForApi();
+            window.pywebview.api.run_analysis_gui();
         }
+
+        async function runProgram3() {
+            await waitForApi();
+            window.pywebview.api.run_realtime_gui();
+        }
+
+        async function runProgram4() {
+            await waitForApi();
+            window.pywebview.api.run_evaluate_gui();
+        }
+
+        async function showFileDialog() {
+            await waitForApi();
+            window.pywebview.api.show_file_dialog();
+        }
+
+        async function runConfigCreator() {
+            await waitForApi();
+            window.pywebview.api.run_config_creator_gui();
+        }
+
+        // Load the current config path on startup
+        waitForApi().then(function() {
+            window.pywebview.api.get_config_path().then(function(result) {
+                document.getElementById('file-path').innerText = result;
+            });
+        });
     </script>
 
 </body>

@@ -5,13 +5,13 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from tkinter import Tk, filedialog
 
-import eel
+import webview
 
 DEFAULT_CONFIG_PATH = Path("./config/yoru_default.yaml")
 LOG_DIR = Path("./logs")
 CONFIG_LOG_PATH = LOG_DIR / "condition_file_log.json"
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 class AppState:
@@ -42,9 +42,6 @@ class AppState:
         )
 
 
-_state = AppState()
-
-
 def _launch_module(module_name: str, *extra_args: str):
     """Launch a YORU sub-module in a new console window."""
     cmd = [sys.executable, "-m", module_name, *extra_args]
@@ -55,70 +52,75 @@ def _launch_module(module_name: str, *extra_args: str):
         subprocess.Popen(cmd, **kwargs)
     except OSError as e:
         print(f"Failed to launch {module_name}: {e}", file=sys.stderr)
-        eel.displayError(f"Failed to launch {module_name}: {e}")
 
 
-@eel.expose
-def run_realtime_gui():
-    cfg = _state.condition_file_path
-    if cfg.is_file():
-        _launch_module("yoru.realtime_yoru_GUI", str(cfg))
-    else:
-        msg = f"Config file not found: {cfg}"
-        print(msg, file=sys.stderr)
-        eel.displayError(msg)
+class Api:
+    """Python API exposed to the frontend via pywebview."""
 
+    def __init__(self, state: AppState):
+        self._state = state
+        self._window: webview.Window | None = None
 
-@eel.expose
-def show_file_dialog():
-    root = Tk()
-    root.withdraw()
-    try:
-        tk_file = filedialog.askopenfilename(
-            title="Select Condition file",
-            filetypes=[("Condition yaml file", ".yml .yaml")],
+    def set_window(self, window: webview.Window):
+        self._window = window
+
+    def run_realtime_gui(self):
+        cfg = self._state.condition_file_path
+        if cfg.is_file():
+            _launch_module("yoru.realtime_yoru_GUI", str(cfg))
+        else:
+            msg = f"Config file not found: {cfg}"
+            print(msg, file=sys.stderr)
+            if self._window:
+                self._window.evaluate_js(f"displayError({json.dumps(msg)})")
+
+    def show_file_dialog(self):
+        if not self._window:
+            return
+        result = self._window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            file_types=("YAML files (*.yml;*.yaml)",),
         )
-    finally:
-        root.destroy()
+        if result and len(result) > 0 and Path(result[0]).is_file():
+            self._state.update_condition_file(Path(result[0]))
+        else:
+            self._state.update_condition_file(DEFAULT_CONFIG_PATH)
 
-    if tk_file and Path(tk_file).is_file():
-        _state.update_condition_file(Path(tk_file))
-    else:
-        _state.update_condition_file(DEFAULT_CONFIG_PATH)
+        resolved = str(self._state.condition_file_path)
+        self._window.evaluate_js(
+            f"document.getElementById('file-path').innerText = {json.dumps(resolved)}"
+        )
 
-    resolved = str(_state.condition_file_path)
-    eel.displayFilePath(resolved)
+    def get_config_path(self):
+        return str(self._state.condition_file_path.resolve())
 
+    def run_train_gui(self):
+        _launch_module("yoru.train_GUI")
 
-@eel.expose
-def get_config_path():
-    return str(_state.condition_file_path.resolve())
+    def run_analysis_gui(self):
+        _launch_module("yoru.analysis_GUI")
 
+    def run_evaluate_gui(self):
+        _launch_module("yoru.evaluation_GUI")
 
-@eel.expose
-def run_analysis_gui():
-    _launch_module("yoru.analysis_GUI")
-
-
-@eel.expose
-def run_train_gui():
-    _launch_module("yoru.train_GUI")
-
-
-@eel.expose
-def run_evaluate_gui():
-    _launch_module("yoru.evaluation_GUI")
-
-
-@eel.expose
-def run_config_creator_gui():
-    _launch_module("yoru.config_creator_GUI")
+    def run_config_creator_gui(self):
+        _launch_module("yoru.config_creator_GUI")
 
 
 def main():
-    _state.load_condition_file()
-    eel.init("web")
-    eel.start("gui_home.html", size=(1024, 768), port=8889)
+    state = AppState()
+    state.load_condition_file()
+    api = Api(state)
+
+    window = webview.create_window(
+        "YORU (Your Optimal Recognition Utility)",
+        url=str(WEB_DIR / "gui_home.html"),
+        js_api=api,
+        width=1024,
+        height=768,
+    )
+    api.set_window(window)
+    webview.start()
 
 
 if __name__ == "__main__":

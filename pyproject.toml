@@ -5,7 +5,7 @@ description = "YORU - Your Own Research Utility for real-time behavioral analysi
 readme = "README.md"
 requires-python = ">=3.9,<3.10"
 dependencies = [
-    "eel==0.16.0",
+    "pywebview>=5.0",
     "nidaqmx==0.9.0",
     "numpy>=1.24.4",
     "dearpygui==1.11.1",

@@ -78,17 +78,15 @@ Follow these steps to install YORU quickly:
     nvidia-smi
     ```
 ## Install via uv
-Although not all functionality has been tested, installation via uv can be performed using the project.toml file below.
-[project.toml](https://github.com/Kamikouchi-lab/YORU/blob/uv_install/pyproject.toml)
-
-copy and paste this file to your YORU folder and
+Installation via [uv](https://docs.astral.sh/uv/) can be performed using the `pyproject.toml` included in this repository:
 
 ```
 cd "Path/to/YORU"
-uv init .
 uv sync
-python -m yoru
+uv run python -m yoru
 ```
+
+> **Note:** The launcher GUI uses [pywebview](https://pywebview.flowrl.com/) (native OS WebView). No external browser or local server is required.
 
 # Learn about YORU
 - [User guides](https://kamikouchi-lab.github.io/YORU_doc/guides/01-install/)
