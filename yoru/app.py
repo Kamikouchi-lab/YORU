@@ -2,7 +2,6 @@
 # Copyright (C) YORU contributors — see LICENSE for details.
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -10,97 +9,90 @@ from tkinter import Tk, filedialog
 
 import eel
 
-default_condition_file_path = "./config/yoru_default.yaml"
-condition_file_path = default_condition_file_path
+DEFAULT_CONFIG_PATH = Path("./config/yoru_default.yaml")
+LOG_DIR = Path("./logs")
+CONFIG_LOG_PATH = LOG_DIR / "condition_file_log.json"
 
 
-def create_default_json():
-    log_dir = "./logs"
-    log_file_path = f"{log_dir}/condition_file_log.json"
+class AppState:
+    """Holds application state instead of module-level globals."""
 
-    # ディレクトリが存在しない場合は作成
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    def __init__(self):
+        self.condition_file_path: Path = DEFAULT_CONFIG_PATH
 
-    default_data = {"config_file": default_condition_file_path}
-    with open(log_file_path, "w") as file:
-        json.dump(default_data, file)
+    def load_condition_file(self):
+        """Load the last-used config file path from the log, or create defaults."""
+        try:
+            data = json.loads(CONFIG_LOG_PATH.read_text(encoding="utf-8"))
+            path = Path(data.get("config_file", str(DEFAULT_CONFIG_PATH)))
+            self.condition_file_path = path.resolve()
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            self.condition_file_path = DEFAULT_CONFIG_PATH.resolve()
+            self._write_config_log(self.condition_file_path)
+
+    def update_condition_file(self, new_path: Path):
+        self.condition_file_path = new_path.resolve()
+        self._write_config_log(self.condition_file_path)
+
+    @staticmethod
+    def _write_config_log(path: Path):
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        CONFIG_LOG_PATH.write_text(
+            json.dumps({"config_file": str(path)}), encoding="utf-8"
+        )
 
 
-def load_condition_file():
-    global condition_file_path
-    log_file_path = "./logs/condition_file_log.json"
-    print(path_to_ab(log_file_path))
+_state = AppState()
+
+
+def _launch_module(module_name: str, *extra_args: str):
+    """Launch a YORU sub-module in a new console window."""
+    cmd = [sys.executable, "-m", module_name, *extra_args]
+    kwargs: dict = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
     try:
-        with open(log_file_path, "r") as file:
-            data = json.load(file)
-            if "config_file" in data:
-                condition_file_path = data["config_file"]
-            else:
-                condition_file_path = default_condition_file_path
-    except (FileNotFoundError, json.JSONDecodeError):
-        condition_file_path = default_condition_file_path
-        create_default_json()  # デフォルトのJSONファイルを作成
+        subprocess.Popen(cmd, **kwargs)
+    except OSError as e:
+        print(f"Failed to launch {module_name}: {e}", file=sys.stderr)
+        eel.displayError(f"Failed to launch {module_name}: {e}")
 
 
 @eel.expose
-def run_cam_gui_YMH():
-    global condition_file_path
-    if os.path.isfile(condition_file_path):
-        subprocess.Popen(
-            [sys.executable, "-m", "yoru.realtime_yoru_GUI", condition_file_path],
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
+def run_realtime_gui():
+    cfg = _state.condition_file_path
+    if cfg.is_file():
+        _launch_module("yoru.realtime_yoru_GUI", str(cfg))
     else:
-        print("not find config file")
+        msg = f"Config file not found: {cfg}"
+        print(msg, file=sys.stderr)
+        eel.displayError(msg)
 
 
 @eel.expose
 def show_file_dialog():
-    global condition_file_path
     root = Tk()
-    root.withdraw()  # Tkのルートウィンドウを表示しない
-    tk_file = filedialog.askopenfilename(
-        title="Select Condition file",
-        filetypes=[("Condition yaml file", ".yml .yaml")],  # ファイルフィルタ
-    )  # ファイル選択ダイアログを表示
-    is_file = os.path.isfile(tk_file)
-    if is_file:
-        condition_file_path = path_to_ab(tk_file)
-        update_json_config_file(condition_file_path)  # JSONファイルを更新
+    root.withdraw()
+    try:
+        tk_file = filedialog.askopenfilename(
+            title="Select Condition file",
+            filetypes=[("Condition yaml file", ".yml .yaml")],
+        )
+    finally:
+        root.destroy()
+
+    if tk_file and Path(tk_file).is_file():
+        _state.update_condition_file(Path(tk_file))
     else:
-        condition_file_path = path_to_ab(default_condition_file_path)
-    eel.displayFilePath(condition_file_path)  # JavaScript関数にファイルパスを送る
-    print(condition_file_path)
+        _state.update_condition_file(DEFAULT_CONFIG_PATH)
 
-
-def update_json_config_file(new_path):
-    data = {"config_file": new_path}
-    with open("./logs/condition_file_log.json", "w") as file:
-        json.dump(data, file)
-
-
-def path_to_ab(rel_path):
-    p_rel = Path(rel_path)
-    p_abu = p_rel.resolve()
-    return str(p_abu)
+    resolved = str(_state.condition_file_path)
+    eel.displayFilePath(resolved)
 
 
 @eel.expose
-def print_file_path():
-    global condition_file_path
-    p_rel = Path(condition_file_path)
-    p_abu = p_rel.resolve()
-    print(p_abu)
-    return str(p_abu)
-
-
-def _launch_module(module_name):
-    """Launch a YORU sub-module in a new console window."""
-    subprocess.Popen(
-        [sys.executable, "-m", module_name],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
-    )
+def get_config_path():
+    return str(_state.condition_file_path.resolve())
 
 
 @eel.expose
@@ -124,7 +116,7 @@ def run_config_creator_gui():
 
 
 def main():
-    load_condition_file()  # 設定ファイルを読み込む
+    _state.load_condition_file()
     eel.init("web")
     eel.start("gui_home.html", size=(1024, 768), port=8889)
 

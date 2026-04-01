@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    
+
     <title>YORU (Your Optimal Recognition Utility)</title>
     <script type="text/javascript" src="/eel.js"></script>
     <meta name="description" content="ページの紹介文">
@@ -28,51 +28,41 @@
         </div>
     </div>
 
-
     <script type="text/javascript">
         function runProgram1() {
             eel.run_train_gui();
         }
-    </script>
 
-    <script type="text/javascript">
         function runProgram2() {
             eel.run_analysis_gui();
         }
-    </script>
 
-    <script type="text/javascript">
         function runProgram3() {
-            eel.run_cam_gui_YMH();
+            eel.run_realtime_gui();
         }
-    </script>
 
-    <script type="text/javascript">
-        eel.print_file_path()(function(result){
+        function runProgram4() {
+            eel.run_evaluate_gui();
+        }
+
+        eel.get_config_path()(function(result){
             document.getElementById('file-path').innerText = result;
         });
-    </script>
 
-
-
-    <script>
         eel.expose(displayFilePath);
         function displayFilePath(path) {
             document.getElementById('file-path').innerText = path;
         }
 
+        eel.expose(displayError);
+        function displayError(message) {
+            alert(message);
+        }
+
         function showFileDialog() {
             eel.show_file_dialog();
         }
-    </script>
 
-    <script type="text/javascript">
-        function runProgram4() {
-            eel.run_evaluate_gui();
-        }
-    </script>
-
-    <script type="text/javascript">
         function runConfigCreator() {
             eel.run_config_creator_gui();
         }
