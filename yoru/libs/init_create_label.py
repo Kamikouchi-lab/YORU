@@ -1,9 +1,3 @@
-import os
-
-import numpy as np
-import yaml
-
-
 class init_create_label:
     def __init__(self, m_dict={}):
         self.m_dict = m_dict
@@ -16,8 +10,3 @@ class init_create_label:
 
     def __del__(self):
         print("== Initialization finished ==.")
-
-
-if __name__ == "__main__":
-    mdict0 = init_movie_gui()
-    print(mdict0.m_dict)

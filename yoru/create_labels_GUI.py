@@ -17,13 +17,6 @@ from yoru.libs.create_labels import yolo_analysis_image
 from yoru.libs.file_operation_create_label import file_dialog_tk
 from yoru.libs.init_create_label import init_create_label
 
-# import yoru.app as YORU
-
-# except(ModuleNotFoundError):
-#     from libs.file_operation_evaluation import file_dialog_tk
-#     from libs.init_evaluation import init_evaluater
-#     from libs.evaluation_calculation import yolo_analysis_image
-#     import app as YORU
 
 
 class model_eval_gui:

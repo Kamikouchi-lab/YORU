@@ -14,16 +14,9 @@ from pynput import keyboard
 sys.path.append("../yoru")
 
 from yoru.libs.evaluation_calculation import Evaluator, yolo_analysis_image
-from yoru.libs.file_operation_evaluation import file_dialog_tk
+from yoru.libs.file_operation_create_label import file_dialog_tk
 from yoru.libs.init_evaluation import init_evaluater
 
-# import yoru.app as YORU
-
-# except(ModuleNotFoundError):
-#     from libs.file_operation_evaluation import file_dialog_tk
-#     from libs.init_evaluation import init_evaluater
-#     from libs.evaluation_calculation import yolo_analysis_image, Evaluator
-#     import app as YORU
 
 
 class model_eval_gui:

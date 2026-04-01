@@ -2,7 +2,6 @@ import os
 import subprocess
 import sys
 import time
-from cProfile import label
 from multiprocessing import Manager, Process
 
 import cv2
