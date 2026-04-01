@@ -2,20 +2,13 @@
 # Copyright (C) YORU contributors — see LICENSE for details.
 
 import os
-import subprocess
-import sys
-import time
-from multiprocessing import Manager, Process
 
 import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 from pynput import keyboard
 
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
+from yoru.gui_base import apply_default_theme, frame_to_data_rgba, process_frame as _process_frame
 from yoru.libs.file_operation_grab import file_dialog_tk
 
 
@@ -40,27 +33,7 @@ class grab_gui:
         self.speed = 1
 
     def process_frame(self):
-        if self.width >= self.height:
-            self.im_win_width = 600
-            self.im_win_height = self.height * (600 / self.width)
-        else:
-            self.im_win_width = self.width * (600 / self.height)
-            self.im_win_height = 600
-        # フレームのリサイズ
-        self.frame_re = cv2.resize(
-            self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
-        )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
-        base_frame = np.zeros((600, 600, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
-        h, w = self.frame_re.shape[:2]
-        base_frame[
-            int(600 / 2 - h / 2) : int(600 / 2 + h / 2),
-            int(600 / 2 - w / 2) : int(600 / 2 + w / 2),
-            :,
-        ] = self.frame_re
-        # 更新
-        self.frame_re = base_frame
+        self.frame_re = _process_frame(self.frame, 600)
 
     def gui_configure(self):
         dpg.create_context()
@@ -72,36 +45,7 @@ class grab_gui:
         dpg.create_viewport(title="YORU - Frame Capture", width=960, height=900)
 
         # Theme
-        with dpg.theme() as global_theme:
-            with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_TitleBg, (25, 70, 130), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_TitleBgActive, (35, 95, 165), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_Tab, (25, 70, 130), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_TabHovered, (50, 115, 185), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_Button, (35, 95, 165), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_ButtonHovered, (55, 120, 195), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_Text, (230, 230, 230), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_style(
-                    dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_style(
-                    dpg.mvStyleVar_ItemSpacing, 8, 6, category=dpg.mvThemeCat_Core
-                )
-        dpg.bind_theme(global_theme)
+        apply_default_theme()
 
         # GUI-settings
         with dpg.texture_registry(show=False):
@@ -223,16 +167,20 @@ class grab_gui:
         # setup
         dpg.setup_dearpygui()
         dpg.show_viewport()
-        listener = keyboard.Listener(on_press=self.on_key_press)
-        listener.start()
+        self._kb_listener = keyboard.Listener(on_press=self.on_key_press)
+        self._kb_listener.start()
 
     def run(self):
         self.gui_configure()
-        while dpg.is_dearpygui_running():
-            self.plot_callback()
-            dpg.render_dearpygui_frame()
-            if self.m_dict["quit"]:
-                break
+        try:
+            while dpg.is_dearpygui_running():
+                self.plot_callback()
+                dpg.render_dearpygui_frame()
+                if self.m_dict["quit"]:
+                    break
+        finally:
+            if hasattr(self, "_kb_listener"):
+                self._kb_listener.stop()
 
     def plot_callback(self) -> None:
         if dpg.get_value("streamingChkBox"):
@@ -325,30 +273,23 @@ class grab_gui:
 
     def grab_btn_cb(self):
         self.grab_name = dpg.get_value("save_name")
-        if self.grab_name and self.grab_dir:
-            self.grab_path = (
-                self.grab_dir
-                + "/"
-                + self.grab_name
-                + "_"
-                + str(self.current_frame_num)
-                + ".png"
-            )
-            print(self.grab_path)
-            cap = cv2.VideoCapture(self.file_path)
-            # 指定されたフレーム番号へ移動
-            cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_num)
-            # フレームを読み込む
-            ret, frame = cap.read()
-            # フレームの読み込みに成功したら保存
-            if ret:
-                cv2.imwrite(self.grab_path, frame)
-                self.grab_count = self.grab_count + 1
-                dpg.set_value("count_frames", str(self.grab_count) + " frames")
-            else:
-                print(f"error")
+        if not self.grab_name or not hasattr(self, "grab_dir") or not self.grab_dir:
+            print("Not selected file dir or name")
+            return
+        self.grab_path = os.path.join(
+            self.grab_dir,
+            f"{self.grab_name}_{self.current_frame_num}.png",
+        )
+        print(self.grab_path)
+        # Reuse the existing VideoCapture instead of creating a new one
+        self.vid.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_num)
+        ret, frame = self.vid.read()
+        if ret:
+            cv2.imwrite(self.grab_path, frame)
+            self.grab_count = self.grab_count + 1
+            dpg.set_value("count_frames", str(self.grab_count) + " frames")
         else:
-            print(f"Not selected file dir or name")
+            print("Failed to read frame for grab")
 
     def count_reset_bt(self):
         self.grab_count = 0
@@ -366,12 +307,7 @@ class grab_gui:
         pass
 
     def frame_to_data(self, frame):
-        # raw image streaming
-        # frame_data = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        # self.texture_data = np.true_divide(frame_data.ravel(), 255.0)
-        # data = np.asfarray(self.texture_data.ravel(), dtype="f")
-        data = np.true_divide(cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA), 255)
-        return data
+        return frame_to_data_rgba(frame)
 
     def quit_cb(self):
         print("quit_pushed")
@@ -380,10 +316,9 @@ class grab_gui:
         dpg.destroy_context()  # <-- moved from __del__
 
     def __del__(self):
-        if hasattr(self, "quit"):
+        if hasattr(self, "m_dict"):
             self.m_dict["quit"] = True
         print("=== GUI window quit ===")
-        dpg.destroy_context()
 
 
 def main():

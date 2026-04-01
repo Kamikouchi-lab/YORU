@@ -21,7 +21,6 @@ class loadingParam:  # loading parameters from serial
         print(self.file)
         with open(self.file) as file:
             self.yml = yaml.safe_load(file)
-            yaml.safe_load_all
 
 
 class asvTexture:
@@ -45,7 +44,7 @@ class asvTexture:
         tex1[tex1 <= thre] = self.yml["texture"]["contrast"][0]
         tex1 = resize(tex1, (tex1.shape[0] * 8, tex1.shape[1] * 8))
         tex1 = np.concatenate([tex1, np.flipud(tex1)], axis=0)
-        tex1 = ndimage.filters.gaussian_filter(tex1, self.yml["texture"]["FreqFloor"])
+        tex1 = ndimage.gaussian_filter(tex1, self.yml["texture"]["FreqFloor"])
         tex1 = tex1 / np.max(tex1[:])
 
         tex1RGB = np.zeros((np.shape(tex1)[0], np.shape(tex1)[1], 3), dtype="uint8")
@@ -74,7 +73,7 @@ class asvTexture:
         tex1[tex1 > thre] = self.yml["texture"]["contrast"][1]
         tex1[tex1 <= thre] = self.yml["texture"]["contrast"][0]
         tex1 = resize(tex1, (tex1.shape[0] * 4 * 4, tex1.shape[1] * 4 * 4))
-        tex1 = ndimage.filters.gaussian_filter(tex1, self.yml["texture"]["FreqWall"])
+        tex1 = ndimage.gaussian_filter(tex1, self.yml["texture"]["FreqWall"])
         tex1 = tex1 / np.max(tex1[:])
         tex1RGB = np.zeros((np.shape(tex1)[0], np.shape(tex1)[1], 3), dtype="uint8")
         for idx, lumi in enumerate(self.yml["texture"]["RGB"]):
@@ -103,7 +102,7 @@ class asvTexture:
         tex1[tex1 <= thre] = 0
         tex1 = resize(tex1, (tex1.shape[0] * 4, tex1.shape[1] * 4))
         tex1 = np.concatenate([tex1, np.flipud(tex1)], axis=0)
-        tex1 = ndimage.filters.gaussian_filter(tex1, 10)
+        tex1 = ndimage.gaussian_filter(tex1, 10)
         tex1 = tex1 / np.max(tex1[:])
 
         tex1RGB = np.zeros((np.shape(tex1)[0], np.shape(tex1)[1], 3), dtype="uint8")

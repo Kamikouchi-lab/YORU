@@ -31,19 +31,26 @@ def main():
     parser.add_argument("--project", default=".",           help="Project output directory")
     args = parser.parse_args()
 
-    if "rtdetr" in args.weights.lower():
-        from ultralytics import RTDETR
-        model = RTDETR(args.weights)
-    else:
-        from ultralytics import YOLO
-        model = YOLO(args.weights)
-    model.train(
-        data=args.data,
-        epochs=args.epochs,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        project=args.project,
-    )
+    try:
+        if "rtdetr" in args.weights.lower():
+            from ultralytics import RTDETR
+            model = RTDETR(args.weights)
+        else:
+            from ultralytics import YOLO
+            model = YOLO(args.weights)
+        model.train(
+            data=args.data,
+            epochs=args.epochs,
+            imgsz=args.imgsz,
+            batch=args.batch,
+            project=args.project,
+        )
+    except FileNotFoundError as e:
+        print(f"[yoru] Model weights not found: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        print(f"[yoru] Training failed: {e}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

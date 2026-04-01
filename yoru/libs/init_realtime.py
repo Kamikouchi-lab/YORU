@@ -4,21 +4,12 @@
 import datetime
 import os
 import re
-import sys
 import time
 
 import numpy as np
 import torch
 
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
 from yoru.libs.util import loadingParam
-
-# try:
-#     from yoru.libs.util import loadingParam
-# except ModuleNotFoundError:
-#     from libs.util import loadingParam
 
 
 class init_asovi:

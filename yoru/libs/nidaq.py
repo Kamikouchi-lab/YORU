@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) YORU contributors — see LICENSE for details.
 
-import sys
 import time
-from enum import auto
 
 import nidaqmx
 import numpy as np
@@ -40,9 +38,8 @@ class dio:
         self.task.start()
 
     def stop(self):
-        # self.task.stop()
-        # self.task.close()
-        self.task.__del__()
+        self.task.stop()
+        self.task.close()
 
     def writeDO(self, tflist):
         self.task.write(tflist)

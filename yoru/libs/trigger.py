@@ -4,15 +4,10 @@
 import glob
 import importlib
 import os
-import sys
 import time
 
 import serial
 import serial.tools.list_ports
-
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
 
 import yoru.libs.arduino as ard
 
@@ -126,10 +121,6 @@ class trigger_python:
         print("Trigger instance set to None.")
 
 
-def __del__(self):
-    self.close()
-
-
 class read_condition:
     def __init__(self, m_dict={}):
         self.m_dict = m_dict
@@ -139,7 +130,9 @@ class read_condition:
         self.m_dict["COM_list"] = [element.device for element in comlist]
 
     def list_plugins(self):
-        file_paths = glob.glob("./trigger_plugins/*.py", recursive=True)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        plugin_dir = os.path.join(project_root, "trigger_plugins", "*.py")
+        file_paths = glob.glob(plugin_dir)
         self.m_dict["plugins"] = [
             os.path.splitext(os.path.basename(path))[0] for path in file_paths
         ]
@@ -148,5 +141,5 @@ class read_condition:
 if __name__ == "__main__":
     # Print list of connected COM ports
     m_dict = {}
-    read = read_com(m_dict)
+    read = read_condition(m_dict)
     read.list_com_ports()

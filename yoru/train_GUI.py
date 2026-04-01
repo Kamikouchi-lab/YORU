@@ -12,10 +12,6 @@ from multiprocessing import Manager, Process
 import dearpygui.dearpygui as dpg
 import yaml
 
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
 from yoru.libs.create_yaml_train import create_project
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.init_train import init_train

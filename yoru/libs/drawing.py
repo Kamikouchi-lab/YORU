@@ -4,7 +4,6 @@
 """Shared visualization utilities for detection results."""
 
 import logging
-import time
 
 import cv2
 import matplotlib.pyplot as plt
@@ -64,6 +63,8 @@ def draw_detections(img, results, colormap, names):
 class yolo_drawing:
     def __init__(self, m_dict=None):
         self.m_dict = m_dict if m_dict is not None else {}
+        self.names = {}
+        self.colormap = {}
 
     def get_colormap(self, label_names, colormap_name):
         return get_colormap(label_names, colormap_name)

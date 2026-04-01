@@ -3,22 +3,14 @@
 
 import logging
 import os
-import subprocess
-import sys
-import time
 from multiprocessing import Manager, Process
 
 import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
-
+from yoru.gui_base import apply_default_theme, frame_to_data_rgb, process_frame as _process_frame
 from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
-# try:
 from yoru.libs.file_operation_analysis import file_dialog_tk
 from yoru.libs.init_analysis import init_analysis
 from yoru.libs.plugins import get_detector
@@ -50,36 +42,11 @@ class analyze_GUI:
         self.speed = 1
 
     def process_frame(self):
-        if self.width >= self.height:
-            self.im_win_width = PREVIEW_SIZE
-            self.im_win_height = self.height * (PREVIEW_SIZE / self.width)
-        else:
-            self.im_win_width = self.width * (PREVIEW_SIZE / self.height)
-            self.im_win_height = PREVIEW_SIZE
-
-        # 画面のフリップ
-        if self.m_dict["v_flip"]:
-            self.frame = cv2.flip(self.frame, 0)
-
-        if self.m_dict["h_flip"]:
-            self.frame = cv2.flip(self.frame, 1)
-
-        # フレームのリサイズ
-        self.frame_re = cv2.resize(
-            self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
+        self.frame_re = _process_frame(
+            self.frame, PREVIEW_SIZE,
+            v_flip=self.m_dict.get("v_flip", False),
+            h_flip=self.m_dict.get("h_flip", False),
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
-        base_frame = np.zeros((PREVIEW_SIZE, PREVIEW_SIZE, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
-        h, w = self.frame_re.shape[:2]
-        half = PREVIEW_SIZE // 2
-        base_frame[
-            int(half - h / 2) : int(half + h / 2),
-            int(half - w / 2) : int(half + w / 2),
-            :,
-        ] = self.frame_re
-        # 更新
-        self.frame_re = base_frame
 
     def startDPG(self):
         dpg.create_context()
@@ -92,59 +59,7 @@ class analyze_GUI:
         dpg.create_viewport(title="YORU - Video Analysis", width=900, height=860)
 
         # Theme
-        with dpg.theme() as global_theme:
-            with dpg.theme_component(dpg.mvAll):
-                # Backgrounds
-                dpg.add_theme_color(dpg.mvThemeCol_WindowBg,              (18, 24, 42),    category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ChildBg,               (22, 30, 52),    category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_PopupBg,               (22, 30, 52),    category=dpg.mvThemeCat_Core)
-                # Title bar
-                dpg.add_theme_color(dpg.mvThemeCol_TitleBg,               (25, 70, 130),   category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive,         (35, 95, 165),   category=dpg.mvThemeCat_Core)
-                # Tabs
-                dpg.add_theme_color(dpg.mvThemeCol_Tab,                   (25, 70, 130),   category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_TabHovered,            (50, 115, 185),  category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_TabActive,             (45, 110, 180),  category=dpg.mvThemeCat_Core)
-                # Buttons
-                dpg.add_theme_color(dpg.mvThemeCol_Button,                (35, 95, 165),   category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered,         (55, 125, 200),  category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive,          (20, 70, 140),   category=dpg.mvThemeCat_Core)
-                # Frame (inputs, combos, checkboxes)
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBg,               (30, 42, 68),    category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered,        (38, 55, 88),    category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive,         (45, 65, 100),   category=dpg.mvThemeCat_Core)
-                # Slider
-                dpg.add_theme_color(dpg.mvThemeCol_SliderGrab,            (60, 130, 210),  category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_SliderGrabActive,      (85, 160, 235),  category=dpg.mvThemeCat_Core)
-                # Scrollbar
-                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg,           (18, 24, 42),    category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrab,         (45, 80, 140),   category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabHovered,  (60, 100, 165),  category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabActive,   (75, 120, 185),  category=dpg.mvThemeCat_Core)
-                # Separator & check
-                dpg.add_theme_color(dpg.mvThemeCol_Separator,             (50, 85, 140),   category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_CheckMark,             (80, 180, 240),  category=dpg.mvThemeCat_Core)
-                # Text
-                dpg.add_theme_color(dpg.mvThemeCol_Text,                  (230, 230, 230), category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_TextDisabled,          (120, 140, 170), category=dpg.mvThemeCat_Core)
-                # Header / collapsible
-                dpg.add_theme_color(dpg.mvThemeCol_Header,                (35, 80, 145),   category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered,         (50, 100, 170),  category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_HeaderActive,          (25, 65, 125),   category=dpg.mvThemeCat_Core)
-                # Plot (progress bar fill)
-                dpg.add_theme_color(dpg.mvThemeCol_PlotHistogram,         (35, 120, 200),  category=dpg.mvThemeCat_Core)
-                # Style vars
-                dpg.add_theme_style(dpg.mvStyleVar_WindowRounding,  6,     category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding,    12, 10, category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding,    5,     category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_FramePadding,     6,  4,  category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing,      8,  6,  category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_GrabRounding,     4,     category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_GrabMinSize,      12,    category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_TabRounding,      4,     category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_ScrollbarRounding, 4,    category=dpg.mvThemeCat_Core)
-                dpg.add_theme_style(dpg.mvStyleVar_ChildRounding,    5,     category=dpg.mvThemeCat_Core)
-        dpg.bind_theme(global_theme)
+        apply_default_theme()
 
         # Section header theme (accent-colored text)
         with dpg.theme() as _sec_hdr_theme:
@@ -502,11 +417,7 @@ class analyze_GUI:
         pass
 
     def frame_to_data(self, frame):
-        # raw image streaming
-        frame_data = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        self.texture_data = np.true_divide(frame_data.ravel(), 255.0)
-        data = np.asfarray(self.texture_data.ravel(), dtype="f")
-        return data
+        return frame_to_data_rgb(frame)
 
     def list_of_speed(self):
         tf = dpg.get_value("speed_list")

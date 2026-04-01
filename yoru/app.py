@@ -10,22 +10,6 @@ from tkinter import Tk, filedialog
 
 import eel
 
-# if __name__ == "__main__":
-
-
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
-# try:
-
-# except(ModuleNotFoundError):
-#     import analysis_GUI
-#     import realtime_yoru_GUI
-#     import evaluation_GUI
-#     import train_GUI
-
-
 default_condition_file_path = "./config/yoru_default.yaml"
 condition_file_path = default_condition_file_path
 
@@ -64,11 +48,7 @@ def run_cam_gui_YMH():
     global condition_file_path
     if os.path.isfile(condition_file_path):
         subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                f"from yoru import realtime_yoru_GUI; realtime_yoru_GUI.main(r'{condition_file_path}')",
-            ],
+            [sys.executable, "-m", "yoru.realtime_yoru_GUI", condition_file_path],
             creationflags=subprocess.CREATE_NEW_CONSOLE,
         )
     else:
@@ -115,36 +95,32 @@ def print_file_path():
     return str(p_abu)
 
 
-@eel.expose
-def run_analysis_gui():
+def _launch_module(module_name):
+    """Launch a YORU sub-module in a new console window."""
     subprocess.Popen(
-        [sys.executable, "-c", "from yoru import analysis_GUI; analysis_GUI.main()"],
+        [sys.executable, "-m", module_name],
         creationflags=subprocess.CREATE_NEW_CONSOLE,
     )
+
+
+@eel.expose
+def run_analysis_gui():
+    _launch_module("yoru.analysis_GUI")
 
 
 @eel.expose
 def run_train_gui():
-    subprocess.Popen(
-        [sys.executable, "-c", "from yoru import train_GUI; train_GUI.main()"],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
-    )
+    _launch_module("yoru.train_GUI")
 
 
 @eel.expose
 def run_evaluate_gui():
-    subprocess.Popen(
-        [sys.executable, "-c", "from yoru import evaluation_GUI; evaluation_GUI.main()"],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
-    )
+    _launch_module("yoru.evaluation_GUI")
 
 
 @eel.expose
 def run_config_creator_gui():
-    subprocess.Popen(
-        [sys.executable, "-c", "from yoru import config_creator_GUI; config_creator_GUI.main()"],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
-    )
+    _launch_module("yoru.config_creator_GUI")
 
 
 def main():

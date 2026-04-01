@@ -11,7 +11,6 @@ file is selected.
 
 import glob
 import os
-import sys
 import threading
 import tkinter
 import tkinter.filedialog as filedialog
@@ -19,10 +18,6 @@ import tkinter.filedialog as filedialog
 import dearpygui.dearpygui as dpg
 import serial.tools.list_ports
 import yaml
-
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
 
 
 class ConfigCreatorGUI:

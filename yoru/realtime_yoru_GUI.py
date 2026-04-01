@@ -17,10 +17,6 @@ import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
 from yoru.libs.detection import yolo_detection
 from yoru.libs.drawing import yolo_drawing
 from yoru.libs.file_operation_realtime import file_dialog_tk

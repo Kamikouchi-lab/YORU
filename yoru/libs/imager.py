@@ -28,7 +28,7 @@ class capture_streamCV2:
 
         self.frameBufLen = 200
         self.frameBuffer = np.zeros(
-            (self.resized_resolution[1], self.resized_resolution[0], self.frameBufLen),
+            (self.resized_resolution[1], self.resized_resolution[0], 3, self.frameBufLen),
             dtype="uint8",
         )
         self.fmt = cv2.VideoWriter_fourcc("D", "I", "V", "X")
@@ -55,7 +55,7 @@ class capture_streamCV2:
         self.frame_count = 0
         while True:
             now = datetime.datetime.now()
-            if (not stream_flag) & self.m_dict["stream"]:
+            if (not stream_flag) and self.m_dict["stream"]:
                 file_name_base = self.m_dict["export"] + "/" + self.m_dict["curLog"]
                 curVidName = file_name_base + "_vid.avi"
                 self.vwriter = cv2.VideoWriter(
@@ -103,13 +103,12 @@ class capture_streamCV2:
                 stream_flag = True
                 print("Start: Video-streaming")
 
-            elif stream_flag & (not self.m_dict["stream"]):
+            elif stream_flag and (not self.m_dict["stream"]):
                 self.frame_count = 0
                 # Streaming Done.
                 stream_flag = False
                 self.vwriter.release()
                 print(curVidName)
-                # self.currentLogFile.close()
                 self.detectionlogfile.close()
                 self.LogFile.close()
                 print("Finished: Video-streaming")
@@ -124,7 +123,7 @@ class capture_streamCV2:
                 if status:
                     if self.m_dict["camera_imshow"]:
                         cv2.imshow("frame", halfImg)
-                    if self.m_dict["stream"] & stream_flag:
+                    if self.m_dict["stream"] and stream_flag:
                         self.vwriter.write(halfImg)
                         "# Date, total time, Count, Speed, Position, Dark, Z-stage, di"
                         # self.currentLogFile.write(
@@ -191,7 +190,7 @@ class capture_streamMSS:
 
         self.frameBufLen = 200
         self.frameBuffer = np.zeros(
-            (self.resized_resolution[1], self.resized_resolution[0], self.frameBufLen),
+            (self.resized_resolution[1], self.resized_resolution[0], 3, self.frameBufLen),
             dtype="uint8",
         )
         self.fmt = cv2.VideoWriter_fourcc("D", "I", "V", "X")
@@ -210,7 +209,7 @@ class capture_streamMSS:
         self.frame_count = 0
         while True:
             now = datetime.datetime.now()
-            if (not stream_flag) & self.m_dict["stream"]:
+            if (not stream_flag) and self.m_dict["stream"]:
                 file_name_base = self.m_dict["export"] + "/" + self.m_dict["curLog"]
                 curVidName = file_name_base + "_vid.avi"
 
@@ -259,21 +258,19 @@ class capture_streamMSS:
                 )
                 stream_flag = True
                 print("Start: Video-streaming")
-            elif stream_flag & (not self.m_dict["stream"]):
+            elif stream_flag and (not self.m_dict["stream"]):
                 self.frame_count = 0
                 # Streaming Done.
                 stream_flag = False
                 self.vwriter.release()
                 print(curVidName)
-                # self.currentLogFile.close()
                 self.detectionlogfile.close()
                 self.LogFile.close()
                 print("Finished: Video-streaming")
 
             # Ensure camera is connected
             if True:  # self.capture.isOpened():
-                # (status, frame) = mss.capture.read()
-                frame = np.array(self.src.grab(self.disp)) * 1
+                frame = np.array(self.src.grab(self.disp), dtype=np.uint8)
                 t1 = time.perf_counter()
                 self.m_dict["total_time"] = t1 - self.m_dict["t0"]
                 halfImg = cv2.resize(frame, self.resized_resolution)
@@ -281,12 +278,8 @@ class capture_streamMSS:
                 if True:
                     if self.m_dict["camera_imshow"]:
                         cv2.imshow("frame", halfImg)
-                    if self.m_dict["stream"] & stream_flag:
+                    if self.m_dict["stream"] and stream_flag:
                         self.vwriter.write(halfImg)
-                        "# Date, total time, Count, Speed, Position, Dark, Z-stage, di"
-                        # self.currentLogFile.write(
-                        #     str(now) + ", " + str(self.m_dict["total_time"]) + "\r"
-                        # )
                         self.log_writer.writerows(
                             [[self.frame_count, str(self.m_dict["total_time"])]]
                         )
@@ -303,7 +296,7 @@ class capture_streamMSS:
                 self.m_dict["current_camera_frame"] = halfImg
             else:
                 t1 = time.perf_counter()
-            while (t1 - t0) < 1 / 16:  # TODO
+            while (t1 - t0) < 1 / 16:
                 t1 = time.perf_counter()
             self.m_dict["camera_fps"] = int(1 / (t1 - t0))
             t0 = t1 * 1

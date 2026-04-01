@@ -3,21 +3,14 @@
 
 import datetime
 import os
-import subprocess
 import sys
-import time
-from multiprocessing import Manager, Process
 
 import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 import yaml
-from pynput import keyboard
 
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
+from yoru.gui_base import process_frame as _process_frame
 from yoru.libs.create_labels import yolo_analysis_image
 from yoru.libs.file_operation_create_label import file_dialog_tk
 from yoru.libs.init_create_label import init_create_label
@@ -46,27 +39,7 @@ class model_eval_gui:
         self.fd_tk = file_dialog_tk(self.m_dict)
 
     def process_frame(self):
-        if self.width >= self.height:
-            self.im_win_width = 400
-            self.im_win_height = self.height * (400 / self.width)
-        else:
-            self.im_win_width = self.width * (400 / self.height)
-            self.im_win_height = 400
-        # フレームのリサイズ
-        self.frame_re = cv2.resize(
-            self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
-        )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
-        base_frame = np.zeros((400, 400, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
-        h, w = self.frame_re.shape[:2]
-        base_frame[
-            int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
-            int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
-            :,
-        ] = self.frame_re
-        # 更新
-        self.frame_re = base_frame
+        self.frame_re = _process_frame(self.frame, 400)
 
     def gui_configure(self):
         dpg.create_context()
@@ -196,14 +169,13 @@ class model_eval_gui:
                 self.m_dict["pr_curve_dir"] = data["evaluate_pr_curve_dir"]
 
             else:
-                folder_name = self.m_dict["project_dir"] + "/model_evaluation"
+                base = os.path.join(self.m_dict["project_dir"], "model_evaluation")
+                folder_name = base
                 i = 1
                 while os.path.exists(folder_name):
-                    folder_name = os.path.join(
-                        self.m_dict["project_dir"], "/model_evaluation_" + str(i)
-                    )
+                    folder_name = f"{base}_{i}"
                     i += 1
-                os.makedirs(folder_name)
+                os.makedirs(folder_name, exist_ok=True)
                 print(folder_name)
                 self.m_dict["datas_dir"] = os.path.join(folder_name, "datas")
                 os.makedirs(self.m_dict["datas_dir"])
@@ -252,10 +224,9 @@ class model_eval_gui:
         dpg.destroy_context()  # <-- moved from __del__
 
     def __del__(self):
-        if hasattr(self, "quit"):
+        if hasattr(self, "m_dict"):
             self.m_dict["quit"] = True
         print("=== GUI window quit ===")
-        dpg.destroy_context()
 
 
 def main():

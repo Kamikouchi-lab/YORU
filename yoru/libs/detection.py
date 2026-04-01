@@ -17,6 +17,8 @@ class yolo_detection:
     def __init__(self, m_dict=None):
         self.m_dict = m_dict if m_dict is not None else {}
         self.yolo_model_path = self.m_dict["yolo_model"]
+        self.names = {}
+        self.colormap = {}
 
     def drawing(self, img, results):
         for *box, conf, cls in self.m_dict["yolo_results"]:
@@ -47,7 +49,13 @@ class yolo_detection:
         logger.info("YOLO detection start...")
 
         while True:
-            if self.m_dict["yolo_process_state"]:
+            try:
+                if not self.m_dict.get("yolo_process_state", False):
+                    if self.m_dict.get("quit", False):
+                        break
+                    time.sleep(0.01)
+                    continue
+
                 self.m_dict = m_dict
                 self.yolo_model_path = self.m_dict["yolo_model"]
                 logger.info("Model: %s", self.m_dict["yolo_model"])
@@ -67,8 +75,8 @@ class yolo_detection:
                 logger.info("Classes: %s", self.m_dict["class_name_list"])
 
                 while True:
-                    image = self.m_dict["current_camera_frame"]
-                    if image.any() and self.m_dict["yolo_detection"]:
+                    image = self.m_dict.get("current_camera_frame")
+                    if image is not None and image.size > 0 and self.m_dict["yolo_detection"]:
                         detections = self.detector.detect(image)
 
                         n = len(detections)
@@ -98,7 +106,10 @@ class yolo_detection:
                     elif not self.m_dict["yolo_process_state"]:
                         logger.info("YOLO break")
                         break
-            if self.m_dict["quit"]:
+            except Exception as e:
+                logger.error("Detection error: %s", e)
+                time.sleep(0.5)
+            if self.m_dict.get("quit", False):
                 break
 
 
