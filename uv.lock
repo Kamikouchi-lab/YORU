@@ -523,6 +523,28 @@ wheels = [
 ]
 
 [[package]]
+name = "polars"
+version = "1.35.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "polars-runtime-32", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fa/43/09d4738aa24394751cb7e5d1fc4b5ef461d796efcadd9d00c79578332063/polars-1.35.2.tar.gz", hash = "sha256:ae458b05ca6e7ca2c089342c70793f92f1103c502dc1b14b56f0a04f2cc1d205", size = 694895, upload-time = "2025-11-09T13:20:05.921Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b4/9a/24e4b890c7ee4358964aa92c4d1865df0e8831f7df6abaa3a39914521724/polars-1.35.2-py3-none-any.whl", hash = "sha256:5e8057c8289ac148c793478323b726faea933d9776bd6b8a554b0ab7c03db87e", size = 783597, upload-time = "2025-11-09T13:18:51.361Z" },
+]
+
+[[package]]
+name = "polars-runtime-32"
+version = "1.35.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cb/75/ac1256ace28c832a0997b20ba9d10a9d3739bd4d457c1eb1e7d196b6f88b/polars_runtime_32-1.35.2.tar.gz", hash = "sha256:6e6e35733ec52abe54b7d30d245e6586b027d433315d20edfb4a5d162c79fe90", size = 2694387, upload-time = "2025-11-09T13:20:07.624Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dc/40/96a808ca5cc8707894e196315227f04a0c82136b7fb25570bc51ea33b88d/polars_runtime_32-1.35.2-cp39-abi3-win_amd64.whl", hash = "sha256:ddc015fac39735592e2e7c834c02193ba4d257bb4c8c7478b9ebe440b0756b84", size = 41290019, upload-time = "2025-11-09T13:19:12.214Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/d1/8d1b28d007da43c750367c8bf5cb0f22758c16b1104b2b73b9acadb2d17a/polars_runtime_32-1.35.2-cp39-abi3-win_arm64.whl", hash = "sha256:6861145aa321a44eda7cc6694fb7751cb7aa0f21026df51b5faa52e64f9dc39b", size = 36955684, upload-time = "2025-11-09T13:19:15.666Z" },
+]
+
+[[package]]
 name = "psutil"
 version = "5.9.8"
 source = { registry = "https://pypi.org/simple" }
@@ -530,15 +552,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/90/c7/6dc0a455d111f68ee
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6e/f5/2aa3a4acdc1e5940b59d421742356f133185667dd190b166dbcfcf5d7b43/psutil-5.9.8-cp37-abi3-win32.whl", hash = "sha256:bc56c2a1b0d15aa3eaa5a60c9f3f8e3e565303b465dbf57a1b730e7a2b9844e0", size = 251252, upload-time = "2024-01-19T20:47:52.88Z" },
     { url = "https://files.pythonhosted.org/packages/93/52/3e39d26feae7df0aa0fd510b14012c3678b36ed068f7d78b8d8784d61f0e/psutil-5.9.8-cp37-abi3-win_amd64.whl", hash = "sha256:8db4c1b57507eef143a15a6884ca10f7c73876cdf5d51e713151c1236a0e68cf", size = 255090, upload-time = "2024-01-19T20:47:56.019Z" },
-]
-
-[[package]]
-name = "py-cpuinfo"
-version = "9.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/37/a8/d832f7293ebb21690860d2e01d8115e5ff6f2ae8bbdc953f0eb0fa4bd2c7/py-cpuinfo-9.0.0.tar.gz", hash = "sha256:3cdbbf3fac90dc6f118bfd64384f309edeadd902d7c8fb17f02ffa1fc3f49690", size = 104716, upload-time = "2022-10-25T20:38:06.303Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e0/a9/023730ba63db1e494a271cb018dcd361bd2c917ba7004c3e49d5daf795a2/py_cpuinfo-9.0.0-py3-none-any.whl", hash = "sha256:859625bc251f64e21f077d099d4162689c762b5d6a4c3c97553d56241c9674d5", size = 22335, upload-time = "2022-10-25T20:38:27.636Z" },
 ]
 
 [[package]]
@@ -894,7 +907,7 @@ dependencies = [
     { name = "torch", marker = "sys_platform == 'win32'" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp39-cp39-win_amd64.whl", hash = "sha256:579b6a7fffc34a860c57a7131221ef125831f5961431f8da15760ab1ef752d44" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp39-cp39-win_amd64.whl", hash = "sha256:579b6a7fffc34a860c57a7131221ef125831f5961431f8da15760ab1ef752d44" },
 ]
 
 [[package]]
@@ -929,28 +942,25 @@ wheels = [
 
 [[package]]
 name = "ultralytics"
-version = "8.2.52"
+version = "8.3.229"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "matplotlib", marker = "sys_platform == 'win32'" },
     { name = "numpy", marker = "sys_platform == 'win32'" },
     { name = "opencv-python", marker = "sys_platform == 'win32'" },
-    { name = "pandas", marker = "sys_platform == 'win32'" },
     { name = "pillow", marker = "sys_platform == 'win32'" },
+    { name = "polars", marker = "sys_platform == 'win32'" },
     { name = "psutil", marker = "sys_platform == 'win32'" },
-    { name = "py-cpuinfo", marker = "sys_platform == 'win32'" },
     { name = "pyyaml", marker = "sys_platform == 'win32'" },
     { name = "requests", marker = "sys_platform == 'win32'" },
     { name = "scipy", marker = "sys_platform == 'win32'" },
-    { name = "seaborn", marker = "sys_platform == 'win32'" },
     { name = "torch", marker = "sys_platform == 'win32'" },
     { name = "torchvision", marker = "sys_platform == 'win32'" },
-    { name = "tqdm", marker = "sys_platform == 'win32'" },
     { name = "ultralytics-thop", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b7/2d/6b0ea4fc0893dc2dab16269a9ce15739932bacfe8cd2c8f1c6b657e20d97/ultralytics-8.2.52.tar.gz", hash = "sha256:3f399d241cde9b5ffa188a4534281f35d2b50cd1539323ba7b7df6e69db3ff47", size = 688865, upload-time = "2024-07-10T01:02:08.777Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/0f/b3e412971046b3ab4f4333b879cb376d2b454a417e3d9b6f07c6e67a7e53/ultralytics-8.3.229.tar.gz", hash = "sha256:f99b219f1159c4806ed958d2d9f34580221816019062e0f2b197f21270bffc21", size = 928163, upload-time = "2025-11-18T23:53:38.109Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b1/36/2f7147429967bf0bcd3ccf6488c4e010b9e5b56908ff75bb695a6d819548/ultralytics-8.2.52-py3-none-any.whl", hash = "sha256:bf7511fe42a7e091f42670188addf95e8fc1541e3686b3f94da26316b5115a87", size = 800029, upload-time = "2024-07-10T01:02:01.079Z" },
+    { url = "https://files.pythonhosted.org/packages/12/42/d7f172f95a12a34b7d8372937a4bf329d6b3cb6195ae4516600c61557d3e/ultralytics-8.3.229-py3-none-any.whl", hash = "sha256:765ee5481af5c165b19abff0970cc03fb8d7088210cba46c2f041fe8f02bf703", size = 1082402, upload-time = "2025-11-18T23:53:35.584Z" },
 ]
 
 [[package]]
@@ -1068,7 +1078,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.0", index = "https://download.pytorch.org/whl/cu124" },
     { name = "torchvision", specifier = ">=0.15", index = "https://download.pytorch.org/whl/cu124" },
     { name = "tqdm", specifier = "==4.66.4" },
-    { name = "ultralytics", specifier = "==8.2.52" },
+    { name = "ultralytics", specifier = ">=8.3.0" },
     { name = "ultralytics-thop", specifier = "==2.0.0" },
 ]
 provides-extras = ["dev"]

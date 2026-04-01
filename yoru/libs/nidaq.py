@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import sys
 import time
 from enum import auto

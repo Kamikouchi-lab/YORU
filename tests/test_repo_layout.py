@@ -17,7 +17,7 @@ def test_config_template_exists(repo_root: Path):
     cfg = repo_root / "config" / "template.yaml"
     assert cfg.exists(), "config/template.yaml not found"
 
-def test_optional_yolov5_submodule(repo_root: Path):
+def test_yolov5_local_copy_removed(repo_root: Path):
+    """YOLOv5 is now provided via the ultralytics pip package, not a local copy."""
     yv5 = repo_root / "yoru" / "libs" / "yolov5"
-    if not yv5.exists():
-        pytest.skip("yoru/libs/yolov5 not present (submodule not checked out)")
+    assert not yv5.exists(), "yoru/libs/yolov5/ should be removed; use ultralytics package instead"

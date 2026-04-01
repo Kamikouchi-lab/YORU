@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 class init_create_label:
     def __init__(self, m_dict={}):
         self.m_dict = m_dict

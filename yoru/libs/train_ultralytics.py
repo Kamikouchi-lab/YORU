@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 """Training script for YOLOv8 / YOLO11 via the ultralytics package.
 
 Called by train_GUI.py via subprocess:
