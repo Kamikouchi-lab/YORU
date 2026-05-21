@@ -56,7 +56,7 @@ class analyze_GUI:
             docking_space=True,
         )
 
-        dpg.create_viewport(title="YORU - Video Analysis", width=900, height=860)
+        dpg.create_viewport(title="YORU - Video Analysis", width=1000, height=800, max_width=1000, max_height=800)
 
         # Theme
         apply_default_theme()

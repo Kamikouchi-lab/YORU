@@ -53,7 +53,7 @@ class ConfigCreatorGUI:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Config Creator", width=820, height=950)
+        dpg.create_viewport(title="YORU - Config Creator", width=1000, height=800, max_width=1000, max_height=800)
 
         # ── Theme (same palette as train_GUI) ──────────────────────────
         with dpg.theme() as global_theme:

@@ -116,8 +116,8 @@ def main():
         "YORU (Your Optimal Recognition Utility)",
         url=str(WEB_DIR / "gui_home.html"),
         js_api=api,
-        width=1024,
-        height=768,
+        width=1000,
+        height=800,
     )
     api.set_window(window)
     webview.start()

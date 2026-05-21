@@ -49,7 +49,7 @@ class model_eval_gui:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Evaluation", width=960, height=900)
+        dpg.create_viewport(title="YORU - Evaluation", width=1000, height=800, max_width=1000, max_height=800)
 
         # theme
         with dpg.theme() as global_theme:

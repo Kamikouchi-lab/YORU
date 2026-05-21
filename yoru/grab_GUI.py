@@ -42,7 +42,7 @@ class grab_gui:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Frame Capture", width=960, height=900)
+        dpg.create_viewport(title="YORU - Frame Capture", width=1000, height=800, max_width=1000, max_height=800)
 
         # Theme
         apply_default_theme()

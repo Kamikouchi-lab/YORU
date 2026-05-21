@@ -29,7 +29,7 @@ class yoru_train:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Training", width=960, height=870)
+        dpg.create_viewport(title="YORU - Training", width=1000, height=800)
         imager_window = dpg.generate_uuid()
 
         # ── Global theme ──────────────────────────────────────────────────────
@@ -540,7 +540,7 @@ class yoru_train:
     def grab_bt(self):
         # print("quit_pushed")
         # self.m_dict["quit"] = True
-        subprocess.call(["python", "./yoru/grab_GUI.py"])
+        subprocess.Popen([sys.executable, "-m", "yoru.grab_GUI"])
         self._set_step_state("step2_state", "Complete!!")
         # dpg.destroy_context()  # <-- moved from __del__
 
