@@ -233,7 +233,10 @@ class model_eval_gui:
             print(f"load complete")
 
     def labelImg_bt(self):
-        subprocess.call(["labelImg"])
+        import sys
+        from yoru.labelimg.labelimg import get_main_app
+        app, win = get_main_app(sys.argv)
+        app.exec_()
 
     def yolo_detection(self):
         yolo_det = yolo_analysis_image(self.m_dict)

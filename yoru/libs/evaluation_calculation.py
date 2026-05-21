@@ -15,6 +15,8 @@ import seaborn as sns
 import torch
 from tqdm import tqdm
 
+from yoru.libs.yolo_wrapper import load_yolo_model
+
 
 class yolo_analysis_image:
     def __init__(self, m_dict):
@@ -25,16 +27,10 @@ class yolo_analysis_image:
         print("init")
 
     def analyze_image(self):
-        yolo_model = torch.hub.load(
-            "./libs/yolov5", "custom", path=self.yolo_model_path, source="local"
-        )
+        yolo_model = load_yolo_model(self.yolo_model_path)
 
         # クラス名の取得
-        class_names = (
-            yolo_model.module.names
-            if hasattr(yolo_model, "module")
-            else yolo_model.names
-        )
+        class_names = yolo_model.names
         print(class_names)
 
         search_path = os.path.join(self.data_path, "*.png")
@@ -327,16 +323,10 @@ class Evaluator(ModelValidation):
         return df
 
     def read_yolo_det_box_txt(self):
-        yolo_model = torch.hub.load(
-            "./libs/yolov5", "custom", path=self.m_dict["model_path"], source="local"
-        )
+        yolo_model = load_yolo_model(self.m_dict["model_path"])
 
         # クラス名の取得
-        class_names = (
-            yolo_model.module.names
-            if hasattr(yolo_model, "module")
-            else yolo_model.names
-        )
+        class_names = yolo_model.names
         return class_names
 
     def save_dict_to_txt(self, dic, filename):

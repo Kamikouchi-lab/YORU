@@ -5,6 +5,7 @@ export_name: "fly_copulation_real_time_analysis" # Specifying the file name of t
 model:
  yolo_detection: False  # If you want to start YORU's inference immediately after starting YORU's real-time process, set this to True.
  yolo_model_path: "Path to YORU model"  # Specify the YORU model (.pt file)
+ yolo_model_type: "auto"  # Model type: "yolov5", "yolov8", "yolo11", or "auto" (inferred from filename)
  Trigger: False
 
 capture_style:

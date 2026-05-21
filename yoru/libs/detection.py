@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+from yoru.libs.yolo_wrapper import load_yolo_model
+
 
 class yolo_detection:
     def __init__(self, m_dict={}):
@@ -61,14 +63,11 @@ class yolo_detection:
 
                 # try:
                 # dpg.disable_item("yolocheckbox")
-                self.yolo_model = torch.hub.load(
-                    "./libs/yolov5", "custom", path=self.yolo_model_path, source="local"
+                self.yolo_model = load_yolo_model(
+                    self.yolo_model_path,
+                    self.m_dict.get("yolo_model_type", "auto"),
                 )
-                self.m_dict["class_list"] = (
-                    self.yolo_model.module.names
-                    if hasattr(self.yolo_model, "module")
-                    else self.yolo_model.names
-                )
+                self.m_dict["class_list"] = self.yolo_model.names
                 self.m_dict["class_name_list"] = list(
                     self.m_dict["class_list"].values()
                 )

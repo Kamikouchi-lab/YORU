@@ -80,6 +80,7 @@ class init_asovi:
 
         # YOLO model
         self.m_dict["yolo_model"] = self.conf["model"]["yolo_model_path"]
+        self.m_dict["yolo_model_type"] = self.conf["model"].get("yolo_model_type", "auto")
         self.m_dict["yolo_detection"] = self.conf["model"]["yolo_detection"]
         self.m_dict["yolo_results"] = []
         self.m_dict["yolo_process_state"] = True
