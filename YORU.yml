@@ -5,7 +5,7 @@ channels:
 dependencies:
   - python=3.9
   - pip
-  - setuptools
+  - setuptools<81  # pkg_resources was removed in setuptools 81; eel still imports it
   - wheel
 
   - pip:
