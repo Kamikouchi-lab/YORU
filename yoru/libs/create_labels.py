@@ -24,8 +24,13 @@ class yolo_analysis_image:
         print("init")
 
     def analyze_image(self):
+        # カレントディレクトリに依存しないよう、このファイルの位置を基準に
+        # yolov5 リポジトリ(hubconf.py を含む)の絶対パスを解決する。
+        yolov5_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "yolov5"
+        )
         yolo_model = torch.hub.load(
-            "./libs/yolov5", "custom", path=self.yolo_model_path, source="local"
+            yolov5_dir, "custom", path=self.yolo_model_path, source="local"
         )
 
         # クラス名の取得

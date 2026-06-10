@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import time
+import traceback
 from cProfile import label
 from multiprocessing import Manager, Process
 
@@ -39,6 +40,85 @@ class analyze_GUI:
         self.process_frame()
         self.grab_count = 0
         self.speed = 1
+
+    # ------------------------------------------------------------------
+    # エラーハンドリング用ヘルパー
+    # ------------------------------------------------------------------
+    def _report_error(self, context, exc):
+        """例外を標準エラー出力に記録し、GUI上のポップアップで表示する。
+
+        標準エラー出力へのトレースバックは、サブプロセスとして起動された
+        場合に app.py 側の _run_gui_subprocess で捕捉され、ホーム画面に
+        通知される。
+        """
+        detail = f"{type(exc).__name__}: {exc}"
+        print(f"[ERROR] {context}: {detail}", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        self._show_error_popup(context, detail)
+
+    def _show_error_popup(self, context, detail):
+        """エラー内容をモーダルウィンドウで表示する。"""
+        try:
+            if dpg.does_item_exist("error_popup"):
+                dpg.delete_item("error_popup")
+            with dpg.window(
+                label="Error",
+                modal=True,
+                tag="error_popup",
+                no_resize=True,
+                width=480,
+                pos=(210, 300),
+            ):
+                dpg.add_text(context, color=(255, 160, 120))
+                dpg.add_separator()
+                dpg.add_text(detail, wrap=460, color=(255, 120, 120))
+                dpg.add_spacer(height=8)
+                dpg.add_button(
+                    label="Close",
+                    width=80,
+                    callback=lambda: dpg.delete_item("error_popup"),
+                )
+        except Exception:
+            # ポップアップ表示に失敗しても標準エラー出力には残っている
+            pass
+
+    def _safe_enable(self, tag):
+        """存在する場合のみアイテムを有効化する(失敗しても無視)。"""
+        try:
+            if dpg.does_item_exist(tag):
+                dpg.enable_item(tag)
+        except Exception:
+            pass
+
+    def _validate_analysis_inputs(self, require_movie=False, require_image=False):
+        """解析開始前に必要な入力が揃っているか検証する。"""
+        model_path = self.m_dict.get("model_path", "")
+        if not model_path or not os.path.isfile(str(model_path)):
+            raise FileNotFoundError(
+                "Model file is not selected or does not exist. "
+                "Please select a valid model file."
+            )
+
+        output_path = self.m_dict.get("output_path", "")
+        if not output_path or not os.path.isdir(str(output_path)):
+            raise NotADirectoryError(
+                "Result directory is not selected or does not exist. "
+                "Please select a valid output directory."
+            )
+
+        if require_movie:
+            input_path = self.m_dict.get("input_path", "")
+            if not input_path or input_path == "." or len(input_path) == 0:
+                raise FileNotFoundError(
+                    "No movie file is selected. Please select movie file(s)."
+                )
+
+        if require_image:
+            input_path_image = self.m_dict.get("input_path_image", "")
+            if not input_path_image or input_path_image == "." or len(input_path_image) == 0:
+                raise FileNotFoundError(
+                    "No image file is selected. Please select image file(s)."
+                )
 
     def process_frame(self):
         if self.width >= self.height:
@@ -452,18 +532,22 @@ class analyze_GUI:
 
     def file_open(self):
         if self.file_path:
-            print("File: " + self.file_path)
+            print("File: " + self.file_path, flush=True)
         else:
-            print("Failed open files")
+            raise FileNotFoundError("No movie file path was provided.")
 
         self.vid = cv2.VideoCapture(self.file_path)
+        if not self.vid.isOpened():
+            raise IOError(f"Could not open movie file: {self.file_path}")
         self.width = self.vid.get(cv2.CAP_PROP_FRAME_WIDTH)
         self.height = self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.framecount = int(self.vid.get(cv2.CAP_PROP_FRAME_COUNT))
         self.current_frame_num = 0
         self.status, self.frame = self.vid.read()
+        if not self.status or self.frame is None:
+            raise IOError(f"Could not read frames from movie file: {self.file_path}")
         self.process_frame()
-        print("Movie size: ", self.width, self.height)
+        print("Movie size: ", self.width, self.height, flush=True)
         dpg.configure_item("frame_bar", max_value=self.framecount - 2)
         dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
         dpg.enable_item("streamingChkBox")
@@ -471,13 +555,15 @@ class analyze_GUI:
 
     def file_open_image(self):
         if self.file_path_image:
-            print("File: " + self.file_path_image)
+            print("File: " + self.file_path_image, flush=True)
         else:
-            print("Failed open image")
+            raise FileNotFoundError("No image file path was provided.")
         self.frame = cv2.imread(self.file_path_image)
+        if self.frame is None:
+            raise IOError(f"Could not read image file: {self.file_path_image}")
         self.height, self.width, _ = self.frame.shape
         self.process_frame()
-        print("Image size: ", self.width, self.height)
+        print("Image size: ", self.width, self.height, flush=True)
         dpg.set_value("imwin_tag1", self.frame_to_data(self.frame_re))
 
     def stream_cb(self):
@@ -503,20 +589,34 @@ class analyze_GUI:
         self.speed = tf
 
     def movie_select_bt(self):
-        self.fd_tk.input_file_open()
-        self.file_path = self.m_dict["input_path"][0]
-        self.file_open()
+        try:
+            self.fd_tk.input_file_open()
+            input_paths = self.m_dict.get("input_path")
+            # ダイアログがキャンセルされた場合は何もしない
+            if not input_paths or input_paths == "." or len(input_paths) == 0:
+                print("No movie file selected", flush=True)
+                return
+            self.file_path = input_paths[0]
+            self.file_open()
+        except Exception as e:
+            self._report_error("Failed to open movie file", e)
 
     def image_select_bt(self):
-        self.fd_tk.input_file_open_image()
-        self.current_image_num = 0
-        print(self.m_dict["input_path_image"])
-        self.file_path_image = self.m_dict["input_path_image"][
-            int(self.current_image_num)
-        ]
-        self.image_num = len(self.m_dict["input_path_image"]) - 1
-        print(self.image_num)
-        self.file_open_image()
+        try:
+            self.fd_tk.input_file_open_image()
+            image_paths = self.m_dict.get("input_path_image")
+            # ダイアログがキャンセルされた場合は何もしない
+            if not image_paths or image_paths == "." or len(image_paths) == 0:
+                print("No image file selected", flush=True)
+                return
+            self.current_image_num = 0
+            print(image_paths, flush=True)
+            self.file_path_image = image_paths[int(self.current_image_num)]
+            self.image_num = len(image_paths) - 1
+            print(self.image_num, flush=True)
+            self.file_open_image()
+        except Exception as e:
+            self._report_error("Failed to open image file", e)
 
     def v_flip_cb(self):
         self.status, self.frame = self.vid.read()
@@ -577,35 +677,55 @@ class analyze_GUI:
         dpg.destroy_context()  # <-- moved from __del__
 
     def analyze_movie(self):
-        print("Start analyzing ....")
-        self.yolo_analysis = yolo_analysis(self.m_dict)
-        self.yolo_analysis.analyze()
-        print("Analysis complete!!")
+        try:
+            self._validate_analysis_inputs(require_movie=True)
+            print("Start analyzing ....", flush=True)
+            self.yolo_analysis = yolo_analysis(self.m_dict)
+            self.yolo_analysis.analyze()
+            print("Analysis complete!!", flush=True)
+        except Exception as e:
+            self._report_error("Movie analysis failed", e)
+            dpg.set_value("analy_time", "Estimated remaining time: error")
+        finally:
+            # analyze() の途中で無効化されたコントロールを確実に元に戻す
+            self._safe_enable("analyze_btn")
+            self._safe_enable("create_movie")
 
     def analyze_image(self):
-        print("Start analyzing ....")
-        self.yolo_analysis = yolo_analysis_image(self.m_dict)
-        self.yolo_analysis.analyze_image()
-        print("Analysis complete!!")
+        try:
+            self._validate_analysis_inputs(require_image=True)
+            print("Start analyzing ....", flush=True)
+            self.yolo_analysis = yolo_analysis_image(self.m_dict)
+            self.yolo_analysis.analyze_image()
+            print("Analysis complete!!", flush=True)
+        except Exception as e:
+            self._report_error("Image analysis failed", e)
+            if dpg.does_item_exist("analy_state"):
+                dpg.set_value("analy_state", "Error")
+        finally:
+            # analyze_image() の途中で無効化されたボタンを確実に元に戻す
+            self._safe_enable("analyze_img_btn")
 
     def create_condition(self):
         tf = dpg.get_value("create_movie")
         self.m_dict["create_video"] = tf
 
     def model_select_bt(self):
-        self.fd_tk.model_file_open()
-        self.update_class_list()
+        try:
+            self.fd_tk.model_file_open()
+            self.update_class_list()
+        except Exception as e:
+            self._report_error("Failed to load model", e)
 
     def update_class_list(self):
         model_path = self.m_dict.get("model_path", "")
+        # モデル未選択(ダイアログのキャンセル等)は正常系として無視する
         if not model_path or not os.path.isfile(str(model_path)):
             return
-        try:
-            yolo_model = load_yolo_model(str(model_path))
-            class_names = yolo_model.names
-        except Exception as e:
-            print(f"Failed to load class names: {e}")
-            return
+        print(f"Loading model: {model_path}", flush=True)
+        yolo_model = load_yolo_model(str(model_path))
+        class_names = yolo_model.names
+        print(f"Model loaded. {len(class_names)} classes found.", flush=True)
         dpg.delete_item("tracking_class_checkboxes", children_only=True)
         self.m_dict["tracking_exclude_classes"] = []
         for cls_id, cls_name in class_names.items():
@@ -634,7 +754,15 @@ class analyze_GUI:
 
     def in_thresh(self):
         tf = dpg.get_value("conf_threshold")
-        self.m_dict["threshold"] = float(tf)
+        try:
+            self.m_dict["threshold"] = float(tf)
+        except (ValueError, TypeError):
+            # 入力途中の不正な値はポップアップを出さず警告のみ。直前の値を保持する。
+            print(
+                f"[WARN] Invalid confidence threshold: {tf!r} (keeping previous value)",
+                file=sys.stderr,
+                flush=True,
+            )
 
     def __del__(self):
         print("=== GUI window quit ===")

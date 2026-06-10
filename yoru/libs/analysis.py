@@ -144,10 +144,12 @@ class yolo_analysis:
         self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
         movie_count = len(self.mov_path_list)
+        total_movies = movie_count
         self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
         dpg.set_value("no_mov", self.m_dict["no_movies"])
+        print(f"=== Start movie analysis: {total_movies} movie(s) ===", flush=True)
 
-        for self.mov_path in self.mov_path_list:
+        for movie_index, self.mov_path in enumerate(self.mov_path_list, start=1):
             df_results = pd.DataFrame()
             result_list = []
             video = cv2.VideoCapture(self.mov_path)
@@ -189,6 +191,13 @@ class yolo_analysis:
             pre_ids = []
             dpg.set_value("movie_progress_bar", 0.0)
             dpg.configure_item("movie_progress_bar", overlay="0%")
+
+            print(
+                f"[{movie_index}/{total_movies}] Analyzing '{base_name}' "
+                f"({total_frames} frames)...",
+                flush=True,
+            )
+            last_logged_pct = -10  # 標準出力への進捗ログ用(10%刻みで出力)
 
             while video.isOpened():
                 ret, frame = video.read()
@@ -293,6 +302,16 @@ class yolo_analysis:
                 dpg.set_value("movie_progress_bar", progress)
                 dpg.configure_item("movie_progress_bar", overlay=f"{int(progress * 100)}%")
 
+                # 標準出力へ10%刻みで進捗を流す
+                pct = int(progress * 100)
+                if pct // 10 > last_logged_pct // 10:
+                    last_logged_pct = pct
+                    print(
+                        f"    [{movie_index}/{total_movies}] {base_name}: "
+                        f"{pct}% ({frame_count}/{total_frames} frames)",
+                        flush=True,
+                    )
+
                 end_time = time.time()  # 処理終了時間
                 process_time = end_time - start_time  # このフレームの処理時間
                 process_times.append(process_time)  # 処理時間をリストに保存
@@ -347,6 +366,11 @@ class yolo_analysis:
                 )
             # csvとして出力
             df_results.to_csv(file_path, index=False)
+            print(
+                f"[{movie_index}/{total_movies}] Done '{base_name}' "
+                f"-> {file_path}",
+                flush=True,
+            )
 
             video.release()
             if self.m_dict["create_video"]:
@@ -363,6 +387,7 @@ class yolo_analysis:
         dpg.configure_item("movie_progress_bar", overlay="Done")
         dpg.enable_item("analyze_btn")
         dpg.enable_item("create_movie")
+        print("=== Movie analysis complete ===", flush=True)
 
     def create_video(self):
         dpg.set_value("cr_analy_time", "Estimated remaining time: calculating...")
@@ -506,6 +531,8 @@ class yolo_analysis_image:
         self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
         image_count = len(self.img_path_list)
+        print(f"=== Start image analysis: {image_count} image(s) ===", flush=True)
+        last_logged_pct = -10  # 標準出力への進捗ログ用(10%刻みで出力)
 
         df_results = pd.DataFrame()
         result_list = []
@@ -517,6 +544,8 @@ class yolo_analysis_image:
             file_name_without_ext = os.path.splitext(base_name)[0]
 
             frame = cv2.imread(self.img_path)
+            if frame is None:
+                raise IOError(f"Could not read image file: {self.img_path}")
             if self.m_dict["v_flip"]:
                 frame = cv2.flip(frame, 0)
 
@@ -560,6 +589,15 @@ class yolo_analysis_image:
             dpg.set_value("image_progress_bar", progress)
             dpg.configure_item("image_progress_bar", overlay=f"{image_index + 1}/{image_count}")
 
+            # 標準出力へ10%刻みで進捗を流す
+            pct = int(progress * 100)
+            if pct // 10 > last_logged_pct // 10:
+                last_logged_pct = pct
+                print(
+                    f"    {pct}% ({image_index + 1}/{image_count}) {base_name}",
+                    flush=True,
+                )
+
         # リストをデータフレームに変換
         df_results = pd.DataFrame(
             result_list,
@@ -578,6 +616,7 @@ class yolo_analysis_image:
         )
         # csvとして出力
         df_results.to_csv(file_path, index=False)
+        print(f"=== Image analysis complete -> {file_path} ===", flush=True)
 
         dpg.set_value("analy_state", "Done!")
         dpg.set_value("image_progress_bar", 1.0)
