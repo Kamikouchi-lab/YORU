@@ -201,8 +201,20 @@ class YOLOv5Wrapper:
     """Wraps a YOLOv5 model loaded via ``torch.hub``."""
 
     def __init__(self, model_path: str):
+        # Resolve the absolute path of the yolov5 repository (which contains
+        # hubconf.py) relative to this file's location, so it does not depend
+        # on the current working directory.
+        yolov5_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "yolov5"
+        )
+        if not os.path.isfile(os.path.join(yolov5_dir, "hubconf.py")):
+            raise FileNotFoundError(
+                f"YOLOv5 repository not found at '{yolov5_dir}'. "
+                "Make sure the yolov5 submodule is checked out "
+                "(git submodule update --init --recursive)."
+            )
         self._model = torch.hub.load(
-            "./libs/yolov5", "custom", path=model_path, source="local"
+            yolov5_dir, "custom", path=model_path, source="local"
         )
 
     @property

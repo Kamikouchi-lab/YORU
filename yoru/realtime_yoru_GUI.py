@@ -61,10 +61,10 @@ class camGUI:
             dsize=(self.m_dict["camera_width"], self.m_dict["camera_height"]),
         )
 
-        # COMリストの読み込み
+        # load the COM list
         self.read_condi.list_com_ports()
 
-        # trigger pluginsの読み込み
+        # load the trigger plugins
         self.read_condi.list_plugins()
 
         # flatten camera data to a 1 d stricture

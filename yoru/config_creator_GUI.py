@@ -19,8 +19,10 @@ import yaml
 
 sys.path.append("../yoru")
 
+from yoru.libs.gui_error import GuiErrorMixin
 
-class ConfigCreatorGUI:
+
+class ConfigCreatorGUI(GuiErrorMixin):
     def __init__(self):
         self.class_list = ["None"]
         self.com_list = self._get_com_ports()
@@ -413,11 +415,18 @@ class ConfigCreatorGUI:
             },
         }
 
-        out_dir = os.path.dirname(os.path.abspath(out_path))
-        os.makedirs(out_dir, exist_ok=True)
-        with open(out_path, "w") as f:
-            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        dpg.set_value("cfg_save_status", f"Saved: {out_path}")
+        try:
+            out_dir = os.path.dirname(os.path.abspath(out_path))
+            os.makedirs(out_dir, exist_ok=True)
+            with open(out_path, "w") as f:
+                yaml.dump(
+                    config, f, default_flow_style=False, allow_unicode=True, sort_keys=False
+                )
+            dpg.set_value("cfg_save_status", f"Saved: {out_path}")
+        except Exception as e:
+            # Consistent with other GUIs: stderr + modal display. Also reflect in the save status line.
+            self._report_error("Failed to save config", e)
+            dpg.set_value("cfg_save_status", f"Error: {type(e).__name__}: {e}")
 
     # ------------------------------------------------------------------
     # Run loop

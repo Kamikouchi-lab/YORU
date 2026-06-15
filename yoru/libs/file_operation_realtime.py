@@ -14,8 +14,8 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="select YOLO model",
-            filetypes=[("YOLO model file", ".pt .pth")],  # ファイルフィルタ
-            initialdir="./",  # 自分自身のディレクトリ
+            filetypes=[("YOLO model file", ".pt .pth")],  # file filter
+            initialdir="./",  # the current directory
         )
         root.destroy()
         dpg.set_value("File Path", file_path)

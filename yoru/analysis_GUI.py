@@ -15,11 +15,12 @@ sys.path.append("../yoru")
 from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
 # try:
 from yoru.libs.file_operation_analysis import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.init_analysis import init_analysis
 from yoru.libs.yolo_wrapper import load_yolo_model
 
 
-class analyze_GUI:
+class analyze_GUI(GuiErrorMixin):
     def __init__(self, m_dict={}):
         self.m_dict = m_dict
         self.fd_tk = file_dialog_tk(self.m_dict)
@@ -40,6 +41,40 @@ class analyze_GUI:
         self.grab_count = 0
         self.speed = 1
 
+    # ------------------------------------------------------------------
+    # Error-handling helpers
+    # (_report_error / _show_error_popup / _safe_enable are shared via GuiErrorMixin)
+    # ------------------------------------------------------------------
+    def _validate_analysis_inputs(self, require_movie=False, require_image=False):
+        """Validate that the inputs required before starting analysis are present."""
+        model_path = self.m_dict.get("model_path", "")
+        if not model_path or not os.path.isfile(str(model_path)):
+            raise FileNotFoundError(
+                "Model file is not selected or does not exist. "
+                "Please select a valid model file."
+            )
+
+        output_path = self.m_dict.get("output_path", "")
+        if not output_path or not os.path.isdir(str(output_path)):
+            raise NotADirectoryError(
+                "Result directory is not selected or does not exist. "
+                "Please select a valid output directory."
+            )
+
+        if require_movie:
+            input_path = self.m_dict.get("input_path", "")
+            if not input_path or input_path == "." or len(input_path) == 0:
+                raise FileNotFoundError(
+                    "No movie file is selected. Please select movie file(s)."
+                )
+
+        if require_image:
+            input_path_image = self.m_dict.get("input_path_image", "")
+            if not input_path_image or input_path_image == "." or len(input_path_image) == 0:
+                raise FileNotFoundError(
+                    "No image file is selected. Please select image file(s)."
+                )
+
     def process_frame(self):
         if self.width >= self.height:
             self.im_win_width = 400
@@ -48,7 +83,7 @@ class analyze_GUI:
             self.im_win_width = self.width * (400 / self.height)
             self.im_win_height = 400
 
-        # 画面のフリップ
+        # Flip the display
         if self.m_dict["v_flip"]:
             self.frame = cv2.flip(self.frame, 0)
         else:
@@ -59,20 +94,20 @@ class analyze_GUI:
         else:
             pass
 
-        # フレームのリサイズ
+        # Resize the frame
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
+        # Create a new frame (a frame filled entirely with black)
         base_frame = np.zeros((400, 400, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
+        # Place the resized frame at the center of the new frame
         h, w = self.frame_re.shape[:2]
         base_frame[
             int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
             int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
             :,
         ] = self.frame_re
-        # 更新
+        # Update
         self.frame_re = base_frame
 
     def startDPG(self):
@@ -452,18 +487,22 @@ class analyze_GUI:
 
     def file_open(self):
         if self.file_path:
-            print("File: " + self.file_path)
+            print("File: " + self.file_path, flush=True)
         else:
-            print("Failed open files")
+            raise FileNotFoundError("No movie file path was provided.")
 
         self.vid = cv2.VideoCapture(self.file_path)
+        if not self.vid.isOpened():
+            raise IOError(f"Could not open movie file: {self.file_path}")
         self.width = self.vid.get(cv2.CAP_PROP_FRAME_WIDTH)
         self.height = self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.framecount = int(self.vid.get(cv2.CAP_PROP_FRAME_COUNT))
         self.current_frame_num = 0
         self.status, self.frame = self.vid.read()
+        if not self.status or self.frame is None:
+            raise IOError(f"Could not read frames from movie file: {self.file_path}")
         self.process_frame()
-        print("Movie size: ", self.width, self.height)
+        print("Movie size: ", self.width, self.height, flush=True)
         dpg.configure_item("frame_bar", max_value=self.framecount - 2)
         dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
         dpg.enable_item("streamingChkBox")
@@ -471,13 +510,15 @@ class analyze_GUI:
 
     def file_open_image(self):
         if self.file_path_image:
-            print("File: " + self.file_path_image)
+            print("File: " + self.file_path_image, flush=True)
         else:
-            print("Failed open image")
+            raise FileNotFoundError("No image file path was provided.")
         self.frame = cv2.imread(self.file_path_image)
+        if self.frame is None:
+            raise IOError(f"Could not read image file: {self.file_path_image}")
         self.height, self.width, _ = self.frame.shape
         self.process_frame()
-        print("Image size: ", self.width, self.height)
+        print("Image size: ", self.width, self.height, flush=True)
         dpg.set_value("imwin_tag1", self.frame_to_data(self.frame_re))
 
     def stream_cb(self):
@@ -503,20 +544,34 @@ class analyze_GUI:
         self.speed = tf
 
     def movie_select_bt(self):
-        self.fd_tk.input_file_open()
-        self.file_path = self.m_dict["input_path"][0]
-        self.file_open()
+        try:
+            self.fd_tk.input_file_open()
+            input_paths = self.m_dict.get("input_path")
+            # Do nothing if the dialog was canceled
+            if not input_paths or input_paths == "." or len(input_paths) == 0:
+                print("No movie file selected", flush=True)
+                return
+            self.file_path = input_paths[0]
+            self.file_open()
+        except Exception as e:
+            self._report_error("Failed to open movie file", e)
 
     def image_select_bt(self):
-        self.fd_tk.input_file_open_image()
-        self.current_image_num = 0
-        print(self.m_dict["input_path_image"])
-        self.file_path_image = self.m_dict["input_path_image"][
-            int(self.current_image_num)
-        ]
-        self.image_num = len(self.m_dict["input_path_image"]) - 1
-        print(self.image_num)
-        self.file_open_image()
+        try:
+            self.fd_tk.input_file_open_image()
+            image_paths = self.m_dict.get("input_path_image")
+            # Do nothing if the dialog was canceled
+            if not image_paths or image_paths == "." or len(image_paths) == 0:
+                print("No image file selected", flush=True)
+                return
+            self.current_image_num = 0
+            print(image_paths, flush=True)
+            self.file_path_image = image_paths[int(self.current_image_num)]
+            self.image_num = len(image_paths) - 1
+            print(self.image_num, flush=True)
+            self.file_open_image()
+        except Exception as e:
+            self._report_error("Failed to open image file", e)
 
     def v_flip_cb(self):
         self.status, self.frame = self.vid.read()
@@ -577,35 +632,55 @@ class analyze_GUI:
         dpg.destroy_context()  # <-- moved from __del__
 
     def analyze_movie(self):
-        print("Start analyzing ....")
-        self.yolo_analysis = yolo_analysis(self.m_dict)
-        self.yolo_analysis.analyze()
-        print("Analysis complete!!")
+        try:
+            self._validate_analysis_inputs(require_movie=True)
+            print("Start analyzing ....", flush=True)
+            self.yolo_analysis = yolo_analysis(self.m_dict)
+            self.yolo_analysis.analyze()
+            print("Analysis complete!!", flush=True)
+        except Exception as e:
+            self._report_error("Movie analysis failed", e)
+            dpg.set_value("analy_time", "Estimated remaining time: error")
+        finally:
+            # Reliably restore controls that were disabled during analyze()
+            self._safe_enable("analyze_btn")
+            self._safe_enable("create_movie")
 
     def analyze_image(self):
-        print("Start analyzing ....")
-        self.yolo_analysis = yolo_analysis_image(self.m_dict)
-        self.yolo_analysis.analyze_image()
-        print("Analysis complete!!")
+        try:
+            self._validate_analysis_inputs(require_image=True)
+            print("Start analyzing ....", flush=True)
+            self.yolo_analysis = yolo_analysis_image(self.m_dict)
+            self.yolo_analysis.analyze_image()
+            print("Analysis complete!!", flush=True)
+        except Exception as e:
+            self._report_error("Image analysis failed", e)
+            if dpg.does_item_exist("analy_state"):
+                dpg.set_value("analy_state", "Error")
+        finally:
+            # Reliably restore the button that was disabled during analyze_image()
+            self._safe_enable("analyze_img_btn")
 
     def create_condition(self):
         tf = dpg.get_value("create_movie")
         self.m_dict["create_video"] = tf
 
     def model_select_bt(self):
-        self.fd_tk.model_file_open()
-        self.update_class_list()
+        try:
+            self.fd_tk.model_file_open()
+            self.update_class_list()
+        except Exception as e:
+            self._report_error("Failed to load model", e)
 
     def update_class_list(self):
         model_path = self.m_dict.get("model_path", "")
+        # Treat no model selected (e.g. dialog canceled) as a normal case and ignore it
         if not model_path or not os.path.isfile(str(model_path)):
             return
-        try:
-            yolo_model = load_yolo_model(str(model_path))
-            class_names = yolo_model.names
-        except Exception as e:
-            print(f"Failed to load class names: {e}")
-            return
+        print(f"Loading model: {model_path}", flush=True)
+        yolo_model = load_yolo_model(str(model_path))
+        class_names = yolo_model.names
+        print(f"Model loaded. {len(class_names)} classes found.", flush=True)
         dpg.delete_item("tracking_class_checkboxes", children_only=True)
         self.m_dict["tracking_exclude_classes"] = []
         for cls_id, cls_name in class_names.items():
@@ -634,7 +709,15 @@ class analyze_GUI:
 
     def in_thresh(self):
         tf = dpg.get_value("conf_threshold")
-        self.m_dict["threshold"] = float(tf)
+        try:
+            self.m_dict["threshold"] = float(tf)
+        except (ValueError, TypeError):
+            # For an invalid value mid-typing, only warn without a popup; keep the previous value.
+            print(
+                f"[WARN] Invalid confidence threshold: {tf!r} (keeping previous value)",
+                file=sys.stderr,
+                flush=True,
+            )
 
     def __del__(self):
         print("=== GUI window quit ===")

@@ -12,12 +12,13 @@ sys.path.append("../yoru")
 
 # try:
 from yoru.libs.file_operation_grab import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 
 # except(ModuleNotFoundError):
 #     from libs.file_operation_grab import file_dialog_tk
 
 
-class grab_gui:
+class grab_gui(GuiErrorMixin):
     def __init__(self, m_dict={}):
         print("Refine-gui")
         self.m_dict = m_dict
@@ -44,20 +45,20 @@ class grab_gui:
         else:
             self.im_win_width = self.width * (600 / self.height)
             self.im_win_height = 600
-        # フレームのリサイズ
+        # Resize the frame
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
+        # Create a new frame (filled entirely with black)
         base_frame = np.zeros((600, 600, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
+        # Place the resized frame at the center of the new frame
         h, w = self.frame_re.shape[:2]
         base_frame[
             int(600 / 2 - h / 2) : int(600 / 2 + h / 2),
             int(600 / 2 - w / 2) : int(600 / 2 + w / 2),
             :,
         ] = self.frame_re
-        # 更新
+        # Update
         self.frame_re = base_frame
 
     def gui_configure(self):
@@ -199,28 +200,38 @@ class grab_gui:
             self.slide_bar_cb()
 
     def file_open(self):
-        self.fd_tk = file_dialog_tk(self.m_dict)
-        self.file_path = self.fd_tk.video_file_open()
+        try:
+            self.fd_tk = file_dialog_tk(self.m_dict)
+            self.file_path = self.fd_tk.video_file_open()
 
-        if self.file_path:
-            print("File: " + self.file_path)
-        else:
-            print("Failed open files")
+            if not self.file_path:
+                # Do nothing if the dialog was cancelled
+                print("No video file selected", flush=True)
+                return
 
-        self.vid = cv2.VideoCapture(self.file_path)
-        self.width = self.vid.get(cv2.CAP_PROP_FRAME_WIDTH)
-        self.height = self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        self.framecount = int(self.vid.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.current_frame_num = 0
-        self.status, self.frame = self.vid.read()
-        self.process_frame()
-        print("Movie size: ", self.width, self.height)
-        dpg.configure_item("frame_bar", max_value=self.framecount - 2)
-        dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
-        dpg.enable_item("streamingChkBox")
-        dpg.enable_item("frame_bar")
+            print("File: " + self.file_path, flush=True)
+            self.vid = cv2.VideoCapture(self.file_path)
+            if not self.vid.isOpened():
+                raise IOError(f"Could not open movie file: {self.file_path}")
+            self.width = self.vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+            self.height = self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            self.framecount = int(self.vid.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.current_frame_num = 0
+            self.status, self.frame = self.vid.read()
+            if not self.status or self.frame is None:
+                raise IOError(
+                    f"Could not read frames from movie file: {self.file_path}"
+                )
+            self.process_frame()
+            print("Movie size: ", self.width, self.height, flush=True)
+            dpg.configure_item("frame_bar", max_value=self.framecount - 2)
+            dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
+            dpg.enable_item("streamingChkBox")
+            dpg.enable_item("frame_bar")
+        except Exception as e:
+            self._report_error("Failed to open video file", e)
 
-    # ショートカットキー設定
+    # Shortcut key settings
     def on_key_press(self, key):
         try:
             if key == keyboard.Key.right:
@@ -229,7 +240,7 @@ class grab_gui:
                 self.reverse_frame_bt()
             elif (
                 key == keyboard.Key.alt_l or key == keyboard.Key.alt_r
-            ):  # 'ctrl_l'は左Ctrlキーを表します
+            ):  # 'ctrl_l' represents the left Ctrl key
                 self.grab_btn_cb()
         except AttributeError:
             pass
@@ -277,31 +288,41 @@ class grab_gui:
             print("initial frame")
 
     def grab_btn_cb(self):
-        self.grab_name = dpg.get_value("save_name")
-        if self.grab_name and self.grab_dir:
+        try:
+            self.grab_name = dpg.get_value("save_name")
+            grab_dir = getattr(self, "grab_dir", None)
+            if not (self.grab_name and grab_dir):
+                raise ValueError(
+                    "Save directory and frame name must be set before grabbing a frame."
+                )
             self.grab_path = (
-                self.grab_dir
+                grab_dir
                 + "/"
                 + self.grab_name
                 + "_"
                 + str(self.current_frame_num)
                 + ".png"
             )
-            print(self.grab_path)
+            print(self.grab_path, flush=True)
             cap = cv2.VideoCapture(self.file_path)
-            # 指定されたフレーム番号へ移動
+            if not cap.isOpened():
+                raise IOError(f"Could not open movie file: {self.file_path}")
+            # Move to the specified frame number
             cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_num)
-            # フレームを読み込む
+            # Read the frame
             ret, frame = cap.read()
-            # フレームの読み込みに成功したら保存
-            if ret:
-                cv2.imwrite(self.grab_path, frame)
-                self.grab_count = self.grab_count + 1
-                dpg.set_value("count_frames", str(self.grab_count) + " frames")
-            else:
-                print(f"error")
-        else:
-            print(f"Not selected file dir or name")
+            cap.release()
+            # Save the frame if it was read successfully
+            if not ret or frame is None:
+                raise IOError(
+                    f"Could not read frame {self.current_frame_num} from {self.file_path}"
+                )
+            if not cv2.imwrite(self.grab_path, frame):
+                raise IOError(f"Could not write frame image: {self.grab_path}")
+            self.grab_count = self.grab_count + 1
+            dpg.set_value("count_frames", str(self.grab_count) + " frames")
+        except Exception as e:
+            self._report_error("Failed to grab frame", e)
 
     def count_reset_bt(self):
         self.grab_count = 0

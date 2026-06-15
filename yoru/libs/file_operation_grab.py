@@ -14,7 +14,7 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="Select Video file",
-            filetypes=[("Movie file", ".mp4 .wmv .avi .mov .mkv")],  # ファイルフィルタ
+            filetypes=[("Movie file", ".mp4 .wmv .avi .mov .mkv")],  # file filter
         )
         root.destroy()
         dpg.set_value("video_path", file_path)

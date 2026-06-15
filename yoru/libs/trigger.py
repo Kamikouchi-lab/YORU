@@ -22,7 +22,7 @@ class yolo_trigger:
         while not self.m_dict.get("quit", False):
             # print("a")
             if not self.m_dict.get("Trigger", False):
-                time.sleep(1)  # 1秒間スリープしてCPUの使用率を下げる
+                time.sleep(1)  # Sleep for 1 second to reduce CPU usage
                 continue
 
             print("trigger loading...")
@@ -37,7 +37,7 @@ class yolo_trigger:
 
             #     time.sleep(1)
             # continue
-            except Exception as e:  # 具体的なエラーメッセージを出力
+            except Exception as e:  # Print a specific error message
                 print(f"Error: {e}")
                 continue
 
@@ -49,7 +49,7 @@ class yolo_trigger:
                 self.arduino_tri.trigger()
                 # print(self.m_dict["yolo_results"])
 
-                # 　trigger処理
+                # trigger processing
             except serial.serialutil.SerialException:
                 print("Trigger failure ....")
                 time.sleep(1)
@@ -68,7 +68,7 @@ class trigger_python:
         self.m_dict = m_dict
         self.com = self.m_dict["arduino_com"]
         self.pin = self.m_dict["pin"]
-        self.myArduino = None  # 初期化
+        self.myArduino = None  # Initialize
         # self.ser_baudrate = int(self.m_dict.get("baudrate", 9600))
 
         if self.com and self.com != "None":
@@ -77,7 +77,7 @@ class trigger_python:
             except PermissionError as e:
                 print(f"Error: could not open port '{self.com}': {e}")
                 if self.myArduino:
-                    self.myArduino.close()        # ard.dio の close メソッド
+                    self.myArduino.close()        # close method of ard.dio
                 self.myArduino = None
             
         else:

@@ -15,6 +15,7 @@ sys.path.append("../yoru")
 
 from yoru.libs.create_labels import yolo_analysis_image
 from yoru.libs.file_operation_create_label import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.init_create_label import init_create_label
 
 # import yoru.app as YORU
@@ -26,7 +27,7 @@ from yoru.libs.init_create_label import init_create_label
 #     import app as YORU
 
 
-class model_eval_gui:
+class model_eval_gui(GuiErrorMixin):
     def __init__(self, m_dict={}):
         print("Evaluater-gui")
         self.m_dict = m_dict
@@ -54,20 +55,20 @@ class model_eval_gui:
         else:
             self.im_win_width = self.width * (400 / self.height)
             self.im_win_height = 400
-        # フレームのリサイズ
+        # Resize the frame
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
+        # Create a new frame (filled entirely with black)
         base_frame = np.zeros((400, 400, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
+        # Place the resized frame at the center of the new frame
         h, w = self.frame_re.shape[:2]
         base_frame[
             int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
             int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
             :,
         ] = self.frame_re
-        # 更新
+        # Update
         self.frame_re = base_frame
 
     def gui_configure(self):
@@ -185,62 +186,73 @@ class model_eval_gui:
 
     def load_pr_dir(self):
         print("load project")
-        file_path = self.m_dict["config_file_path"]
-        if not os.path.exists(file_path):
-            print("Don't find a project")
-            return None
-        with open(file_path, "r") as yf:
-            data = yaml.safe_load(yf)
-            self.m_dict["project_dir"] = data["project_dir"]
-            if data.get("evaluation_info_date"):
-                self.m_dict["datas_dir"] = data["evaluate_datas_dir"]
-                self.m_dict["result_dir"] = data["evaluate_result_dir"]
-                self.m_dict["pr_curve_dir"] = data["evaluate_pr_curve_dir"]
-
-            else:
-                folder_name = self.m_dict["project_dir"] + "/model_evaluation"
-                i = 1
-                while os.path.exists(folder_name):
-                    folder_name = os.path.join(
-                        self.m_dict["project_dir"], "/model_evaluation_" + str(i)
-                    )
-                    i += 1
-                os.makedirs(folder_name)
-                print(folder_name)
-                self.m_dict["datas_dir"] = os.path.join(folder_name, "datas")
-                os.makedirs(self.m_dict["datas_dir"])
-
-                self.m_dict["result_dir"] = os.path.join(folder_name, "result")
-                os.makedirs(self.m_dict["result_dir"])
-
-                self.m_dict["pr_curve_dir"] = os.path.join(
-                    self.m_dict["result_dir"], "pr_curves"
+        try:
+            file_path = self.m_dict.get("config_file_path", "")
+            if not file_path or not os.path.exists(file_path):
+                raise FileNotFoundError(
+                    "Project config file is not selected or does not exist. "
+                    "Please select a valid config.yaml."
                 )
-                os.makedirs(self.m_dict["pr_curve_dir"])
+            with open(file_path, "r") as yf:
+                data = yaml.safe_load(yf)
+                self.m_dict["project_dir"] = data["project_dir"]
+                if data.get("evaluation_info_date"):
+                    self.m_dict["datas_dir"] = data["evaluate_datas_dir"]
+                    self.m_dict["result_dir"] = data["evaluate_result_dir"]
+                    self.m_dict["pr_curve_dir"] = data["evaluate_pr_curve_dir"]
 
-                with open(file_path, "a") as yf:
-                    yaml.dump(
-                        {
-                            "evaluate_result_dir": self.m_dict["result_dir"],
-                            "evaluate_datas_dir": self.m_dict["datas_dir"],
-                            "evaluate_pr_curve_dir": self.m_dict["pr_curve_dir"],
-                            "evaluation_info_date": datetime.date.today(),
-                        },
-                        yf,
+                else:
+                    folder_name = self.m_dict["project_dir"] + "/model_evaluation"
+                    i = 1
+                    while os.path.exists(folder_name):
+                        folder_name = os.path.join(
+                            self.m_dict["project_dir"], "/model_evaluation_" + str(i)
+                        )
+                        i += 1
+                    os.makedirs(folder_name)
+                    print(folder_name)
+                    self.m_dict["datas_dir"] = os.path.join(folder_name, "datas")
+                    os.makedirs(self.m_dict["datas_dir"])
+
+                    self.m_dict["result_dir"] = os.path.join(folder_name, "result")
+                    os.makedirs(self.m_dict["result_dir"])
+
+                    self.m_dict["pr_curve_dir"] = os.path.join(
+                        self.m_dict["result_dir"], "pr_curves"
                     )
-                print("add class info in yaml file")
+                    os.makedirs(self.m_dict["pr_curve_dir"])
 
-            print(f"load complete")
+                    with open(file_path, "a") as yf:
+                        yaml.dump(
+                            {
+                                "evaluate_result_dir": self.m_dict["result_dir"],
+                                "evaluate_datas_dir": self.m_dict["datas_dir"],
+                                "evaluate_pr_curve_dir": self.m_dict["pr_curve_dir"],
+                                "evaluation_info_date": datetime.date.today(),
+                            },
+                            yf,
+                        )
+                    print("add class info in yaml file")
+
+                print(f"load complete")
+        except Exception as e:
+            self._report_error("Failed to load project config", e)
 
     def labelImg_bt(self):
-        import sys
-        from yoru.labelimg.labelimg import get_main_app
-        app, win = get_main_app(sys.argv)
-        app.exec_()
+        try:
+            import sys
+            from yoru.labelimg.labelimg import get_main_app
+            app, win = get_main_app(sys.argv)
+            app.exec_()
+        except Exception as e:
+            self._report_error("Failed to launch LabelImg", e)
 
     def yolo_detection(self):
-        yolo_det = yolo_analysis_image(self.m_dict)
-        yolo_det.analyze_image()
+        try:
+            yolo_det = yolo_analysis_image(self.m_dict)
+            yolo_det.analyze_image()
+        except Exception as e:
+            self._report_error("Label generation (prediction) failed", e)
 
     def quit_cb(self):
         print("quit_pushed")

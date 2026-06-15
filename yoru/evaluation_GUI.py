@@ -15,6 +15,7 @@ sys.path.append("../yoru")
 
 from yoru.libs.evaluation_calculation import Evaluator, yolo_analysis_image
 from yoru.libs.file_operation_evaluation import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.init_evaluation import init_evaluater
 
 # import yoru.app as YORU
@@ -26,7 +27,7 @@ from yoru.libs.init_evaluation import init_evaluater
 #     import app as YORU
 
 
-class model_eval_gui:
+class model_eval_gui(GuiErrorMixin):
     def __init__(self, m_dict={}):
         print("Evaluater-gui")
         self.m_dict = m_dict
@@ -54,20 +55,20 @@ class model_eval_gui:
         else:
             self.im_win_width = self.width * (400 / self.height)
             self.im_win_height = 400
-        # フレームのリサイズ
+        # Resize the frame
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
+        # Create a new frame (filled entirely with black)
         base_frame = np.zeros((400, 400, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
+        # Place the resized frame at the center of the new frame
         h, w = self.frame_re.shape[:2]
         base_frame[
             int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
             int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
             :,
         ] = self.frame_re
-        # 更新
+        # Update
         self.frame_re = base_frame
 
     def gui_configure(self):
@@ -238,71 +239,104 @@ class model_eval_gui:
 
     def load_pr_dir(self):
         print("load project")
-        cfg = self.m_dict["config_file_path"]
-        if not os.path.exists(cfg):
-            print("Don't find a project")
-            return None
+        try:
+            cfg = self.m_dict.get("config_file_path", "")
+            if not cfg or not os.path.exists(cfg):
+                raise FileNotFoundError(
+                    "Project config file is not selected or does not exist. "
+                    "Please select a valid config.yaml."
+                )
 
-        with open(cfg, "r") as yf:
-            data = yaml.safe_load(yf)
-        self.m_dict["project_dir"] = data["project_dir"]
+            with open(cfg, "r") as yf:
+                data = yaml.safe_load(yf)
+            self.m_dict["project_dir"] = data["project_dir"]
 
-        if data.get("evaluation_info_date"):
-            # 既存の evaluation 情報を読み込む
-            self.m_dict["data_dir"]      = data["evaluate_data_dir"]
-            self.m_dict["result_dir"]    = data["evaluate_result_dir"]
-            self.m_dict["pr_curve_dir"]  = data["evaluate_pr_curve_dir"]
-        else:
-            # project_dir の下に model_evaluation フォルダを作成
-            base = os.path.join(self.m_dict["project_dir"], "model_evaluation")
-            folder_name = base
-            i = 1
-            # 既にあれば suffix を付ける
-            while os.path.exists(folder_name):
-                folder_name = f"{base}_{i}"
-                i += 1
-            os.makedirs(folder_name, exist_ok=True)
+            if data.get("evaluation_info_date"):
+                # Load existing evaluation information
+                self.m_dict["data_dir"]      = data["evaluate_data_dir"]
+                self.m_dict["result_dir"]    = data["evaluate_result_dir"]
+                self.m_dict["pr_curve_dir"]  = data["evaluate_pr_curve_dir"]
+            else:
+                # Create a model_evaluation folder under project_dir
+                base = os.path.join(self.m_dict["project_dir"], "model_evaluation")
+                folder_name = base
+                i = 1
+                # Append a suffix if it already exists
+                while os.path.exists(folder_name):
+                    folder_name = f"{base}_{i}"
+                    i += 1
+                os.makedirs(folder_name, exist_ok=True)
 
-            # data/results/pr_curves ディレクトリを下につくる
-            self.m_dict["data_dir"]     = os.path.join(folder_name, "data")
-            os.makedirs(self.m_dict["data_dir"], exist_ok=True)
+                # Create data/results/pr_curves directories underneath
+                self.m_dict["data_dir"]     = os.path.join(folder_name, "data")
+                os.makedirs(self.m_dict["data_dir"], exist_ok=True)
 
-            self.m_dict["result_dir"]   = os.path.join(folder_name, "results")
-            os.makedirs(self.m_dict["result_dir"], exist_ok=True)
+                self.m_dict["result_dir"]   = os.path.join(folder_name, "results")
+                os.makedirs(self.m_dict["result_dir"], exist_ok=True)
 
-            self.m_dict["pr_curve_dir"] = os.path.join(self.m_dict["result_dir"], "pr_curves")
-            os.makedirs(self.m_dict["pr_curve_dir"], exist_ok=True)
+                self.m_dict["pr_curve_dir"] = os.path.join(self.m_dict["result_dir"], "pr_curves")
+                os.makedirs(self.m_dict["pr_curve_dir"], exist_ok=True)
 
-            # YAML に追記
-            with open(cfg, "a") as yf:
-                yaml.dump({
-                    "evaluate_result_dir":    self.m_dict["result_dir"],
-                    "evaluate_data_dir":      self.m_dict["data_dir"],
-                    "evaluate_pr_curve_dir":  self.m_dict["pr_curve_dir"],
-                    "evaluation_info_date":   datetime.date.today(),
-                }, yf)
-            print("add class info in yaml file")
+                # Append to YAML
+                with open(cfg, "a") as yf:
+                    yaml.dump({
+                        "evaluate_result_dir":    self.m_dict["result_dir"],
+                        "evaluate_data_dir":      self.m_dict["data_dir"],
+                        "evaluate_pr_curve_dir":  self.m_dict["pr_curve_dir"],
+                        "evaluation_info_date":   datetime.date.today(),
+                    }, yf)
+                print("add class info in yaml file")
 
-        print("load complete")
-        dpg.set_value("step1_state", "Complete!!")
+            print("load complete")
+            dpg.set_value("step1_state", "Complete!!")
+        except Exception as e:
+            self._report_error("Failed to load project config", e)
+            dpg.set_value("step1_state", "Error")
 
     def grab_bt(self):
-        subprocess.call(["python", "./yoru/grab_GUI.py"])
-        dpg.set_value("step2_state", "Complete!!")
+        try:
+            # subprocess.call does not raise on a non-zero exit, so check the return code
+            ret = subprocess.call([sys.executable, "./yoru/grab_GUI.py"])
+            if ret != 0:
+                raise RuntimeError(f"Frame Capture exited with code {ret}")
+            dpg.set_value("step2_state", "Complete!!")
+        except Exception as e:
+            self._report_error("Failed to launch Frame Capture", e)
+            dpg.set_value("step2_state", "Error")
 
     def labelImg_bt(self):
-        subprocess.call(["labelImg"])
-        dpg.set_value("step3_state", "Complete!!")
+        try:
+            ret = subprocess.call(["labelImg"])
+            if ret != 0:
+                raise RuntimeError(f"LabelImg exited with code {ret}")
+            dpg.set_value("step3_state", "Complete!!")
+        except Exception as e:
+            self._report_error("Failed to launch LabelImg", e)
+            dpg.set_value("step3_state", "Error")
 
     def yolo_detection(self):
-        yolo_det = yolo_analysis_image(self.m_dict)
-        yolo_det.analyze_image()
-        dpg.set_value("step4_state", "Complete!!")
+        try:
+            yolo_det = yolo_analysis_image(self.m_dict)
+            yolo_det.analyze_image()
+            dpg.set_value("step4_state", "Complete!!")
+        except Exception as e:
+            self._report_error("Prediction failed", e)
+            dpg.set_value("step4_state", "Error")
 
     def cal_aps_btn(self):
-        evaluator = Evaluator(self.m_dict)
-        evaluator.run_evaluation(self.m_dict["data_dir"])
-        dpg.set_value("step5_state", "Complete!!")
+        try:
+            data_dir = self.m_dict.get("data_dir")
+            if not data_dir:
+                raise RuntimeError(
+                    "Evaluation data directory is not set. "
+                    "Please load the project config first (Step1)."
+                )
+            evaluator = Evaluator(self.m_dict)
+            evaluator.run_evaluation(data_dir)
+            dpg.set_value("step5_state", "Complete!!")
+        except Exception as e:
+            self._report_error("AP calculation failed", e)
+            dpg.set_value("step5_state", "Error")
 
     def quit_cb(self):
         print("quit_pushed")

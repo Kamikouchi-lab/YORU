@@ -24,11 +24,17 @@ class yolo_analysis_image:
         print("init")
 
     def analyze_image(self):
+        # Resolve the absolute path of the yolov5 repository (which contains
+        # hubconf.py) relative to this file's location, so it does not depend
+        # on the current working directory.
+        yolov5_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "yolov5"
+        )
         yolo_model = torch.hub.load(
-            "./libs/yolov5", "custom", path=self.yolo_model_path, source="local"
+            yolov5_dir, "custom", path=self.yolo_model_path, source="local"
         )
 
-        # クラス名の取得
+        # Get the class names
         class_names = (
             yolo_model.module.names
             if hasattr(yolo_model, "module")
@@ -48,15 +54,15 @@ class yolo_analysis_image:
 
             yolo_result = yolo_model(frame)
 
-            # 出力パスの作成
+            # Build the output path
             result_txt_path = os.path.join(
                 self.datas_path, file_name_without_ext + ".txt"
             )
             result = []
             for *box, conf, cls in yolo_result.xywhn[0]:
-                # xyxy形式（中心x, 中心y, 幅, 高さ）のリスト
+                # list in xywh format (center x, center y, width, height)
                 class_name = class_names[int(cls.item())]
-                # 結果をリストに保存
+                # Save the result to the list
                 result.append(
                     [
                         int(cls.item()),
