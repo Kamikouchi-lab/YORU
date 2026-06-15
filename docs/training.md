@@ -42,7 +42,7 @@
 
 8. Check the "YAML Path" and select training conditions, such as epochs, networks and so on.
 
-9. Start training by push "Train YOLOv5".
+9. Start training by pushing "Train Model".
 
     >  In the terminal, you should check the initiation of training.
 

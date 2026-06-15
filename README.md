@@ -89,8 +89,8 @@ Follow these steps to install YORU quickly:
     nvidia-smi
     ```
 ## Install via uv
-Although not all functionality has been tested, installation via uv can be performed using the project.toml file below.
-[project.toml](https://github.com/Kamikouchi-lab/YORU/blob/uv_install/pyproject.toml)
+Although not all functionality has been tested, installation via uv can be performed using the pyproject.toml file below.
+[pyproject.toml](https://github.com/Kamikouchi-lab/YORU/blob/uv_install/pyproject.toml)
 
 copy and paste this file to your YORU folder and
 
