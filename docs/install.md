@@ -1,10 +1,10 @@
 # Install
 
-0. Check the instllation of [Google Chrome](https://www.google.com/intl/ja/chrome/)
+1. Check the installation of [Google Chrome](https://www.google.com/intl/ja/chrome/)
 
 - eel package need to use Google Chrome.
 
-1. Check the instllation of [Miniconda](https://docs.anaconda.com/miniconda/)
+2. Check the installation of [Miniconda](https://docs.anaconda.com/miniconda/)
 
 > Anaconda's [TERMS OF SERVICE](https://legal.anaconda.com/policies/en?name=terms-of-service#terms-of-service) was changed. If you used Anaconda in an organization that has two hundred (200) or more employees or contractors, you have to be careful.
 
@@ -27,7 +27,7 @@
 
 4. Install the GPU driver and [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit).
 
-5. Create a virtual environment using [YORU.yml](YORU.yml) in command prompt or Anaconda prompt.
+5. Create a virtual environment using [YORU.yml](../YORU.yml) in command prompt or Anaconda prompt.
    
      ```
      conda env create -f "Path/to/YORU.yml"

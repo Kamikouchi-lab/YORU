@@ -8,9 +8,9 @@
   name: Experiment name
   export: Folder path for video exporting
   export_name: Name of exporting videos
-  s
+
   model:
-   yolo_model_path: Path to YORU mode
+   yolo_model_path: Path to YORU model
   
   capture_style:
    stream_MSS: False # If True, YORU start screen capture mode

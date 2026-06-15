@@ -12,7 +12,7 @@
 
    Ⅱ. Select Save directory. (Basically, all_label_images in the project folder is a good choice.)
 
-   Ⅲ. Decide the grabed frame name.
+   Ⅲ. Decide the grabbed frame name.
 
    IV. Cut out the screenshot.
 
@@ -24,7 +24,7 @@
 
    > Images that are not used for creating a model are better.
 
-5. Run LabelImg and label the frames.
+4. Run LabelImg and label the frames.
 
     > The detailed documents are accessible in [LabelImg](https://github.com/HumanSignal/labelImg).
 
@@ -32,9 +32,9 @@
 
     > It is easier to do so if Auto Save mode is turned on in the View tab.
 
-6. Push "Prediction" button.
+5. Push "Prediction" button.
 
-7. Push "Calculate APs" button. 
+6. Push "Calculate APs" button. 
 
     > YORU calculates APs and IOUs.
 
