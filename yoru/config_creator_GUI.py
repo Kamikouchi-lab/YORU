@@ -413,11 +413,18 @@ class ConfigCreatorGUI:
             },
         }
 
-        out_dir = os.path.dirname(os.path.abspath(out_path))
-        os.makedirs(out_dir, exist_ok=True)
-        with open(out_path, "w") as f:
-            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        dpg.set_value("cfg_save_status", f"Saved: {out_path}")
+        try:
+            out_dir = os.path.dirname(os.path.abspath(out_path))
+            os.makedirs(out_dir, exist_ok=True)
+            with open(out_path, "w") as f:
+                yaml.dump(
+                    config, f, default_flow_style=False, allow_unicode=True, sort_keys=False
+                )
+            dpg.set_value("cfg_save_status", f"Saved: {out_path}")
+        except Exception as e:
+            detail = f"{type(e).__name__}: {e}"
+            print(f"[ERROR] Failed to save config: {detail}", file=sys.stderr, flush=True)
+            dpg.set_value("cfg_save_status", f"Error: {detail}")
 
     # ------------------------------------------------------------------
     # Run loop
