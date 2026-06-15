@@ -24,9 +24,10 @@ class GuiErrorMixin:
     def _report_error(self, context, exc):
         """例外を標準エラー出力に記録し、GUI上のポップアップで表示する。
 
-        標準エラー出力へのトレースバックは、サブプロセスとして起動された
-        場合に ``app.py`` 側の ``_run_gui_subprocess`` で捕捉され、ホーム
-        画面に通知される。
+        捕捉済みエラーのユーザー通知は、このメソッドが出すモーダルポップアップ
+        が担う。標準エラー出力へのトレースバックは記録用で、``app.py`` 側の
+        ``_run_gui_subprocess`` がホーム画面へ転送するのは GUI プロセスが
+        非ゼロ終了した(=例外を捕捉せずクラッシュした)場合のみである点に注意。
         """
         detail = f"{type(exc).__name__}: {exc}"
         print(f"[ERROR] {context}: {detail}", file=sys.stderr, flush=True)

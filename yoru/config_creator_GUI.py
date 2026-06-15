@@ -19,8 +19,10 @@ import yaml
 
 sys.path.append("../yoru")
 
+from yoru.libs.gui_error import GuiErrorMixin
 
-class ConfigCreatorGUI:
+
+class ConfigCreatorGUI(GuiErrorMixin):
     def __init__(self):
         self.class_list = ["None"]
         self.com_list = self._get_com_ports()
@@ -422,9 +424,9 @@ class ConfigCreatorGUI:
                 )
             dpg.set_value("cfg_save_status", f"Saved: {out_path}")
         except Exception as e:
-            detail = f"{type(e).__name__}: {e}"
-            print(f"[ERROR] Failed to save config: {detail}", file=sys.stderr, flush=True)
-            dpg.set_value("cfg_save_status", f"Error: {detail}")
+            # 他GUIと統一して stderr + モーダル表示。あわせて保存ステータス行にも反映。
+            self._report_error("Failed to save config", e)
+            dpg.set_value("cfg_save_status", f"Error: {type(e).__name__}: {e}")
 
     # ------------------------------------------------------------------
     # Run loop

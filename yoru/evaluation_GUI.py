@@ -295,7 +295,10 @@ class model_eval_gui(GuiErrorMixin):
 
     def grab_bt(self):
         try:
-            subprocess.call(["python", "./yoru/grab_GUI.py"])
+            # subprocess.call は非ゼロ終了でも例外を投げないので終了コードで判定する
+            ret = subprocess.call([sys.executable, "./yoru/grab_GUI.py"])
+            if ret != 0:
+                raise RuntimeError(f"Frame Capture exited with code {ret}")
             dpg.set_value("step2_state", "Complete!!")
         except Exception as e:
             self._report_error("Failed to launch Frame Capture", e)
@@ -303,7 +306,9 @@ class model_eval_gui(GuiErrorMixin):
 
     def labelImg_bt(self):
         try:
-            subprocess.call(["labelImg"])
+            ret = subprocess.call(["labelImg"])
+            if ret != 0:
+                raise RuntimeError(f"LabelImg exited with code {ret}")
             dpg.set_value("step3_state", "Complete!!")
         except Exception as e:
             self._report_error("Failed to launch LabelImg", e)
