@@ -95,21 +95,21 @@ class yolo_detection:
                                 self.m_dict["class_name_list"][i] for i in class_ids
                             ]
 
-                            # object型のNumPy配列を作成
+                            # Create a NumPy array of object dtype
                             yolo_results = np.empty(
                                 (result.shape[0], result.shape[1] + 2), dtype=object
                             )
 
-                            # 座標部分をコピー
+                            # Copy the coordinate portion
                             yolo_results[:, :-2] = result
 
-                            # クラス名を追加
+                            # Add the class names
                             yolo_results[:, -2] = yoru_names_list
                             self.m_dict["yolo_class_names"] = yoru_names_list
 
                             yolo_results[:, -1] = self.m_dict["total_time"]
 
-                            # 結果を保存
+                            # Save the results
                             self.m_dict["yolo_results"] = yolo_results
 
                             # self.m_dict["yolo_results"] = [sublist + [self.m_dict["yolo_class_names"][i]] for i, sublist in enumerate(result)]

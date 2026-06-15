@@ -46,16 +46,16 @@ Examples:
                        help="Condition YAML to load at startup")
     p_gui.set_defaults(func=_cmd_gui)
 
-    # ここがポイント：引数なしのときは GUI を既定動作にする
+    # Key point: when no arguments are given, default to launching the GUI
     parser.set_defaults(func=_cmd_gui, command="gui", config="config/template.yaml")
     return parser
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    # argparse が --help を処理した場合はここに来ない（0終了）
-    # 既定（引数なし）は func=_cmd_gui が入っている
-    return int(bool(args.func(args)))  # 成功は 0/None, 失敗は非0
+    # If argparse handled --help, execution never reaches here (exits with 0)
+    # The default (no arguments) has func=_cmd_gui set
+    return int(bool(args.func(args)))  # success is 0/None, failure is non-zero
 
 # -------------------------
 # Subcommand impls
@@ -64,24 +64,24 @@ def main(argv: list[str] | None = None) -> int:
 def _cmd_gui(args) -> int:
     """Launch GUI. Keep imports lazy so '--help' stays fast."""
     try:
-        from yoru.app import main as app_main   # ←あなたの既存 GUI エントリ
+        from yoru.app import main as app_main   # <- your existing GUI entry point
     except Exception as e:
         print(f"[yoru] failed to import yoru.app.main: {e}")
         return 1
 
     cfg = getattr(args, "config", None)
     try:
-        # app_main のシグネチャが不明な場合に備えて安全に呼ぶ
+        # Call safely in case the signature of app_main is unknown
         if cfg is not None:
-            # app_main(config_path=...) に対応していれば使う
+            # Use this if app_main(config_path=...) is supported
             try:
-                return int(bool(app_main(cfg)))  # 位置引数で渡す版
+                return int(bool(app_main(cfg)))  # variant passing it as a positional argument
             except TypeError:
                 try:
-                    return int(bool(app_main(config=cfg)))  # キーワードで渡す版
+                    return int(bool(app_main(config=cfg)))  # variant passing it as a keyword argument
                 except TypeError:
                     pass
-        # 引数なし版（多くの実装はこれでOK）
+        # No-argument variant (works for most implementations)
         return int(bool(app_main()))
     except SystemExit as se:
         return int(se.code or 0)

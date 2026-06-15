@@ -55,20 +55,20 @@ class model_eval_gui(GuiErrorMixin):
         else:
             self.im_win_width = self.width * (400 / self.height)
             self.im_win_height = 400
-        # フレームのリサイズ
+        # Resize the frame
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
+        # Create a new frame (filled entirely with black)
         base_frame = np.zeros((400, 400, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
+        # Place the resized frame at the center of the new frame
         h, w = self.frame_re.shape[:2]
         base_frame[
             int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
             int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
             :,
         ] = self.frame_re
-        # 更新
+        # Update
         self.frame_re = base_frame
 
     def gui_configure(self):
@@ -252,22 +252,22 @@ class model_eval_gui(GuiErrorMixin):
             self.m_dict["project_dir"] = data["project_dir"]
 
             if data.get("evaluation_info_date"):
-                # 既存の evaluation 情報を読み込む
+                # Load existing evaluation information
                 self.m_dict["data_dir"]      = data["evaluate_data_dir"]
                 self.m_dict["result_dir"]    = data["evaluate_result_dir"]
                 self.m_dict["pr_curve_dir"]  = data["evaluate_pr_curve_dir"]
             else:
-                # project_dir の下に model_evaluation フォルダを作成
+                # Create a model_evaluation folder under project_dir
                 base = os.path.join(self.m_dict["project_dir"], "model_evaluation")
                 folder_name = base
                 i = 1
-                # 既にあれば suffix を付ける
+                # Append a suffix if it already exists
                 while os.path.exists(folder_name):
                     folder_name = f"{base}_{i}"
                     i += 1
                 os.makedirs(folder_name, exist_ok=True)
 
-                # data/results/pr_curves ディレクトリを下につくる
+                # Create data/results/pr_curves directories underneath
                 self.m_dict["data_dir"]     = os.path.join(folder_name, "data")
                 os.makedirs(self.m_dict["data_dir"], exist_ok=True)
 
@@ -277,7 +277,7 @@ class model_eval_gui(GuiErrorMixin):
                 self.m_dict["pr_curve_dir"] = os.path.join(self.m_dict["result_dir"], "pr_curves")
                 os.makedirs(self.m_dict["pr_curve_dir"], exist_ok=True)
 
-                # YAML に追記
+                # Append to YAML
                 with open(cfg, "a") as yf:
                     yaml.dump({
                         "evaluate_result_dir":    self.m_dict["result_dir"],
@@ -295,7 +295,7 @@ class model_eval_gui(GuiErrorMixin):
 
     def grab_bt(self):
         try:
-            # subprocess.call は非ゼロ終了でも例外を投げないので終了コードで判定する
+            # subprocess.call does not raise on a non-zero exit, so check the return code
             ret = subprocess.call([sys.executable, "./yoru/grab_GUI.py"])
             if ret != 0:
                 raise RuntimeError(f"Frame Capture exited with code {ret}")

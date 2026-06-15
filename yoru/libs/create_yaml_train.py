@@ -30,9 +30,9 @@ class create_project:
             self.m_dict["classes_path"]
         ):
             with open(self.m_dict["classes_path"], "r", encoding="utf-8") as f:
-                # ファイルの内容を行ごとに読み込む
+                # Read the file contents line by line
                 lines = f.readlines()
-            # 行のリストから改行文字を削除
+            # Remove newline characters from the list of lines
             items = [line.strip() for line in lines]
 
             self.m_dict["class_num"] = len(items)
@@ -74,7 +74,7 @@ class create_project:
                     exsisting_data["project_dir"] = self.m_dict["project_dir"]
                     exsisting_data["patience"] = False
                     exsisting_data["training_date"] = datetime.date.today()
-                    # 変更した内容をYAMLファイルに書き込みます
+                    # Write the modified contents to the YAML file
                     with open(file_path, "w") as yf:
                         yaml.dump(exsisting_data, yf, default_flow_style=False)
                         return None

@@ -42,11 +42,11 @@ class analyze_GUI(GuiErrorMixin):
         self.speed = 1
 
     # ------------------------------------------------------------------
-    # エラーハンドリング用ヘルパー
-    # (_report_error / _show_error_popup / _safe_enable は GuiErrorMixin に共通化)
+    # Error-handling helpers
+    # (_report_error / _show_error_popup / _safe_enable are shared via GuiErrorMixin)
     # ------------------------------------------------------------------
     def _validate_analysis_inputs(self, require_movie=False, require_image=False):
-        """解析開始前に必要な入力が揃っているか検証する。"""
+        """Validate that the inputs required before starting analysis are present."""
         model_path = self.m_dict.get("model_path", "")
         if not model_path or not os.path.isfile(str(model_path)):
             raise FileNotFoundError(
@@ -83,7 +83,7 @@ class analyze_GUI(GuiErrorMixin):
             self.im_win_width = self.width * (400 / self.height)
             self.im_win_height = 400
 
-        # 画面のフリップ
+        # Flip the display
         if self.m_dict["v_flip"]:
             self.frame = cv2.flip(self.frame, 0)
         else:
@@ -94,20 +94,20 @@ class analyze_GUI(GuiErrorMixin):
         else:
             pass
 
-        # フレームのリサイズ
+        # Resize the frame
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
+        # Create a new frame (a frame filled entirely with black)
         base_frame = np.zeros((400, 400, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
+        # Place the resized frame at the center of the new frame
         h, w = self.frame_re.shape[:2]
         base_frame[
             int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
             int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
             :,
         ] = self.frame_re
-        # 更新
+        # Update
         self.frame_re = base_frame
 
     def startDPG(self):
@@ -547,7 +547,7 @@ class analyze_GUI(GuiErrorMixin):
         try:
             self.fd_tk.input_file_open()
             input_paths = self.m_dict.get("input_path")
-            # ダイアログがキャンセルされた場合は何もしない
+            # Do nothing if the dialog was canceled
             if not input_paths or input_paths == "." or len(input_paths) == 0:
                 print("No movie file selected", flush=True)
                 return
@@ -560,7 +560,7 @@ class analyze_GUI(GuiErrorMixin):
         try:
             self.fd_tk.input_file_open_image()
             image_paths = self.m_dict.get("input_path_image")
-            # ダイアログがキャンセルされた場合は何もしない
+            # Do nothing if the dialog was canceled
             if not image_paths or image_paths == "." or len(image_paths) == 0:
                 print("No image file selected", flush=True)
                 return
@@ -642,7 +642,7 @@ class analyze_GUI(GuiErrorMixin):
             self._report_error("Movie analysis failed", e)
             dpg.set_value("analy_time", "Estimated remaining time: error")
         finally:
-            # analyze() の途中で無効化されたコントロールを確実に元に戻す
+            # Reliably restore controls that were disabled during analyze()
             self._safe_enable("analyze_btn")
             self._safe_enable("create_movie")
 
@@ -658,7 +658,7 @@ class analyze_GUI(GuiErrorMixin):
             if dpg.does_item_exist("analy_state"):
                 dpg.set_value("analy_state", "Error")
         finally:
-            # analyze_image() の途中で無効化されたボタンを確実に元に戻す
+            # Reliably restore the button that was disabled during analyze_image()
             self._safe_enable("analyze_img_btn")
 
     def create_condition(self):
@@ -674,7 +674,7 @@ class analyze_GUI(GuiErrorMixin):
 
     def update_class_list(self):
         model_path = self.m_dict.get("model_path", "")
-        # モデル未選択(ダイアログのキャンセル等)は正常系として無視する
+        # Treat no model selected (e.g. dialog canceled) as a normal case and ignore it
         if not model_path or not os.path.isfile(str(model_path)):
             return
         print(f"Loading model: {model_path}", flush=True)
@@ -712,7 +712,7 @@ class analyze_GUI(GuiErrorMixin):
         try:
             self.m_dict["threshold"] = float(tf)
         except (ValueError, TypeError):
-            # 入力途中の不正な値はポップアップを出さず警告のみ。直前の値を保持する。
+            # For an invalid value mid-typing, only warn without a popup; keep the previous value.
             print(
                 f"[WARN] Invalid confidence threshold: {tf!r} (keeping previous value)",
                 file=sys.stderr,

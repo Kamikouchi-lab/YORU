@@ -453,7 +453,7 @@ class yoru_train(GuiErrorMixin):
             self._set_step_state("step1_state", "Error")
 
     def _restore_model_ui(self, weight: str) -> None:
-        """ウェイトファイル名からモデルファミリー/バージョン/サイズのUIを復元する。"""
+        """Restore the model family/version/size UI from the weight file name."""
         w = weight.lower()
         if w.startswith("yolov5"):
             family, version, size = "YOLO", "YOLOv5", w[6] if len(w) > 6 else "s"
@@ -510,12 +510,12 @@ class yoru_train(GuiErrorMixin):
             self.m_dict["yaml_path"] = data["yaml_path"]
             self.m_dict["all_label_dir"] = self.m_dict["project_dir"] + "/all_label_images"
 
-            # --- Step1: プロジェクト読み込み完了 ---
+            # --- Step1: project loading complete ---
             dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
             dpg.enable_item("move_label_images")
             self._set_step_state("step1_state", "Complete!!")
 
-            # --- モデル/ウェイトの復元 (training_date があれば weights キーを優先) ---
+            # --- Restore model/weight (prefer the weights key if training_date exists) ---
             saved_model = data.get("weights") or data.get("Model") or data.get("YOLO_ver")
             if saved_model:
                 if not saved_model.endswith(".pt"):
@@ -525,7 +525,7 @@ class yoru_train(GuiErrorMixin):
                 dpg.set_value("weight_display_text", saved_model)
                 self._restore_model_ui(saved_model)
 
-            # --- 学習条件の復元 ---
+            # --- Restore training conditions ---
             if data.get("epochs") is not None:
                 self.m_dict["epoch"] = data["epochs"]
                 dpg.set_value("epoc_num_in", str(data["epochs"]))
@@ -536,7 +536,7 @@ class yoru_train(GuiErrorMixin):
                 self.m_dict["batch"] = data["batch-size"]
                 dpg.set_value("batch_num_in", str(data["batch-size"]))
 
-            # --- Step2: all_label_images に画像があれば完了扱い ---
+            # --- Step2: treat as complete if all_label_images contains images ---
             all_label_dir = self.m_dict["all_label_dir"]
             if os.path.exists(all_label_dir):
                 img_exts = {".png", ".jpg", ".jpeg", ".bmp"}
@@ -547,7 +547,7 @@ class yoru_train(GuiErrorMixin):
                 if has_images:
                     self._set_step_state("step2_state", "Complete!!")
 
-                # --- Step3: all_label_images に classes.txt 以外の .txt があればラベリング完了 ---
+                # --- Step3: labeling complete if all_label_images has any .txt other than classes.txt ---
                 has_labels = any(
                     f.endswith(".txt") and f != "classes.txt"
                     for f in os.listdir(all_label_dir)
@@ -555,13 +555,13 @@ class yoru_train(GuiErrorMixin):
                 if has_labels:
                     self._set_step_state("step3_state", "Complete!!")
 
-            # --- Step4: train/images にファイルがあれば移動済み ---
+            # --- Step4: files moved if train/images contains any files ---
             train_images_dir = self.m_dict["project_dir"] + "/train/images"
             if os.path.exists(train_images_dir) and os.listdir(train_images_dir):
                 self._set_step_state("step4_state", "Complete!!")
                 dpg.disable_item("move_label_images")
 
-            # --- Step5: クラス情報が登録済みなら classes_path を復元して完了表示 ---
+            # --- Step5: if class info is registered, restore classes_path and show as complete ---
             if data.get("add_class_info_date"):
                 classes_txt = all_label_dir + "/classes.txt"
                 if os.path.exists(classes_txt):
@@ -569,7 +569,7 @@ class yoru_train(GuiErrorMixin):
                     dpg.set_value("classes_path", classes_txt)
                 self._set_step_state("step5_state", "Complete!!")
 
-            # --- Step6: 学習済みなら完了表示 ---
+            # --- Step6: show as complete if already trained ---
             if data.get("training_date"):
                 self._set_step_state("step6_state", "Complete!!")
 
@@ -582,7 +582,7 @@ class yoru_train(GuiErrorMixin):
         # print("quit_pushed")
         # self.m_dict["quit"] = True
         try:
-            # subprocess.call は非ゼロ終了でも例外を投げないので終了コードで判定する
+            # subprocess.call does not raise on a non-zero exit, so check the return code
             ret = subprocess.call([sys.executable, "./yoru/grab_GUI.py"])
             if ret != 0:
                 raise RuntimeError(f"Frame Capture exited with code {ret}")
@@ -633,7 +633,7 @@ class yoru_train(GuiErrorMixin):
             self._set_step_state("step5_state", "Error")
 
     def _build_weight(self) -> str:
-        """選択中のモデルファミリー・バージョン・サイズからウェイトファイル名を生成する。"""
+        """Build the weight file name from the selected model family, version, and size."""
         family = self.m_dict.get("model_family", "YOLO")
         if family == "YOLO":
             prefix_map = {"YOLOv5": "yolov5", "YOLOv8": "yolov8", "YOLO11": "yolo11"}

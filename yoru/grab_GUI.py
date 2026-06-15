@@ -45,20 +45,20 @@ class grab_gui(GuiErrorMixin):
         else:
             self.im_win_width = self.width * (600 / self.height)
             self.im_win_height = 600
-        # フレームのリサイズ
+        # Resize the frame
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
+        # Create a new frame (filled entirely with black)
         base_frame = np.zeros((600, 600, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
+        # Place the resized frame at the center of the new frame
         h, w = self.frame_re.shape[:2]
         base_frame[
             int(600 / 2 - h / 2) : int(600 / 2 + h / 2),
             int(600 / 2 - w / 2) : int(600 / 2 + w / 2),
             :,
         ] = self.frame_re
-        # 更新
+        # Update
         self.frame_re = base_frame
 
     def gui_configure(self):
@@ -250,7 +250,7 @@ class grab_gui(GuiErrorMixin):
             self.file_path = self.fd_tk.video_file_open()
 
             if not self.file_path:
-                # ダイアログがキャンセルされた場合は何もしない
+                # Do nothing if the dialog was cancelled
                 print("No video file selected", flush=True)
                 return
 
@@ -276,7 +276,7 @@ class grab_gui(GuiErrorMixin):
         except Exception as e:
             self._report_error("Failed to open video file", e)
 
-    # ショートカットキー設定
+    # Shortcut key settings
     def on_key_press(self, key):
         try:
             if key == keyboard.Key.right:
@@ -285,7 +285,7 @@ class grab_gui(GuiErrorMixin):
                 self.reverse_frame_bt()
             elif (
                 key == keyboard.Key.alt_l or key == keyboard.Key.alt_r
-            ):  # 'ctrl_l'は左Ctrlキーを表します
+            ):  # 'ctrl_l' represents the left Ctrl key
                 self.grab_btn_cb()
         except AttributeError:
             pass
@@ -352,12 +352,12 @@ class grab_gui(GuiErrorMixin):
             cap = cv2.VideoCapture(self.file_path)
             if not cap.isOpened():
                 raise IOError(f"Could not open movie file: {self.file_path}")
-            # 指定されたフレーム番号へ移動
+            # Move to the specified frame number
             cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_num)
-            # フレームを読み込む
+            # Read the frame
             ret, frame = cap.read()
             cap.release()
-            # フレームの読み込みに成功したら保存
+            # Save the frame if it was read successfully
             if not ret or frame is None:
                 raise IOError(
                     f"Could not read frame {self.current_frame_num} from {self.file_path}"

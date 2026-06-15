@@ -138,7 +138,7 @@ class yolo_analysis:
         dpg.set_value("no_mov", "Leaving movies: calculating...")
         yolo_model = load_yolo_model(self.yolo_model_path)
 
-        # クラス名の取得
+        # Get class names
         self.class_names = yolo_model.names
 
         self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
@@ -155,21 +155,21 @@ class yolo_analysis:
             video = cv2.VideoCapture(self.mov_path)
             frame_count = 0
 
-            # トラッキング用
+            # For tracking
             pre_ids = []
-            pre_center_pos = []  # 以前の位置情報を入力する
+            pre_center_pos = []  # Stores the previous position information
             global_counter = 0
 
-            # ファイル名の取得（拡張子なし）
+            # Get the file name (without extension)
             base_name = os.path.basename(self.mov_path)
             file_name_without_ext = os.path.splitext(base_name)[0]
 
-            # 指定の出力ディレクトリに新しいファイル名を結合
+            # Join the new file name with the specified output directory
             file_path = os.path.join(self.out_path, file_name_without_ext + ".csv")
 
-            # 出力動画の設定
+            # Output video settings
             if self.m_dict["create_video"]:
-                # 指定の出力ディレクトリに新しいファイル名を結合
+                # Join the new file name with the specified output directory
                 out_movie_path = os.path.join(
                     self.out_path, file_name_without_ext + "_render_" + ".mp4"
                 )
@@ -183,7 +183,7 @@ class yolo_analysis:
                     ),
                 )
 
-            # ビデオのフレーム数を取得
+            # Get the number of frames in the video
             total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
             process_times = []
 
@@ -197,7 +197,7 @@ class yolo_analysis:
                 f"({total_frames} frames)...",
                 flush=True,
             )
-            last_logged_pct = -10  # 標準出力への進捗ログ用(10%刻みで出力)
+            last_logged_pct = -10  # For progress logging to stdout (output in 10% steps)
 
             while video.isOpened():
                 ret, frame = video.read()
@@ -208,7 +208,7 @@ class yolo_analysis:
                     dpg.set_value("analy_time", self.m_dict["estimate_time"])
                     break
 
-                start_time = time.time()  # 処理開始時間
+                start_time = time.time()  # Processing start time
 
                 if self.m_dict["v_flip"]:
                     frame = cv2.flip(frame, 0)
@@ -218,15 +218,15 @@ class yolo_analysis:
 
                 yolo_result = yolo_model(frame)
 
-                # yolo_result.render()  # render()は検出結果を描画します
+                # yolo_result.render()  # render() draws the detection results
                 # result_frame = yolo_result.ims[0]
-                # フレームを出力動画に書き込む
+                # Write the frame to the output video
 
                 cur_center_pos = []
                 result = []
-                result_excluded = []  # トラッキング対象外クラスの検出結果
+                result_excluded = []  # Detection results for classes excluded from tracking
                 exclude_classes = list(self.m_dict.get("tracking_exclude_classes", []))
-                for *box, conf, cls in yolo_result.xyxy[0]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
+                for *box, conf, cls in yolo_result.xyxy[0]:  # List in xyxy format (top-left x, top-left y, bottom-right x, bottom-right y, confidence, class)
                     if conf.item() <  self.m_dict["threshold"]:
                         break
                     x_center = (box[0].item() + box[2].item()) / 2
@@ -246,7 +246,7 @@ class yolo_analysis:
                         class_name,
                     ]
 
-                    # トラッキングON かつ 除外クラスの場合は別リストへ
+                    # If tracking is ON and the class is excluded, add to a separate list
                     if self.m_dict["tracking_state"] and int(cls.item()) in exclude_classes:
                         result_excluded.append(entry)
                     else:
@@ -254,13 +254,13 @@ class yolo_analysis:
                         cur_center_pos.append((x_center, y_center))
 
                 if self.m_dict["tracking_state"]:
-                    # トラッキングの実装
+                    # Tracking implementation
                     id_matrix = self.cal_id(pre_center_pos, cur_center_pos)
                     cur_ids = []
                     # if id_matrix is None:
                     # print(cur_center_pos)
                     if id_matrix is not None:
-                        # id_matrixを今のフレームで並び替える
+                        # Sort id_matrix by the current frame
                         id_matrix.sort(
                             key=lambda x: x[1] if x[1] >= 0 else float("inf")
                         )
@@ -273,18 +273,18 @@ class yolo_analysis:
                                 if 0 <= ids[0] < len(pre_ids):
                                     cur_ids.append(pre_ids[ids[0]])
                                 else:
-                                    # 範囲外の場合の処理（例：新しいIDを割り当てる）
+                                    # Handling for out-of-range cases (e.g., assign a new ID)
                                     cur_ids.append(global_counter)
                                     global_counter += 1
                                     # print("b")
-                        # リストの結合
+                        # Combine the lists
                         result = [x + [y] for x, y in zip(result, cur_ids)]
                         # print(result)
 
                     pre_ids = cur_ids
                     pre_center_pos = cur_center_pos
 
-                    # 除外クラスはtracking_id=-1として追加
+                    # Add excluded classes with tracking_id=-1
                     result = result + [x + [-1] for x in result_excluded]
                 
                 
@@ -302,7 +302,7 @@ class yolo_analysis:
                 dpg.set_value("movie_progress_bar", progress)
                 dpg.configure_item("movie_progress_bar", overlay=f"{int(progress * 100)}%")
 
-                # 標準出力へ10%刻みで進捗を流す
+                # Emit progress to stdout in 10% steps
                 pct = int(progress * 100)
                 if pct // 10 > last_logged_pct // 10:
                     last_logged_pct = pct
@@ -312,24 +312,24 @@ class yolo_analysis:
                         flush=True,
                     )
 
-                end_time = time.time()  # 処理終了時間
-                process_time = end_time - start_time  # このフレームの処理時間
-                process_times.append(process_time)  # 処理時間をリストに保存
+                end_time = time.time()  # Processing end time
+                process_time = end_time - start_time  # Processing time for this frame
+                process_times.append(process_time)  # Save the processing time to the list
 
-                # 平均フレーム処理時間
+                # Average frame processing time
                 avg_process_time = sum(process_times) / len(process_times)
 
-                # 残りのフレーム数
+                # Number of remaining frames
                 remaining_frames = total_frames - frame_count
 
-                # 残りの処理時間の見積もり
+                # Estimate of the remaining processing time
                 remaining_time_estimate = avg_process_time * remaining_frames
                 self.m_dict["estimate_time"] = (
                     f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
                 )
                 dpg.set_value("analy_time", self.m_dict["estimate_time"])
 
-            # リストをデータフレームに変換
+            # Convert the list to a DataFrame
             # print(result_list)
             if self.m_dict["tracking_state"]:
                 df_results = pd.DataFrame(
@@ -364,7 +364,7 @@ class yolo_analysis:
                         "class_name",
                     ],
                 )
-            # csvとして出力
+            # Output as CSV
             df_results.to_csv(file_path, index=False)
             print(
                 f"[{movie_index}/{total_movies}] Done '{base_name}' "
@@ -393,18 +393,18 @@ class yolo_analysis:
         dpg.set_value("cr_analy_time", "Estimated remaining time: calculating...")
         yolo_model = load_yolo_model(self.yolo_model_path)
 
-        # ファイル名の取得（拡張子なし）
+        # Get the file name (without extension)
         base_name = os.path.basename(self.mov_path)
         file_name_without_ext = os.path.splitext(base_name)[0]
 
-        # 指定の出力ディレクトリに新しいファイル名を結合
+        # Join the new file name with the specified output directory
         out_movie_path = os.path.join(
             self.out_path, file_name_without_ext + "_render_" + ".mp4"
         )
 
-        # 入力動画の読み込み
+        # Load the input video
         cap = cv2.VideoCapture(self.mov_path)
-        # 出力動画の設定
+        # Output video settings
         out = cv2.VideoWriter(
             out_movie_path,
             cv2.VideoWriter_fourcc(*"mp4v"),
@@ -415,7 +415,7 @@ class yolo_analysis:
             ),
         )
 
-        # ビデオのフレーム数を取得
+        # Get the number of frames in the video
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         process_times = []
         frame_count = 0
@@ -423,7 +423,7 @@ class yolo_analysis:
         while cap.isOpened():
             ret, frame = cap.read()
 
-            start_time = time.time()  # 処理開始時間
+            start_time = time.time()  # Processing start time
             frame = cv2.flip(frame, 0)
 
             if not ret:
@@ -433,30 +433,30 @@ class yolo_analysis:
                 dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
                 break
 
-            # オブジェクト検出
+            # Object detection
             result = yolo_model(frame)
 
-            # 検出結果の描画
-            result.render()  # render()は検出結果を描画します
+            # Draw the detection results
+            result.render()  # render() draws the detection results
 
             result_frame = result.ims[0]
 
-            # フレームを出力動画に書き込む
+            # Write the frame to the output video
             out.write(result_frame)
 
             frame_count += 1
 
-            end_time = time.time()  # 処理終了時間
-            process_time = end_time - start_time  # このフレームの処理時間
-            process_times.append(process_time)  # 処理時間をリストに保存
+            end_time = time.time()  # Processing end time
+            process_time = end_time - start_time  # Processing time for this frame
+            process_times.append(process_time)  # Save the processing time to the list
 
-            # 平均フレーム処理時間
+            # Average frame processing time
             avg_process_time = sum(process_times) / len(process_times)
 
-            # 残りのフレーム数
+            # Number of remaining frames
             remaining_frames = total_frames - frame_count
 
-            # 残りの処理時間の見積もり
+            # Estimate of the remaining processing time
             remaining_time_estimate = avg_process_time * remaining_frames
             self.m_dict["cr_estimate_time"] = (
                 f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
@@ -525,18 +525,18 @@ class yolo_analysis_image:
 
         yolo_model = load_yolo_model(self.yolo_model_path)
 
-        # クラス名の取得
+        # Get class names
         self.class_names = yolo_model.names
 
         self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
 
         image_count = len(self.img_path_list)
         print(f"=== Start image analysis: {image_count} image(s) ===", flush=True)
-        last_logged_pct = -10  # 標準出力への進捗ログ用(10%刻みで出力)
+        last_logged_pct = -10  # For progress logging to stdout (output in 10% steps)
 
         df_results = pd.DataFrame()
         result_list = []
-        # 指定の出力ディレクトリに新しいファイル名を結合
+        # Join the new file name with the specified output directory
         file_path = os.path.join(self.out_path, "image_analysis_results" + ".csv")
 
         for image_index, self.img_path in enumerate(self.img_path_list):
@@ -556,12 +556,12 @@ class yolo_analysis_image:
 
             for *box, conf, cls in yolo_result.xyxy[
                 0
-            ]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
+            ]:  # List in xyxy format (top-left x, top-left y, bottom-right x, bottom-right y, confidence, class)
                 x_center = (box[0].item() + box[2].item()) / 2
                 y_center = (box[1].item() + box[3].item()) / 2
                 class_name = self.class_names[int(cls.item())]
 
-                # 結果をリストに保存
+                # Save the results to the list
                 result_list.append(
                     [
                         file_name_without_ext,
@@ -579,7 +579,7 @@ class yolo_analysis_image:
 
                 result_frame = self.drawing(frame, box, conf, cls)
 
-            # フレームを出力動画に書き込む
+            # Write the frame to the output video
             result_file_path = os.path.join(
                 self.out_path, file_name_without_ext + "_render.png"
             )
@@ -589,7 +589,7 @@ class yolo_analysis_image:
             dpg.set_value("image_progress_bar", progress)
             dpg.configure_item("image_progress_bar", overlay=f"{image_index + 1}/{image_count}")
 
-            # 標準出力へ10%刻みで進捗を流す
+            # Emit progress to stdout in 10% steps
             pct = int(progress * 100)
             if pct // 10 > last_logged_pct // 10:
                 last_logged_pct = pct
@@ -598,7 +598,7 @@ class yolo_analysis_image:
                     flush=True,
                 )
 
-        # リストをデータフレームに変換
+        # Convert the list to a DataFrame
         df_results = pd.DataFrame(
             result_list,
             columns=[
@@ -614,7 +614,7 @@ class yolo_analysis_image:
                 "class_name",
             ],
         )
-        # csvとして出力
+        # Output as CSV
         df_results.to_csv(file_path, index=False)
         print(f"=== Image analysis complete -> {file_path} ===", flush=True)
 
@@ -630,24 +630,24 @@ class file_open:
 
     def get_file_path(self):
         root = tk.Tk()
-        root.withdraw()  # Tkのルートウィンドウを表示しない
+        root.withdraw()  # Do not display the Tk root window
 
-        # ファイル選択ダイアログを表示
+        # Show the file selection dialog
         file_path = filedialog.askopenfilename()
 
         return file_path
 
     def get_directory_path(self):
         root = tk.Tk()
-        root.withdraw()  # Tkのルートウィンドウを表示しない
+        root.withdraw()  # Do not display the Tk root window
 
-        # フォルダ選択ダイアログを表示
+        # Show the folder selection dialog
         directory_path = filedialog.askdirectory()
 
         return directory_path
 
 
-# 使用例
+# Usage example
 if __name__ == "__main__":
     fileopen = file_open()
     model_path = fileopen.get_file_path()

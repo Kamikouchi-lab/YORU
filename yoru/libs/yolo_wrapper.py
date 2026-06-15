@@ -201,8 +201,9 @@ class YOLOv5Wrapper:
     """Wraps a YOLOv5 model loaded via ``torch.hub``."""
 
     def __init__(self, model_path: str):
-        # カレントディレクトリに依存しないよう、このファイルの位置を基準に
-        # yolov5 リポジトリ(hubconf.py を含む)の絶対パスを解決する。
+        # Resolve the absolute path of the yolov5 repository (which contains
+        # hubconf.py) relative to this file's location, so it does not depend
+        # on the current working directory.
         yolov5_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "yolov5"
         )

@@ -1568,10 +1568,10 @@ class MainWindow(QMainWindow, WindowMixin):
         self.load_labels(shapes)
         self.canvas.verified = t_yolo_parse_reader.verified
 
-        # classes.txt の順序を保持するため、label_hist を更新する。
-        # classes.txt のクラスを先頭に（インデックス順を保持）、その後に
-        # label_hist 独自のクラスを追加することで、保存時に classes.txt が
-        # 別の内容で上書きされるバグを防ぐ。
+        # Update label_hist while preserving the order of classes.txt.
+        # Put the classes.txt classes first (keeping their index order), then
+        # append label_hist's own classes, to prevent the bug where classes.txt
+        # gets overwritten with different content on save.
         yolo_classes = t_yolo_parse_reader.classes
         merged = list(yolo_classes)
         for cls in self.label_hist:

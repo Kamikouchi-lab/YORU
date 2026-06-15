@@ -27,7 +27,7 @@ condition_file_path = default_condition_file_path
 
 
 def _run_gui_subprocess(command, gui_name):
-    """GUIサブプロセスを実行し、エラーがあればEel経由でフロントに通知する"""
+    """Run the GUI subprocess and, if an error occurs, notify the frontend via Eel."""
     proc = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -41,7 +41,7 @@ def _run_gui_subprocess(command, gui_name):
 
 
 def _launch_gui(command, gui_name):
-    """バックグラウンドスレッドでGUIサブプロセスを起動する"""
+    """Launch the GUI subprocess in a background thread."""
     thread = threading.Thread(
         target=_run_gui_subprocess, args=(command, gui_name), daemon=True
     )
@@ -52,7 +52,7 @@ def create_default_json():
     log_dir = "./logs"
     log_file_path = f"{log_dir}/condition_file_log.json"
 
-    # ディレクトリが存在しない場合は作成
+    # Create the directory if it does not exist
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -74,7 +74,7 @@ def load_condition_file():
                 condition_file_path = default_condition_file_path
     except (FileNotFoundError, json.JSONDecodeError):
         condition_file_path = default_condition_file_path
-        create_default_json()  # デフォルトのJSONファイルを作成
+        create_default_json()  # Create the default JSON file
 
 
 @eel.expose
@@ -97,18 +97,18 @@ def run_cam_gui_YMH():
 def show_file_dialog():
     global condition_file_path
     root = Tk()
-    root.withdraw()  # Tkのルートウィンドウを表示しない
+    root.withdraw()  # Do not show the Tk root window
     tk_file = filedialog.askopenfilename(
         title="Select Condition file",
-        filetypes=[("Condition yaml file", ".yml .yaml")],  # ファイルフィルタ
-    )  # ファイル選択ダイアログを表示
+        filetypes=[("Condition yaml file", ".yml .yaml")],  # file filter
+    )  # Show the file selection dialog
     is_file = os.path.isfile(tk_file)
     if is_file:
         condition_file_path = path_to_ab(tk_file)
-        update_json_config_file(condition_file_path)  # JSONファイルを更新
+        update_json_config_file(condition_file_path)  # Update the JSON file
     else:
         condition_file_path = path_to_ab(default_condition_file_path)
-    eel.displayFilePath(condition_file_path)  # JavaScript関数にファイルパスを送る
+    eel.displayFilePath(condition_file_path)  # Send the file path to the JavaScript function
     print(condition_file_path)
 
 
@@ -166,7 +166,7 @@ def run_config_creator_gui():
 
 
 def main():
-    load_condition_file()  # 設定ファイルを読み込む
+    load_condition_file()  # Load the configuration file
     eel.init("web")
     eel.start("gui_home.html", size=(1024, 768), port=8889)
 

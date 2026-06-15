@@ -24,7 +24,7 @@ class file_move_random:
         for self.txt_file in glob.glob(self.directory_path + "/*.txt"):
             # Get the filename only from the initial file variable
             filename = os.path.basename(self.txt_file)
-            # calssファイルを読み込まないようにする
+            # avoid reading the class file
             if filename == "classes.txt":
                 continue
 
@@ -106,8 +106,8 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="select class file",
-            filetypes=[("Classes file", "classes.txt")],  # ファイルフィルタ
-            initialdir="./",  # 自分自身のディレクトリ
+            filetypes=[("Classes file", "classes.txt")],  # file filter
+            initialdir="./",  # the current directory
         )
         root.destroy()
         dpg.set_value("classes_path", file_path)
@@ -118,7 +118,7 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="select dataset",
-            filetypes=[("config file", "config.yml .yaml")],  # ファイルフィルタ
+            filetypes=[("config file", "config.yml .yaml")],  # file filter
         )
         root.destroy()
         dpg.set_value("yaml_file_path", file_path)
@@ -129,8 +129,8 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="select YOLO model",
-            filetypes=[("movie file", ".mp4 .wmv .avi")],  # ファイルフィルタ
-            initialdir="./",  # 自分自身のディレクトリ
+            filetypes=[("movie file", ".mp4 .wmv .avi")],  # file filter
+            initialdir="./",  # the current directory
         )
         root.destroy()
         dpg.set_value("Input file Path", file_path)

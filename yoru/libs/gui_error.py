@@ -1,12 +1,13 @@
-"""GUI 共通の例外ハンドリングヘルパー。
+"""Shared exception-handling helpers for the GUIs.
 
-各 ``*_GUI`` クラスに :class:`GuiErrorMixin` を継承させることで、
+By having each ``*_GUI`` class inherit :class:`GuiErrorMixin`, the following
+can be handled uniformly:
 
-- 失敗時に標準エラー出力へトレースバックを残し
-  (``app.py`` の ``_run_gui_subprocess`` がホーム画面へ転送する)、
-- DearPyGui のモーダルウィンドウでエラー内容を表示する
+- On failure, write a traceback to standard error
+  (``app.py``'s ``_run_gui_subprocess`` forwards it to the home screen), and
+- Display the error details in a DearPyGui modal window.
 
-を統一的に行える。``analysis_GUI.py`` で先行実装したパターンを共通化したもの。
+This generalizes the pattern first implemented in ``analysis_GUI.py``.
 """
 
 import sys
@@ -16,18 +17,19 @@ import dearpygui.dearpygui as dpg
 
 
 class GuiErrorMixin:
-    """DearPyGui ベースの GUI に共通のエラー報告機能を提供する Mixin。"""
+    """Mixin providing common error-reporting features for DearPyGui-based GUIs."""
 
-    # 同時に複数のエラーポップアップを開かないよう固定タグを使う
+    # Use a fixed tag so that multiple error popups are not opened at once
     _error_popup_tag = "error_popup"
 
     def _report_error(self, context, exc):
-        """例外を標準エラー出力に記録し、GUI上のポップアップで表示する。
+        """Log the exception to standard error and show it in an on-screen popup.
 
-        捕捉済みエラーのユーザー通知は、このメソッドが出すモーダルポップアップ
-        が担う。標準エラー出力へのトレースバックは記録用で、``app.py`` 側の
-        ``_run_gui_subprocess`` がホーム画面へ転送するのは GUI プロセスが
-        非ゼロ終了した(=例外を捕捉せずクラッシュした)場合のみである点に注意。
+        User notification of caught errors is handled by the modal popup this
+        method displays. The traceback written to standard error is for logging;
+        note that ``app.py``'s ``_run_gui_subprocess`` only forwards it to the
+        home screen when the GUI process exits with a non-zero code (i.e. it
+        crashed without catching the exception).
         """
         detail = f"{type(exc).__name__}: {exc}"
         print(f"[ERROR] {context}: {detail}", file=sys.stderr, flush=True)
@@ -35,7 +37,7 @@ class GuiErrorMixin:
         self._show_error_popup(context, detail)
 
     def _show_error_popup(self, context, detail):
-        """エラー内容をモーダルウィンドウで表示する。"""
+        """Display the error details in a modal window."""
         try:
             tag = self._error_popup_tag
             if dpg.does_item_exist(tag):
@@ -58,11 +60,11 @@ class GuiErrorMixin:
                     callback=lambda: dpg.delete_item(tag),
                 )
         except Exception:
-            # ポップアップ表示に失敗しても標準エラー出力には残っている
+            # Even if showing the popup fails, the message remains in standard error
             pass
 
     def _safe_enable(self, tag):
-        """存在する場合のみアイテムを有効化する(失敗しても無視)。"""
+        """Enable the item only if it exists (ignore failures)."""
         try:
             if dpg.does_item_exist(tag):
                 dpg.enable_item(tag)

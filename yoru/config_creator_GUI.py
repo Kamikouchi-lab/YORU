@@ -424,7 +424,7 @@ class ConfigCreatorGUI(GuiErrorMixin):
                 )
             dpg.set_value("cfg_save_status", f"Saved: {out_path}")
         except Exception as e:
-            # 他GUIと統一して stderr + モーダル表示。あわせて保存ステータス行にも反映。
+            # Consistent with other GUIs: stderr + modal display. Also reflect in the save status line.
             self._report_error("Failed to save config", e)
             dpg.set_value("cfg_save_status", f"Error: {type(e).__name__}: {e}")
 

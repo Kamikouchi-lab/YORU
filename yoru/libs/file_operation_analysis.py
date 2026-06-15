@@ -14,8 +14,8 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="Select YOLO model",
-            filetypes=[("YOLO model file", ".pt .pth")],  # ファイルフィルタ
-            # initialdir = "./" # 自分自身のディレクトリ
+            filetypes=[("YOLO model file", ".pt .pth")],  # file filter
+            # initialdir = "./" # the current directory
         )
         root.destroy()
         dpg.set_value("Model_path", file_path)
@@ -29,8 +29,8 @@ class file_dialog_tk:
             title="Select movie files",
             filetypes=[
                 ("movie files", ".mp4 .wmv .avi .mov .mkv .m4v")
-            ],  # ファイルフィルタ
-            # initialdir = "./" # 自分自身のディレクトリ
+            ],  # file filter
+            # initialdir = "./" # the current directory
         )
         root.destroy()
         dpg.set_value("Input file Path", file_path)
@@ -43,8 +43,8 @@ class file_dialog_tk:
             title="Select image files",
             filetypes=[
                 ("image file", ".jpeg .jpg .tiff .png .gif")
-            ],  # ファイルフィルタ
-            # initialdir = "./" # 自分自身のディレクトリ
+            ],  # file filter
+            # initialdir = "./" # the current directory
         )
         root.destroy()
         dpg.set_value("input_image_path", file_path)

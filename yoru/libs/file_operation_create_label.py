@@ -15,7 +15,7 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="Select config.yaml file",
-            filetypes=[("Config file", "config.yaml config.yml")],  # ファイルフィルタ
+            filetypes=[("Config file", "config.yaml config.yml")],  # file filter
         )
         root.destroy()
         dpg.set_value("config_path", file_path)
@@ -27,8 +27,8 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="select YOLO model",
-            filetypes=[("YOLO model file", ".pt .pth")],  # ファイルフィルタ
-            # initialdir = "./" # 自分自身のディレクトリ
+            filetypes=[("YOLO model file", ".pt .pth")],  # file filter
+            # initialdir = "./" # the current directory
         )
         root.destroy()
         dpg.set_value("Model_path", file_path)
@@ -41,8 +41,8 @@ class file_dialog_tk:
             title="select YOLO model",
             filetypes=[
                 ("image file", ".jpeg .jpg .tiff .png .gif")
-            ],  # ファイルフィルタ
-            # initialdir = "./" # 自分自身のディレクトリ
+            ],  # file filter
+            # initialdir = "./" # the current directory
         )
         root.destroy()
         dpg.set_value("input_image_path", file_path)

@@ -29,7 +29,7 @@ class yolo_analysis_image:
     def analyze_image(self):
         yolo_model = load_yolo_model(self.yolo_model_path)
 
-        # クラス名の取得
+        # Get class names
         class_names = yolo_model.names
         print(class_names)
 
@@ -47,15 +47,15 @@ class yolo_analysis_image:
 
             yolo_result = yolo_model(frame)
 
-            # 出力パスの作成
+            # Create the output path
             result_txt_path = os.path.join(
                 self.data_path, file_name_without_ext + "_yolo.txt"
             )
             result = []
             for *box, conf, cls in yolo_result.xywhn[0]:
-                # xyxy形式（中心x, 中心y, 幅, 高さ）のリスト
+                # List in xyxy format (center x, center y, width, height)
                 class_name = class_names[int(cls.item())]
-                # 結果をリストに保存
+                # Save the result to the list
                 result.append(
                     [
                         int(cls.item()),
@@ -107,10 +107,10 @@ class ModelValidation:
 
     def calculate_tp_fp(self, gt_boxes, pred_boxes, iou_threshold):
         """
-        gt_boxes: 真のバウンディングボックスのリスト
-        pred_boxes: 予測されたバウンディングボックスのリスト。各ボックスは(score, x1, y1, x2, y2)の形式。
-        iou_threshold: IoUのしきい値
-        iou_list: Iouのリスト
+        gt_boxes: List of ground-truth bounding boxes
+        pred_boxes: List of predicted bounding boxes. Each box is in the format (score, x1, y1, x2, y2).
+        iou_threshold: IoU threshold
+        iou_list: List of IoU values
         tp: True positive
         fp: False positive
         """
@@ -120,10 +120,10 @@ class ModelValidation:
             iou_list = []
             return tp, fp, iou_list
 
-        # IOUの結果のリスト
+        # List of IoU results
         iou_list = []
 
-        # 予測ボックスをスコアでソート
+        # Sort predicted boxes by score
         pred_boxes = sorted(pred_boxes, key=lambda x: x[0], reverse=True)
 
         tp = np.zeros(len(pred_boxes))
@@ -148,7 +148,7 @@ class ModelValidation:
                     max_iou = current_iou
                     max_gt_idx = j
 
-            # IOUリストに追加
+            # Append to the IoU list
             if max_iou >= 0:
                 iou_list.append(max_iou)
 
@@ -182,21 +182,21 @@ class ModelValidation:
 
     def calculate_ap(self, recalls, precisions):
         """Interpolated AP - VOC 2010 way"""
-        # 並び替える
+        # Sort
         recalls = np.sort(recalls)
         precisions = np.sort(precisions)
 
         recalls = np.concatenate(([0.0], recalls, [1.0]))
         precisions = np.concatenate(([0.0], precisions, [0.0]))
 
-        # Precisionの値を後ろから見ていき、現在の値より大きな値が見られた場合には現在の値をその大きな値に置き換えます
+        # Scan the precision values from the end; if a larger value is found, replace the current value with that larger value
         for i in range(precisions.size - 2, -1, -1):
             precisions[i] = np.maximum(precisions[i], precisions[i + 1])
 
-        # 今回のrecallの値と前回のrecallの値の差分を取得
+        # Get the difference between the current recall value and the previous recall value
         indices = np.where(recalls[1:] != recalls[:-1])[0]
 
-        # 各変化点でのprecisionの平均を取り、それをrecallの変化量で重み付けして合計する
+        # Take the precision at each change point, weight it by the change in recall, and sum the result
         ap = np.sum((recalls[indices + 1] - recalls[indices]) * precisions[indices + 1])
 
         return ap
@@ -217,7 +217,7 @@ class Evaluator(ModelValidation):
         recalls_dict = {}
         precisions_dict = {}
 
-        # 各クラスに対して評価を行う
+        # Evaluate each class
         for class_id in tqdm(classes, desc="Processing images"):
             class_aps = []
             iou_per_class = []
@@ -252,14 +252,14 @@ class Evaluator(ModelValidation):
                         iou_per_class.extend(iou_list)
                     total_gts += len(class_gt_boxes)
 
-                # PrecisionとRecallの計算
+                # Calculate precision and recall
                 counter += 1
                 tp_cumsum = np.cumsum(all_tps)
                 fp_cumsum = np.cumsum(all_fps)
                 recalls = tp_cumsum / total_gts
                 precisions = tp_cumsum / (tp_cumsum + fp_cumsum)
 
-                # Precisionの補正
+                # Precision correction
                 precisions = np.concatenate(
                     ([0.0], np.maximum.accumulate(precisions[::-1]), [0.0])
                 )
@@ -274,7 +274,7 @@ class Evaluator(ModelValidation):
                     iou_thresh_hold_disp,
                 )
 
-                # APの計算
+                # Calculate AP
                 ap = np.sum((recalls[1:] - recalls[:-1]) * precisions[1:])
                 class_aps.append(ap)
 
@@ -318,14 +318,14 @@ class Evaluator(ModelValidation):
             [(key, value) for key, values in data_dict.items() for value in values],
             columns=col_name,
         )
-        # クラス名を変換
+        # Convert class names
         df["class_name"] = df["class"].map(classes_dict)
         return df
 
     def read_yolo_det_box_txt(self):
         yolo_model = load_yolo_model(self.m_dict["model_path"])
 
-        # クラス名の取得
+        # Get class names
         class_names = yolo_model.names
         return class_names
 
@@ -370,7 +370,7 @@ class Evaluator(ModelValidation):
 
     def count_correct_predictions(self, labels, predictions):
         """
-        ラベルと予測ラベルの一致をカウントします。重複するラベルにも対応しています。
+        Count matches between labels and predicted labels. Handles duplicate labels as well.
         """
         label_counts = Counter(labels)
         prediction_counts = Counter(predictions)
@@ -416,7 +416,7 @@ class Evaluator(ModelValidation):
             return 0, 0, 0, 0, 0
 
     def run_evaluation(self, image_directory):
-        # ディレクトリ内の全ての画像を取得
+        # Get all images in the directory
 
         precision, recall, total_labels, total_predictions, correct_predictions = (
             self.calculate_precision_recall(image_directory)
@@ -432,16 +432,16 @@ class Evaluator(ModelValidation):
         pred_boxes = []
 
         for img_file in image_files:
-            # 対応するground truthとYOLOの結果のtxtファイル名を構築
+            # Build the txt file names for the corresponding ground truth and YOLO results
             base_name = os.path.splitext(img_file)[0]
             gt_txt = os.path.join(image_directory, base_name + ".txt")
             yolo_txt = os.path.join(image_directory, base_name + "_yolo.txt")
 
-            # これらのtxtファイルからデータを読み込む
+            # Read the data from these txt files
             gt_boxes.append(self.read_boxes_txt(gt_txt))
             pred_boxes.append(self.read_boxes_txt(yolo_txt))
 
-        # クラス名のリストを取得
+        # Get the list of class names
         class_names = self.read_yolo_det_box_txt()
         print(class_names)
 
@@ -477,14 +477,14 @@ class Evaluator(ModelValidation):
         self.save_dict_to_txt(results, result_directory)
         print(result_directory)
 
-        # iou listの出力
+        # Output the iou list
         iou_dataframe = self.dict_to_dataframe(iou_res, class_names)
         result_directory_iou = os.path.join(
             self.m_dict["result_dir"], model_base_name + "_iou_results" + ".csv"
         )
         iou_dataframe.to_csv(result_directory_iou)
 
-        # 結果の描写
+        # Plot the results
         self.drawing_graph(
             results, class_names, self.m_dict["result_dir"], model_base_name
         )
@@ -497,41 +497,41 @@ class Evaluator(ModelValidation):
         result = results["AP@[.50:.05:.95]_per_class"]
         x = [0.5 + i * 0.05 for i in range(10)]
         colors = plt.cm.rainbow(np.linspace(0, 1, len(results)))
-        # データのプロット
+        # Plot the data
         for key, color in zip(result, colors):
             plt.plot(x, result[key], color=color, marker="o", label=classes_dict[key])
 
-        # x軸の目盛りを設定
-        x_ticks = np.arange(0.5, 0.95 + 0.05, 0.10)  # 0.5から0.95まで0.05刻み
+        # Set the x-axis ticks
+        x_ticks = np.arange(0.5, 0.95 + 0.05, 0.10)  # From 0.5 to 0.95 in steps of 0.05
         plt.xticks(x_ticks)
         plt.xlim(0.45, 1.00)
         plt.ylim(0, 1)
 
-        # 軸のラベル
+        # Axis labels
         plt.xlabel("IOU")
         plt.ylabel("AP")
 
-        # タイトルと凡例
+        # Title and legend
         plt.title("AP@[.50:.05:.95]")
         plt.legend()
 
-        # グラフを保存
+        # Save the graph
         result_directory = os.path.join(result_dir, model_base_name + "_ap50-95.png")
         plt.savefig(result_directory)
 
     def drawing_iou_boxplot_graph(
         self, dataframe, classes_dict, result_dir, model_base_name
     ):
-        # # クラス名を変換
+        # # Convert class names
         # dataframe["class"] = dataframe["class"].map(classes_dict)
 
-        # データのプロット
+        # Plot the data
         sns.set()
         sns.set_style("whitegrid")
         sns.set_palette("Set3")
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
-        # y軸の目盛りを設定
+        # Set the y-axis ticks
         plt.ylim(0, 1)
 
         sns.boxplot(x="class_name", y="value", data=dataframe, showfliers=False, ax=ax)
@@ -539,39 +539,39 @@ class Evaluator(ModelValidation):
             x="class_name", y="value", data=dataframe, jitter=True, color="black", ax=ax
         )
 
-        # サンプル数の計算
+        # Calculate the sample counts
         sample_counts = dataframe["class_name"].value_counts()
 
-        # 各カテゴリの位置を取得
+        # Get the position of each category
         categories = dataframe["class_name"].unique()
 
-        # 各ボックスプロットのx=0のラインの少し上にサンプル数を表示
+        # Display the sample count slightly above the x=0 line of each box plot
         for i, category in enumerate(categories):
-            # カテゴリに対応するサンプル数
+            # Sample count corresponding to the category
             count = sample_counts[category]
 
-            # カテゴリの位置を取得
+            # Get the position of the category
             category_pos = i
 
-            # テキストの位置を設定（x軸の位置とy軸の少し下）
+            # Set the text position (x-axis position and slightly below the y-axis)
             ax.text(
                 category_pos,
-                0.05,  # y軸の位置（0の少し下）
+                0.05,  # y-axis position (slightly below 0)
                 f"n={count}",
                 horizontalalignment="center",
-                size="medium",  # テキストのサイズを大きく
+                size="medium",  # Enlarge the text size
                 color="black",
                 weight="semibold",
             )
 
-        # 軸のラベル
+        # Axis labels
         plt.xlabel("Class")
         plt.ylabel("IOU")
 
-        # タイトルと凡例
+        # Title and legend
         plt.title("IOU distributions")
 
-        # グラフを保存
+        # Save the graph
         result_directory = os.path.join(result_dir, model_base_name + "_iou_graph.png")
         fig.savefig(result_directory)
         plt.close()
@@ -586,28 +586,28 @@ class Evaluator(ModelValidation):
         iou_threshold,
     ):
         """
-        Precision-Recall 曲線を描画し、保存する関数。
+        Function that draws and saves the Precision-Recall curve.
 
         Args:
-            precisions: Precision のリスト
-            recalls: Recall のリスト
-            class_name: クラス名
-            result_dir: 結果を保存するディレクトリのパス
-            model_base_name: モデルのベース名
+            precisions: List of precision values
+            recalls: List of recall values
+            class_name: Class name
+            result_dir: Path to the directory where results are saved
+            model_base_name: Base name of the model
         """
-        # 図の準備
+        # Prepare the figure
         plt.figure()
         plt.plot(recalls, precisions, marker=".", label=class_name)
 
-        # 軸のラベル
+        # Axis labels
         plt.xlabel("Recall")
         plt.ylabel("Precision")
 
-        # タイトルと凡例
+        # Title and legend
         plt.title(f"Precision-Recall Curve - {class_name}")
         plt.legend()
 
-        # グラフを保存
+        # Save the graph
         file_path = os.path.join(
             result_dir,
             f"{model_base_name}_precision_recall_{class_name}_IOU{str(iou_threshold)}.png",

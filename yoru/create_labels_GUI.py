@@ -55,20 +55,20 @@ class model_eval_gui(GuiErrorMixin):
         else:
             self.im_win_width = self.width * (400 / self.height)
             self.im_win_height = 400
-        # フレームのリサイズ
+        # Resize the frame
         self.frame_re = cv2.resize(
             self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
         )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
+        # Create a new frame (filled entirely with black)
         base_frame = np.zeros((400, 400, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
+        # Place the resized frame at the center of the new frame
         h, w = self.frame_re.shape[:2]
         base_frame[
             int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
             int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
             :,
         ] = self.frame_re
-        # 更新
+        # Update
         self.frame_re = base_frame
 
     def gui_configure(self):
