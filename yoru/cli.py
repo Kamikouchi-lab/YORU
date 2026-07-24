@@ -63,9 +63,15 @@ def main(argv: list[str] | None = None) -> int:
 
 def _cmd_gui(args) -> int:
     """Launch GUI. Keep imports lazy so '--help' stays fast."""
+    # Imported here (not at module top) so '--help'/'--version' stay fast and
+    # do not create the ~/.yoru directory.
+    from yoru.libs.user_paths import log_exception, setup_logging
+    setup_logging()
+
     try:
         from yoru.app import main as app_main   # <- your existing GUI entry point
     except Exception as e:
+        log_exception("failed to import yoru.app.main", e)
         print(f"[yoru] failed to import yoru.app.main: {e}")
         return 1
 
@@ -86,5 +92,6 @@ def _cmd_gui(args) -> int:
     except SystemExit as se:
         return int(se.code or 0)
     except Exception as e:
+        log_exception("GUI crashed", e)
         print(f"[yoru] GUI crashed: {e}")
         return 1
