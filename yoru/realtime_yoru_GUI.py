@@ -25,6 +25,7 @@ sys.path.append("../yoru")
 from yoru.libs.detection import yolo_detection
 from yoru.libs.drawing import yolo_drawing
 from yoru.libs.file_operation_realtime import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.imager import capture_streamCV2, capture_streamMSS, select_run
 from yoru.libs.init_realtime import init_asovi
 from yoru.libs.trigger import read_condition, yolo_trigger
@@ -45,7 +46,7 @@ from yoru.libs.util import loadingParam
 #     import app as YORU
 
 
-class camGUI:
+class camGUI(GuiErrorMixin):
     def __init__(self, config_file=[], m_dict={}):
         self.m_dict = m_dict
         self.t0 = m_dict["t0"]
@@ -301,8 +302,18 @@ class camGUI:
 
     def run(self):
         self.startDPG()
+        plot_error_shown = False
         while dpg.is_dearpygui_running():
-            self.plot_callback()
+            try:
+                self.plot_callback()
+                plot_error_shown = False
+            except Exception as e:
+                # Surface a display/detection error once instead of letting it
+                # crash the real-time process silently; keep rendering so the
+                # popup stays visible and the GUI can recover on the next frame.
+                if not plot_error_shown:
+                    self._report_error("Real-time display error", e)
+                    plot_error_shown = True
             dpg.render_dearpygui_frame()
             if self.m_dict["quit"]:
                 if self.m_dict["back_to_home"]:

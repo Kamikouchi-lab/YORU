@@ -390,11 +390,27 @@ class yoru_train(GuiErrorMixin):
                 else:
                     dpg.set_value("train_eta_text", f"{s}s")
         if self.m_dict.get("training_done", False):
-            self._set_step_state("step6_state", "Complete!!")
-            dpg.set_value("train_progress_bar", 1.0)
-            dpg.set_value("train_progress_text", "Done!")
-            dpg.set_value("train_eta_text", "0s")
             self.m_dict["training_done"] = False
+            returncode = self.m_dict.get("training_returncode", 0)
+            if returncode:
+                # The training subprocess exited with a non-zero code: surface it
+                # instead of reporting a false "Complete!!".
+                tail = self.m_dict.get("train_output_tail", "")
+                message = f"Training exited with code {returncode}"
+                if tail:
+                    message += f"\n\nLast output:\n{tail}"
+                try:
+                    raise RuntimeError(message)
+                except RuntimeError as e:
+                    self._report_error("Training failed", e)
+                self._set_step_state("step6_state", "Error")
+                dpg.set_value("train_progress_text", "Failed")
+                dpg.set_value("train_eta_text", "-")
+            else:
+                self._set_step_state("step6_state", "Complete!!")
+                dpg.set_value("train_progress_bar", 1.0)
+                dpg.set_value("train_progress_text", "Done!")
+                dpg.set_value("train_eta_text", "0s")
 
     def run(self):
         self.startDPG()
@@ -727,10 +743,14 @@ class yoru_train(GuiErrorMixin):
 
         start_time = None
         start_epoch = 0
+        tail_lines = []  # keep the last output lines for error reporting
 
         for raw_line in proc.stdout:
             line = ansi_re.sub("", raw_line).rstrip()
             print(line)  # pass-through to console
+            tail_lines.append(line)
+            if len(tail_lines) > 20:
+                del tail_lines[0]
             m = torchvision_re.search(line) or ultralytics_re.match(line)
             if m:
                 current = int(m.group(1))
@@ -749,12 +769,14 @@ class yoru_train(GuiErrorMixin):
 
         proc.wait()
         self.m_dict["train_epoch"]   = self.m_dict.get("train_total_epoch", total_epochs)
+        self.m_dict["training_returncode"] = proc.returncode
+        self.m_dict["train_output_tail"]   = "\n".join(tail_lines)
         self.m_dict["training_done"] = True
 
     def run_yolov5(self):
         # train
         cmd = [
-            "python",
+            sys.executable,
             "./yoru/libs/yolov5/train.py",
             "--imgsz",
             str(self.m_dict["img"]),
@@ -800,7 +822,7 @@ class yoru_train(GuiErrorMixin):
     def run_yolo_ultralytics(self):
         """Launch YOLOv8 / YOLO11 training via the ultralytics package."""
         cmd = [
-            "python",
+            sys.executable,
             "./yoru/libs/train_ultralytics.py",
             "--weights",
             str(self.m_dict["weight"]),
@@ -848,7 +870,7 @@ class yoru_train(GuiErrorMixin):
         model_type = family_to_model[self.m_dict.get("model_family", "Faster R-CNN")]
 
         cmd = [
-            "python",
+            sys.executable,
             "./yoru/libs/train_torchvision.py",
             "--model",   model_type,
             "--data",    str(self.m_dict["yaml_path"]),
