@@ -185,3 +185,6 @@ others/
 
 .claude/
 .history/
+settings.json
+settings.*.json
+

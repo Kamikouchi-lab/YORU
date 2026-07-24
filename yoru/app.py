@@ -4,6 +4,7 @@
 import json
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import webview
@@ -30,6 +31,31 @@ class AppState:
             self.condition_file_path = DEFAULT_CONFIG_PATH.resolve()
             self._write_config_log(self.condition_file_path)
 
+def _run_gui_subprocess(command, gui_name):
+    """GUIサブプロセスを実行し、エラーがあればEel経由でフロントに通知する"""
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    stdout, stderr = proc.communicate()
+    if proc.returncode != 0:
+        error_msg = stderr.strip() if stderr.strip() else stdout.strip()
+        eel.displayError(gui_name, error_msg)
+
+
+def _launch_gui(command, gui_name):
+    """バックグラウンドスレッドでGUIサブプロセスを起動する"""
+    thread = threading.Thread(
+        target=_run_gui_subprocess, args=(command, gui_name), daemon=True
+    )
+    thread.start()
+
+
+def create_default_json():
+    log_dir = "./logs"
+    log_file_path = f"{log_dir}/condition_file_log.json"
     def update_condition_file(self, new_path: Path):
         self.condition_file_path = new_path.resolve()
         self._write_config_log(self.condition_file_path)
@@ -49,6 +75,87 @@ def _launch_module(module_name: str, *extra_args: str):
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
     try:
+        with open(log_file_path, "r") as file:
+            data = json.load(file)
+            if "config_file" in data:
+                condition_file_path = data["config_file"]
+            else:
+                condition_file_path = default_condition_file_path
+    except (FileNotFoundError, json.JSONDecodeError):
+        condition_file_path = default_condition_file_path
+        create_default_json()  # デフォルトのJSONファイルを作成
+
+
+@eel.expose
+def run_cam_gui_YMH():
+    global condition_file_path
+    if not os.path.isfile(condition_file_path):
+        eel.displayError("Real-time GUI", "Config file not found: " + condition_file_path)
+        return
+    _launch_gui(
+        [
+            sys.executable,
+            "-c",
+            f"from yoru import realtime_yoru_GUI; realtime_yoru_GUI.main(r'{condition_file_path}')",
+        ],
+        "Real-time GUI",
+    )
+
+
+@eel.expose
+def show_file_dialog():
+    global condition_file_path
+    root = Tk()
+    root.withdraw()  # Tkのルートウィンドウを表示しない
+    tk_file = filedialog.askopenfilename(
+        title="Select Condition file",
+        filetypes=[("Condition yaml file", ".yml .yaml")],  # ファイルフィルタ
+    )  # ファイル選択ダイアログを表示
+    is_file = os.path.isfile(tk_file)
+    if is_file:
+        condition_file_path = path_to_ab(tk_file)
+        update_json_config_file(condition_file_path)  # JSONファイルを更新
+    else:
+        condition_file_path = path_to_ab(default_condition_file_path)
+    eel.displayFilePath(condition_file_path)  # JavaScript関数にファイルパスを送る
+    print(condition_file_path)
+
+
+def update_json_config_file(new_path):
+    data = {"config_file": new_path}
+    with open("./logs/condition_file_log.json", "w") as file:
+        json.dump(data, file)
+
+
+def path_to_ab(rel_path):
+    p_rel = Path(rel_path)
+    p_abu = p_rel.resolve()
+    return str(p_abu)
+
+
+@eel.expose
+def print_file_path():
+    global condition_file_path
+    p_rel = Path(condition_file_path)
+    p_abu = p_rel.resolve()
+    print(p_abu)
+    return str(p_abu)
+
+
+@eel.expose
+def run_analysis_gui():
+    _launch_gui(
+        [sys.executable, "-c", "from yoru import analysis_GUI; analysis_GUI.main()"],
+        "Analysis GUI",
+    )
+
+
+@eel.expose
+def run_train_gui():
+    _launch_gui(
+        [sys.executable, "-c", "from yoru import train_GUI; train_GUI.main()"],
+        "Train GUI",
+    )
         subprocess.Popen(cmd, **kwargs)
     except OSError as e:
         print(f"Failed to launch {module_name}: {e}", file=sys.stderr)
@@ -97,6 +204,12 @@ class Api:
     def run_train_gui(self):
         _launch_module("yoru.train_GUI")
 
+@eel.expose
+def run_evaluate_gui():
+    _launch_gui(
+        [sys.executable, "-c", "from yoru import evaluation_GUI; evaluation_GUI.main()"],
+        "Evaluate GUI",
+    )
     def run_analysis_gui(self):
         _launch_module("yoru.analysis_GUI")
 
