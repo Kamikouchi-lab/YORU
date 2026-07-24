@@ -4,7 +4,9 @@ By having each ``*_GUI`` class inherit :class:`GuiErrorMixin`, the following
 can be handled uniformly:
 
 - On failure, write a traceback to standard error
-  (``app.py``'s ``_run_gui_subprocess`` forwards it to the home screen), and
+  (``app.py``'s ``_run_gui_subprocess`` forwards it to the home screen),
+- Append the exception (with traceback) to the persistent YORU log file
+  ``~/.yoru/logs/yoru.log`` (see :mod:`yoru.libs.user_paths`), and
 - Display the error details in a DearPyGui modal window.
 
 This generalizes the pattern first implemented in ``analysis_GUI.py``.
@@ -14,6 +16,8 @@ import sys
 import traceback
 
 import dearpygui.dearpygui as dpg
+
+from yoru.libs.user_paths import log_exception
 
 
 class GuiErrorMixin:
@@ -29,11 +33,14 @@ class GuiErrorMixin:
         method displays. The traceback written to standard error is for logging;
         note that ``app.py``'s ``_run_gui_subprocess`` only forwards it to the
         home screen when the GUI process exits with a non-zero code (i.e. it
-        crashed without catching the exception).
+        crashed without catching the exception). Independently of that, the
+        exception is always appended to ``~/.yoru/logs/yoru.log`` so it can be
+        reviewed after the fact.
         """
         detail = f"{type(exc).__name__}: {exc}"
         print(f"[ERROR] {context}: {detail}", file=sys.stderr, flush=True)
         traceback.print_exc()
+        log_exception(context, exc)  # persist to ~/.yoru/logs/yoru.log
         self._show_error_popup(context, detail)
 
     def _show_error_popup(self, context, detail):

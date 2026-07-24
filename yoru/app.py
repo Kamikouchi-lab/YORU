@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -7,6 +8,8 @@ from pathlib import Path
 from tkinter import Tk, filedialog
 
 import eel
+
+from yoru.libs.user_paths import get_state_file, log_message, setup_logging
 
 # if __name__ == "__main__":
 
@@ -37,6 +40,10 @@ def _run_gui_subprocess(command, gui_name):
     stdout, stderr = proc.communicate()
     if proc.returncode != 0:
         error_msg = stderr.strip() if stderr.strip() else stdout.strip()
+        log_message(
+            f"GUI subprocess '{gui_name}' exited with code {proc.returncode}: {error_msg}",
+            level=logging.ERROR,
+        )
         eel.displayError(gui_name, error_msg)
 
 
@@ -49,24 +56,38 @@ def _launch_gui(command, gui_name):
 
 
 def create_default_json():
-    log_dir = "./logs"
-    log_file_path = f"{log_dir}/condition_file_log.json"
-
-    # Create the directory if it does not exist
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
     default_data = {"config_file": default_condition_file_path}
-    with open(log_file_path, "w") as file:
+    with open(get_state_file(), "w") as file:
         json.dump(default_data, file)
+
+
+def _migrate_legacy_state_file(state_file):
+    """One-time migration of the pre-``~/.yoru`` state file.
+
+    Older versions stored the last-used config in
+    ``./logs/condition_file_log.json`` (relative to the working directory). If
+    that legacy file exists and the new one does not yet, copy it over so the
+    user's last selection is preserved. The legacy file is left in place.
+    """
+    legacy = Path("./logs/condition_file_log.json")
+    try:
+        if legacy.is_file() and not state_file.exists():
+            with open(legacy, "r") as f:
+                data = json.load(f)
+            with open(state_file, "w") as f:
+                json.dump(data, f)
+            log_message(f"Migrated legacy state file {legacy} -> {state_file}")
+    except Exception as e:
+        log_message(f"Legacy state migration skipped: {e}", level=logging.WARNING)
 
 
 def load_condition_file():
     global condition_file_path
-    log_file_path = "./logs/condition_file_log.json"
-    print(path_to_ab(log_file_path))
+    state_file = get_state_file()
+    _migrate_legacy_state_file(state_file)
+    print(path_to_ab(str(state_file)))
     try:
-        with open(log_file_path, "r") as file:
+        with open(state_file, "r") as file:
             data = json.load(file)
             if "config_file" in data:
                 condition_file_path = data["config_file"]
@@ -114,7 +135,7 @@ def show_file_dialog():
 
 def update_json_config_file(new_path):
     data = {"config_file": new_path}
-    with open("./logs/condition_file_log.json", "w") as file:
+    with open(get_state_file(), "w") as file:
         json.dump(data, file)
 
 
@@ -166,6 +187,7 @@ def run_config_creator_gui():
 
 
 def main():
+    setup_logging()  # write runtime logs to ~/.yoru/logs/yoru.log
     load_condition_file()  # Load the configuration file
     eel.init("web")
     eel.start("gui_home.html", size=(1024, 768), port=8889)
