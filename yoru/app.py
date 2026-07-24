@@ -93,7 +93,16 @@ def load_condition_file():
                 condition_file_path = data["config_file"]
             else:
                 condition_file_path = default_condition_file_path
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
+        # First run / no state file yet: expected, fall back to default silently.
+        condition_file_path = default_condition_file_path
+        create_default_json()  # Create the default JSON file
+    except json.JSONDecodeError as e:
+        # The state file exists but is corrupt: record the recovery.
+        log_message(
+            f"State file {state_file} is corrupt, resetting to default: {e}",
+            level=logging.WARNING,
+        )
         condition_file_path = default_condition_file_path
         create_default_json()  # Create the default JSON file
 
@@ -102,6 +111,10 @@ def load_condition_file():
 def run_cam_gui_YMH():
     global condition_file_path
     if not os.path.isfile(condition_file_path):
+        log_message(
+            f"Real-time GUI aborted: config file not found: {condition_file_path}",
+            level=logging.ERROR,
+        )
         eel.displayError("Real-time GUI", "Config file not found: " + condition_file_path)
         return
     _launch_gui(

@@ -1,5 +1,6 @@
 import csv
 import datetime
+import logging
 import time
 import tkinter as tk
 from threading import Thread
@@ -9,6 +10,8 @@ import mss
 import numpy as np
 from PIL import Image, ImageTk
 from pynput import mouse
+
+from yoru.libs.user_paths import log_message
 
 
 class capture_streamCV2:
@@ -134,6 +137,11 @@ class capture_streamCV2:
                             self.rtesult_writer.writerows(self.m_dict["yolo_results"])
                         self.frame_count += 1
                 else:
+                    log_message(
+                        "capture_streamCV2.run: camera read failed (status=False); "
+                        "stopping capture loop",
+                        logging.ERROR,
+                    )
                     break
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break

@@ -1,7 +1,10 @@
 import datetime
+import logging
 import os
 
 import yaml
+
+from yoru.libs.user_paths import log_message
 
 
 class create_project:
@@ -57,6 +60,10 @@ class create_project:
                 )
             print("add class info in yaml file")
         else:
+            log_message(
+                f"add_class_info failed: config yaml not found: {file_path}",
+                logging.ERROR,
+            )
             print("failed....")
 
     def add_training_info(self):
@@ -94,4 +101,8 @@ class create_project:
                 )
             print("add class info in yaml file")
         else:
+            log_message(
+                f"add_training_info failed: config yaml not found: {file_path}",
+                logging.ERROR,
+            )
             print("failed....")

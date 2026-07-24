@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import subprocess
@@ -20,6 +21,7 @@ from yoru.libs.create_yaml_train import create_project
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.init_train import init_train
+from yoru.libs.user_paths import log_message
 
 # import yoru.app as YORU
 
@@ -747,7 +749,12 @@ class yoru_train(GuiErrorMixin):
                     sec_per_epoch = elapsed / completed
                     self.m_dict["train_eta_seconds"] = sec_per_epoch * remaining
 
-        proc.wait()
+        returncode = proc.wait()
+        if returncode:
+            log_message(
+                f"Training subprocess exited with code {returncode}",
+                level=logging.ERROR,
+            )
         self.m_dict["train_epoch"]   = self.m_dict.get("train_total_epoch", total_epochs)
         self.m_dict["training_done"] = True
 

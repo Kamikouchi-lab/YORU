@@ -66,9 +66,11 @@ class GuiErrorMixin:
                     width=80,
                     callback=lambda: dpg.delete_item(tag),
                 )
-        except Exception:
-            # Even if showing the popup fails, the message remains in standard error
-            pass
+        except Exception as e:
+            # The original error was already logged by _report_error; still
+            # persist the failure of the error popup itself so a broken
+            # error-reporting UI is visible in ~/.yoru/logs/yoru.log.
+            log_exception("Failed to display error popup", e)
 
     def _safe_enable(self, tag):
         """Enable the item only if it exists (ignore failures)."""

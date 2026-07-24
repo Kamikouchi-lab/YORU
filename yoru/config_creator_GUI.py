@@ -20,6 +20,7 @@ import yaml
 sys.path.append("../yoru")
 
 from yoru.libs.gui_error import GuiErrorMixin
+from yoru.libs.user_paths import log_exception
 
 
 class ConfigCreatorGUI(GuiErrorMixin):
@@ -334,6 +335,9 @@ class ConfigCreatorGUI(GuiErrorMixin):
                 dpg.set_value("cfg_trigger_class", class_names[0])
             dpg.set_value("cfg_class_loading_state", f" {len(class_names)} classes loaded")
         except Exception as e:
+            # Worker thread: avoid _report_error (modal from a non-main thread);
+            # persist to ~/.yoru/logs/yoru.log and keep the GUI status string.
+            log_exception("Failed to load classes from model", e)
             dpg.set_value("cfg_class_loading_state", f" Error: {e}")
 
     def _select_export_dir(self):
