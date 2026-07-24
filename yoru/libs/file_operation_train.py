@@ -9,6 +9,8 @@ from multiprocessing import Manager, Process
 
 import dearpygui.dearpygui as dpg
 
+from yoru.libs.user_paths import log_exception
+
 
 class file_move_random:
     def __init__(self, m_dict={}):
@@ -73,7 +75,8 @@ class file_move_random:
             try:
                 shutil.copy(source_file_label, destination_dir_label)
                 shutil.copy(source_file_image, destination_dir_image)
-            except FileNotFoundError:
+            except FileNotFoundError as e:
+                log_exception(f"Train-split copy failed for {i}", e)
                 print(f"Don't find {i} files")
 
         for i in self.move_files_dict["val"]:
@@ -84,7 +87,8 @@ class file_move_random:
             try:
                 shutil.copy(source_file_label, destination_dir_label)
                 shutil.copy(source_file_image, destination_dir_image)
-            except FileNotFoundError:
+            except FileNotFoundError as e:
+                log_exception(f"Val-split copy failed for {i}", e)
                 print(f"Don't find {i} files")
         print("complete")
 

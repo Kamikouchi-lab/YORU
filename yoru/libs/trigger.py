@@ -10,6 +10,7 @@ import serial.tools.list_ports
 sys.path.append("../yoru")
 
 import yoru.libs.arduino as ard
+from yoru.libs.user_paths import log_exception
 
 
 class yolo_trigger:
@@ -38,7 +39,9 @@ class yolo_trigger:
             #     time.sleep(1)
             # continue
             except Exception as e:  # Print a specific error message
+                log_exception("Trigger setup failed", e)
                 print(f"Error: {e}")
+                time.sleep(1)  # back off to avoid tight-loop log spam
                 continue
 
             self.process_triggers()
@@ -50,7 +53,8 @@ class yolo_trigger:
                 # print(self.m_dict["yolo_results"])
 
                 # trigger processing
-            except serial.serialutil.SerialException:
+            except serial.serialutil.SerialException as e:
+                log_exception("Arduino trigger serial failure", e)
                 print("Trigger failure ....")
                 time.sleep(1)
                 break
@@ -75,6 +79,7 @@ class trigger_python:
             try:
                 self.myArduino = ard.dio(comport=self.com, doCh_IDs=[self.pin])
             except PermissionError as e:
+                log_exception(f"Could not open Arduino port '{self.com}'", e)
                 print(f"Error: could not open port '{self.com}': {e}")
                 if self.myArduino:
                     self.myArduino.close()        # close method of ard.dio
