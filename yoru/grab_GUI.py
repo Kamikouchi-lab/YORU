@@ -274,6 +274,18 @@ class grab_gui(GuiErrorMixin):
             dpg.enable_item("streamingChkBox")
             dpg.enable_item("frame_bar")
         except Exception as e:
+            # Roll back to a safe state so the streaming loop and frame buttons
+            # do not later operate on a broken capture (cv2.resize(None) crash).
+            if getattr(self, "vid", None) is not None:
+                self.vid.release()
+            self.vid = None
+            self.frame = None
+            self.status = False
+            if dpg.does_item_exist("streamingChkBox"):
+                dpg.set_value("streamingChkBox", False)
+                dpg.disable_item("streamingChkBox")
+            if dpg.does_item_exist("frame_bar"):
+                dpg.disable_item("frame_bar")
             self._report_error("Failed to open video file", e)
 
     # Shortcut key settings
@@ -295,9 +307,13 @@ class grab_gui(GuiErrorMixin):
         self.grab_dir = self.fd_tk.grab_dir_open()
 
     def slide_bar_cb(self):
+        if getattr(self, "vid", None) is None:
+            return
         self.current_frame_num = dpg.get_value("frame_bar")
         self.vid.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_num)
         self.status, self.frame = self.vid.read()
+        if not self.status or self.frame is None:
+            return
         self.process_frame()
 
         dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
