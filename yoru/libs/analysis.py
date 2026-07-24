@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
+import logging
 import os
 import time
 import tkinter as tk
@@ -5,13 +9,15 @@ from tkinter import filedialog
 
 import cv2
 import dearpygui.dearpygui as dpg
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
 from munkres import Munkres
 
-from yoru.libs.yolo_wrapper import load_yolo_model
+from yoru.libs.drawing import get_colormap
+from yoru.libs.plugins import get_detector
+
+logger = logging.getLogger(__name__)
 
 
 class yolo_analysis:
@@ -20,7 +26,7 @@ class yolo_analysis:
         self.yolo_model_path = self.m_dict["model_path"]
         self.mov_path_list = self.m_dict["input_path"]
         self.out_path = self.m_dict["output_path"]
-        print("init")
+        logger.debug("yolo_analysis initialized")
 
     def cal_id(self, pre_mat, cur_mat):
         pre_mat_calculate = pre_mat.copy()
@@ -57,22 +63,11 @@ class yolo_analysis:
 
         return ret_match_mat
 
-    def get_colormap(self, label_names, colormap_name):
-        colormap = {}
-        cmap = plt.get_cmap(colormap_name)
-        label_ids = list(range(len(label_names)))
-        for i in range(len(label_ids)):
-            rgb = [int(d) for d in np.array(cmap(float(i) / len(label_ids))) * 255][:3]
-            colormap[label_ids[i]] = tuple(rgb)
-
-        return colormap
-
     def drawing(self, result, img):
         for res_frame_no, *res_box, res_x_center, res_y_center, res_conf, res_cls , res_class_name in result:
         
             # print(results)
             label = f"{res_class_name} {res_conf:.2f}"
-            # label = f"{name} {conf:.2f}
 
             cv2.rectangle(
                 img,
@@ -93,18 +88,12 @@ class yolo_analysis:
                 thickness=5,
                 lineType=cv2.LINE_4,
             )
-        # print(label)
-        # self.m_dict["yolo_detection_farme"] = img
-        # cv2.imshow('prj_view2', img)
         return img
 
     def tracking_drawing(self, result, img):
-        for res_frame_no, *res_box, res_x_center, res_y_center, res_conf, res_cls , res_class_name, tracking_id in result:
-        
-            # print(results)
+        for res_frame_no, *res_box, res_x_center, res_y_center, res_conf, res_cls, res_class_name, tracking_id in result:
             label = f"{res_class_name} {res_conf:.2f}"
             label += f" id:{tracking_id}"
-            # label = f"{name} {conf:.2f}
 
             cv2.rectangle(
                 img,
@@ -125,9 +114,6 @@ class yolo_analysis:
                 thickness=5,
                 lineType=cv2.LINE_4,
             )
-        # print(label)
-        # self.m_dict["yolo_detection_farme"] = img
-        # cv2.imshow('prj_view2', img)
         return img
 
     def analyze(self):
@@ -136,12 +122,12 @@ class yolo_analysis:
 
         dpg.set_value("analy_time", "Estimated remaining time: calculating...")
         dpg.set_value("no_mov", "Leaving movies: calculating...")
-        yolo_model = load_yolo_model(self.yolo_model_path)
+        detector = get_detector("auto", self.yolo_model_path)
 
         # クラス名の取得
-        self.class_names = yolo_model.names
+        self.class_names = detector.names
 
-        self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
+        self.colormap = get_colormap(self.class_names, "gist_rainbow")
 
         movie_count = len(self.mov_path_list)
         self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
@@ -151,6 +137,7 @@ class yolo_analysis:
             df_results = pd.DataFrame()
             result_list = []
             video = cv2.VideoCapture(self.mov_path)
+            out = None
             frame_count = 0
 
             # トラッキング用
@@ -165,195 +152,173 @@ class yolo_analysis:
             # 指定の出力ディレクトリに新しいファイル名を結合
             file_path = os.path.join(self.out_path, file_name_without_ext + ".csv")
 
-            # 出力動画の設定
-            if self.m_dict["create_video"]:
-                # 指定の出力ディレクトリに新しいファイル名を結合
-                out_movie_path = os.path.join(
-                    self.out_path, file_name_without_ext + "_render_" + ".mp4"
-                )
-                out = cv2.VideoWriter(
-                    out_movie_path,
-                    cv2.VideoWriter_fourcc(*"mp4v"),
-                    video.get(cv2.CAP_PROP_FPS),
-                    (
-                        int(video.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                        int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                    ),
-                )
-
-            # ビデオのフレーム数を取得
-            total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-            process_times = []
-
-            result_list = []
-            pre_ids = []
-            dpg.set_value("movie_progress_bar", 0.0)
-            dpg.configure_item("movie_progress_bar", overlay="0%")
-
-            while video.isOpened():
-                ret, frame = video.read()
-                if not ret:
-                    self.m_dict["estimate_time"] = (
-                        f"Estimated remaining time: Processing"
+            try:
+                # 出力動画の設定
+                if self.m_dict["create_video"]:
+                    out_movie_path = os.path.join(
+                        self.out_path, file_name_without_ext + "_render_" + ".mp4"
                     )
-                    dpg.set_value("analy_time", self.m_dict["estimate_time"])
-                    break
+                    out = cv2.VideoWriter(
+                        out_movie_path,
+                        cv2.VideoWriter_fourcc(*"mp4v"),
+                        video.get(cv2.CAP_PROP_FPS),
+                        (
+                            int(video.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                            int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                        ),
+                    )
 
-                start_time = time.time()  # 処理開始時間
+                # ビデオのフレーム数を取得
+                total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+                process_times = []
 
-                if self.m_dict["v_flip"]:
-                    frame = cv2.flip(frame, 0)
+                result_list = []
+                pre_ids = []
+                dpg.set_value("movie_progress_bar", 0.0)
+                dpg.configure_item("movie_progress_bar", overlay="0%")
 
-                if self.m_dict["h_flip"]:
-                    frame = cv2.flip(frame, 1)
-
-                yolo_result = yolo_model(frame)
-
-                # yolo_result.render()  # render()は検出結果を描画します
-                # result_frame = yolo_result.ims[0]
-                # フレームを出力動画に書き込む
-
-                cur_center_pos = []
-                result = []
-                result_excluded = []  # トラッキング対象外クラスの検出結果
-                exclude_classes = list(self.m_dict.get("tracking_exclude_classes", []))
-                for *box, conf, cls in yolo_result.xyxy[0]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
-                    if conf.item() <  self.m_dict["threshold"]:
-                        break
-                    x_center = (box[0].item() + box[2].item()) / 2
-                    y_center = (box[1].item() + box[3].item()) / 2
-                    class_name = self.class_names[int(cls.item())]
-
-                    entry = [
-                        frame_count,
-                        box[0].item(),
-                        box[1].item(),
-                        box[2].item(),
-                        box[3].item(),
-                        x_center,
-                        y_center,
-                        conf.item(),
-                        cls.item(),
-                        class_name,
-                    ]
-
-                    # トラッキングON かつ 除外クラスの場合は別リストへ
-                    if self.m_dict["tracking_state"] and int(cls.item()) in exclude_classes:
-                        result_excluded.append(entry)
-                    else:
-                        result.append(entry)
-                        cur_center_pos.append((x_center, y_center))
-
-                if self.m_dict["tracking_state"]:
-                    # トラッキングの実装
-                    id_matrix = self.cal_id(pre_center_pos, cur_center_pos)
-                    cur_ids = []
-                    # if id_matrix is None:
-                    # print(cur_center_pos)
-                    if id_matrix is not None:
-                        # id_matrixを今のフレームで並び替える
-                        id_matrix.sort(
-                            key=lambda x: x[1] if x[1] >= 0 else float("inf")
+                while video.isOpened():
+                    ret, frame = video.read()
+                    if not ret:
+                        self.m_dict["estimate_time"] = (
+                            f"Estimated remaining time: Processing"
                         )
-                        for ids in id_matrix:
-                            if ids[0] == -1 or ids[1] == -1:
-                                cur_ids.append(global_counter)
-                                global_counter += 1
-                                # print(str(global_counter))
-                            else:
-                                if 0 <= ids[0] < len(pre_ids):
-                                    cur_ids.append(pre_ids[ids[0]])
-                                else:
-                                    # 範囲外の場合の処理（例：新しいIDを割り当てる）
+                        dpg.set_value("analy_time", self.m_dict["estimate_time"])
+                        break
+
+                    start_time = time.time()
+
+                    if self.m_dict["v_flip"]:
+                        frame = cv2.flip(frame, 0)
+
+                    if self.m_dict["h_flip"]:
+                        frame = cv2.flip(frame, 1)
+
+                    detections = detector.detect(frame)
+
+                    cur_center_pos = []
+                    result = []
+                    result_excluded = []
+                    exclude_classes = list(self.m_dict.get("tracking_exclude_classes", []))
+                    for d in detections:
+                        if d["conf"] < self.m_dict["threshold"]:
+                            continue
+                        x_center = (d["x1"] + d["x2"]) / 2
+                        y_center = (d["y1"] + d["y2"]) / 2
+
+                        entry = [
+                            frame_count,
+                            d["x1"],
+                            d["y1"],
+                            d["x2"],
+                            d["y2"],
+                            x_center,
+                            y_center,
+                            d["conf"],
+                            d["class_id"],
+                            d["class_name"],
+                        ]
+
+                        if self.m_dict["tracking_state"] and d["class_id"] in exclude_classes:
+                            result_excluded.append(entry)
+                        else:
+                            result.append(entry)
+                            cur_center_pos.append((x_center, y_center))
+
+                    if self.m_dict["tracking_state"]:
+                        id_matrix = self.cal_id(pre_center_pos, cur_center_pos)
+                        cur_ids = []
+                        if id_matrix is not None:
+                            id_matrix.sort(
+                                key=lambda x: x[1] if x[1] >= 0 else float("inf")
+                            )
+                            for ids in id_matrix:
+                                if ids[0] == -1 or ids[1] == -1:
                                     cur_ids.append(global_counter)
                                     global_counter += 1
-                                    # print("b")
-                        # リストの結合
-                        result = [x + [y] for x, y in zip(result, cur_ids)]
-                        # print(result)
+                                else:
+                                    if 0 <= ids[0] < len(pre_ids):
+                                        cur_ids.append(pre_ids[ids[0]])
+                                    else:
+                                        cur_ids.append(global_counter)
+                                        global_counter += 1
+                            result = [x + [y] for x, y in zip(result, cur_ids)]
 
-                    pre_ids = cur_ids
-                    pre_center_pos = cur_center_pos
+                        pre_ids = cur_ids
+                        pre_center_pos = cur_center_pos
 
-                    # 除外クラスはtracking_id=-1として追加
-                    result = result + [x + [-1] for x in result_excluded]
-                
-                
-                if self.m_dict["create_video"]:
-                    if self.m_dict["tracking_state"]:
-                        frame = self.tracking_drawing(result, frame)
-                    else:
-                        frame = self.drawing(result, frame)
-                    out.write(frame)
+                        # 除外クラスはtracking_id=-1として追加
+                        result = result + [x + [-1] for x in result_excluded]
 
-                frame_count += 1
-                result_list = result_list + result
+                    if self.m_dict["create_video"]:
+                        if self.m_dict["tracking_state"]:
+                            frame = self.tracking_drawing(result, frame)
+                        else:
+                            frame = self.drawing(result, frame)
+                        out.write(frame)
 
-                progress = frame_count / total_frames if total_frames > 0 else 0.0
-                dpg.set_value("movie_progress_bar", progress)
-                dpg.configure_item("movie_progress_bar", overlay=f"{int(progress * 100)}%")
+                    frame_count += 1
+                    result_list = result_list + result
 
-                end_time = time.time()  # 処理終了時間
-                process_time = end_time - start_time  # このフレームの処理時間
-                process_times.append(process_time)  # 処理時間をリストに保存
+                    progress = frame_count / total_frames if total_frames > 0 else 0.0
+                    dpg.set_value("movie_progress_bar", progress)
+                    dpg.configure_item("movie_progress_bar", overlay=f"{int(progress * 100)}%")
 
-                # 平均フレーム処理時間
-                avg_process_time = sum(process_times) / len(process_times)
+                    end_time = time.time()
+                    process_time = end_time - start_time
+                    process_times.append(process_time)
 
-                # 残りのフレーム数
-                remaining_frames = total_frames - frame_count
+                    avg_process_time = sum(process_times) / len(process_times)
+                    remaining_frames = total_frames - frame_count
+                    remaining_time_estimate = avg_process_time * remaining_frames
+                    self.m_dict["estimate_time"] = (
+                        f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
+                    )
+                    dpg.set_value("analy_time", self.m_dict["estimate_time"])
 
-                # 残りの処理時間の見積もり
-                remaining_time_estimate = avg_process_time * remaining_frames
-                self.m_dict["estimate_time"] = (
-                    f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
-                )
-                dpg.set_value("analy_time", self.m_dict["estimate_time"])
+                # リストをデータフレームに変換
+                if self.m_dict["tracking_state"]:
+                    df_results = pd.DataFrame(
+                        result_list,
+                        columns=[
+                            "frame",
+                            "x1",
+                            "y1",
+                            "x2",
+                            "y2",
+                            "x_center",
+                            "y_center",
+                            "confidence",
+                            "class",
+                            "class_name",
+                            "tracking_id",
+                        ],
+                    )
+                else:
+                    df_results = pd.DataFrame(
+                        result_list,
+                        columns=[
+                            "frame",
+                            "x1",
+                            "y1",
+                            "x2",
+                            "y2",
+                            "x_center",
+                            "y_center",
+                            "confidence",
+                            "class",
+                            "class_name",
+                        ],
+                    )
+                df_results.to_csv(file_path, index=False)
+            finally:
+                video.release()
+                if out is not None:
+                    out.release()
 
-            # リストをデータフレームに変換
-            # print(result_list)
-            if self.m_dict["tracking_state"]:
-                df_results = pd.DataFrame(
-                    result_list,
-                    columns=[
-                        "frame",
-                        "x1",
-                        "y1",
-                        "x2",
-                        "y2",
-                        "x_center",
-                        "y_center",
-                        "confidence",
-                        "class",
-                        "class_name",
-                        "tracking_id",
-                    ],
-                )
-            else:
-                df_results = pd.DataFrame(
-                    result_list,
-                    columns=[
-                        "frame",
-                        "x1",
-                        "y1",
-                        "x2",
-                        "y2",
-                        "x_center",
-                        "y_center",
-                        "confidence",
-                        "class",
-                        "class_name",
-                    ],
-                )
-            # csvとして出力
-            df_results.to_csv(file_path, index=False)
-
-            video.release()
-            if self.m_dict["create_video"]:
-                out.release()
             movie_count = movie_count - 1
             self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
-            dpg.set_value("no_mov", self.m_dict["no_movies"]),
+            dpg.set_value("no_mov", self.m_dict["no_movies"])
 
         self.m_dict["estimate_time"] = "Estimated remaining time: none"
         self.m_dict["no_movies"] = "Leaving movies: none"
@@ -366,20 +331,18 @@ class yolo_analysis:
 
     def create_video(self):
         dpg.set_value("cr_analy_time", "Estimated remaining time: calculating...")
-        yolo_model = load_yolo_model(self.yolo_model_path)
+        detector = get_detector("auto", self.yolo_model_path)
+        self.class_names = detector.names
+        self.colormap = get_colormap(self.class_names, "gist_rainbow")
 
-        # ファイル名の取得（拡張子なし）
         base_name = os.path.basename(self.mov_path)
         file_name_without_ext = os.path.splitext(base_name)[0]
 
-        # 指定の出力ディレクトリに新しいファイル名を結合
         out_movie_path = os.path.join(
             self.out_path, file_name_without_ext + "_render_" + ".mp4"
         )
 
-        # 入力動画の読み込み
         cap = cv2.VideoCapture(self.mov_path)
-        # 出力動画の設定
         out = cv2.VideoWriter(
             out_movie_path,
             cv2.VideoWriter_fourcc(*"mp4v"),
@@ -390,56 +353,60 @@ class yolo_analysis:
             ),
         )
 
-        # ビデオのフレーム数を取得
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         process_times = []
         frame_count = 0
 
-        while cap.isOpened():
-            ret, frame = cap.read()
+        try:
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    self.m_dict["cr_estimate_time"] = (
+                        f"Estimated remaining time: Processing"
+                    )
+                    dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
+                    break
 
-            start_time = time.time()  # 処理開始時間
-            frame = cv2.flip(frame, 0)
+                start_time = time.time()
 
-            if not ret:
+                if self.m_dict["v_flip"]:
+                    frame = cv2.flip(frame, 0)
+
+                if self.m_dict["h_flip"]:
+                    frame = cv2.flip(frame, 1)
+
+                detections = detector.detect(frame)
+
+                result = []
+                for d in detections:
+                    x_center = (d["x1"] + d["x2"]) / 2
+                    y_center = (d["y1"] + d["y2"]) / 2
+                    result.append([
+                        frame_count,
+                        d["x1"], d["y1"], d["x2"], d["y2"],
+                        x_center, y_center,
+                        d["conf"], d["class_id"], d["class_name"],
+                    ])
+                result_frame = self.drawing(result, frame)
+
+                out.write(result_frame)
+                frame_count += 1
+
+                end_time = time.time()
+                process_time = end_time - start_time
+                process_times.append(process_time)
+
+                avg_process_time = sum(process_times) / len(process_times)
+                remaining_frames = total_frames - frame_count
+                remaining_time_estimate = avg_process_time * remaining_frames
                 self.m_dict["cr_estimate_time"] = (
-                    f"Estimated remaining time: Processing"
+                    f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
                 )
                 dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
-                break
+        finally:
+            cap.release()
+            out.release()
 
-            # オブジェクト検出
-            result = yolo_model(frame)
-
-            # 検出結果の描画
-            result.render()  # render()は検出結果を描画します
-
-            result_frame = result.ims[0]
-
-            # フレームを出力動画に書き込む
-            out.write(result_frame)
-
-            frame_count += 1
-
-            end_time = time.time()  # 処理終了時間
-            process_time = end_time - start_time  # このフレームの処理時間
-            process_times.append(process_time)  # 処理時間をリストに保存
-
-            # 平均フレーム処理時間
-            avg_process_time = sum(process_times) / len(process_times)
-
-            # 残りのフレーム数
-            remaining_frames = total_frames - frame_count
-
-            # 残りの処理時間の見積もり
-            remaining_time_estimate = avg_process_time * remaining_frames
-            self.m_dict["cr_estimate_time"] = (
-                f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
-            )
-            dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
-
-        cap.release()
-        out.release()
         self.m_dict["cr_estimate_time"] = "Estimated remaining time: none"
         dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
 
@@ -450,7 +417,7 @@ class yolo_analysis_image:
         self.yolo_model_path = self.m_dict["model_path"]
         self.img_path_list = self.m_dict["input_path_image"]
         self.out_path = self.m_dict["output_path"]
-        print("init")
+        logger.debug("yolo_analysis_image initialized")
 
     def drawing(self, img, box, conf, cls):
         # print(results)
@@ -476,20 +443,7 @@ class yolo_analysis_image:
             thickness=5,
             lineType=cv2.LINE_4,
         )
-        # print(label)
-        # self.m_dict["yolo_detection_farme"] = img
-        # cv2.imshow('prj_view2', img)
         return img
-
-    def get_colormap(self, label_names, colormap_name):
-        colormap = {}
-        cmap = plt.get_cmap(colormap_name)
-        label_ids = list(range(len(label_names)))
-        for i in range(len(label_ids)):
-            rgb = [int(d) for d in np.array(cmap(float(i) / len(label_ids))) * 255][:3]
-            colormap[label_ids[i]] = tuple(rgb)
-
-        return colormap
 
     def analyze_image(self):
         dpg.disable_item("analyze_img_btn")
@@ -498,12 +452,12 @@ class yolo_analysis_image:
         dpg.set_value("image_progress_bar", 0.0)
         dpg.configure_item("image_progress_bar", overlay="0%")
 
-        yolo_model = load_yolo_model(self.yolo_model_path)
+        detector = get_detector("auto", self.yolo_model_path)
 
         # クラス名の取得
-        self.class_names = yolo_model.names
+        self.class_names = detector.names
 
-        self.colormap = self.get_colormap(self.class_names, "gist_rainbow")
+        self.colormap = get_colormap(self.class_names, "gist_rainbow")
 
         image_count = len(self.img_path_list)
 
@@ -517,38 +471,44 @@ class yolo_analysis_image:
             file_name_without_ext = os.path.splitext(base_name)[0]
 
             frame = cv2.imread(self.img_path)
+            if frame is None:
+                logger.warning("Failed to read image: %s", self.img_path)
+                continue
             if self.m_dict["v_flip"]:
                 frame = cv2.flip(frame, 0)
 
             if self.m_dict["h_flip"]:
                 frame = cv2.flip(frame, 1)
 
-            yolo_result = yolo_model(frame)
+            detections = detector.detect(frame)
 
-            for *box, conf, cls in yolo_result.xyxy[
-                0
-            ]:  # xyxy形式（左上のx、左上のy、右下のx、右下のy、確信度、クラス）のリスト
-                x_center = (box[0].item() + box[2].item()) / 2
-                y_center = (box[1].item() + box[3].item()) / 2
-                class_name = self.class_names[int(cls.item())]
+            result_frame = frame
+            for d in detections:
+                x_center = (d["x1"] + d["x2"]) / 2
+                y_center = (d["y1"] + d["y2"]) / 2
 
                 # 結果をリストに保存
                 result_list.append(
                     [
                         file_name_without_ext,
-                        box[0].item(),
-                        box[1].item(),
-                        box[2].item(),
-                        box[3].item(),
+                        d["x1"],
+                        d["y1"],
+                        d["x2"],
+                        d["y2"],
                         x_center,
                         y_center,
-                        conf.item(),
-                        cls.item(),
-                        class_name,
+                        d["conf"],
+                        d["class_id"],
+                        d["class_name"],
                     ]
                 )
 
-                result_frame = self.drawing(frame, box, conf, cls)
+                result_frame = self.drawing(
+                    frame,
+                    [d["x1"], d["y1"], d["x2"], d["y2"]],
+                    d["conf"],
+                    d["class_id"],
+                )
 
             # フレームを出力動画に書き込む
             result_file_path = os.path.join(

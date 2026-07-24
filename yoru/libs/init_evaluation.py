@@ -1,8 +1,5 @@
-import os
-
-import numpy as np
-import yaml
-
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
 
 class init_evaluater:
     def __init__(self, m_dict={}):
@@ -16,8 +13,3 @@ class init_evaluater:
 
     def __del__(self):
         print("== Initialization finished ==.")
-
-
-if __name__ == "__main__":
-    mdict0 = init_movie_gui()
-    print(mdict0.m_dict)

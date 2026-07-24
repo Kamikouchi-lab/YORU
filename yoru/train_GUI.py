@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import os
 import re
 import subprocess
@@ -9,35 +12,14 @@ from multiprocessing import Manager, Process
 import dearpygui.dearpygui as dpg
 import yaml
 
-# if __name__ == "__main__":
-# Run directly
-
-
-sys.path.append("../yoru")
-
-# try:
 from yoru.libs.create_yaml_train import create_project
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.init_train import init_train
 
-# import yoru.app as YORU
-
-# except(ModuleNotFoundError):
-#     from libs.create_yaml_train import create_project
-#     from libs.file_operation_train import file_move_random, file_dialog_tk
-#     from libs.init_train import init_train, loadingParam
-#     from grab_GUI import main as grab_main
-#     import app as YORU
-# else:
-#     # from .libs import threshold
-#     from .libs.create_yaml_train import create_project
-#     from yoru.libs.file_operation_train import file_move_random, file_dialog_tk
-#     from yoru.libs.init_train import init_train, loadingParam
-
 
 class yoru_train:
-    def __init__(self, m_dict={}):
-        self.m_dict = m_dict
+    def __init__(self, m_dict=None):
+        self.m_dict = m_dict if m_dict is not None else {}
         self.fd_tk = file_dialog_tk(self.m_dict)
 
     def startDPG(self):
@@ -47,7 +29,7 @@ class yoru_train:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Training", width=960, height=870)
+        dpg.create_viewport(title="YORU - Training", width=1000, height=800)
         imager_window = dpg.generate_uuid()
 
         # ── Global theme ──────────────────────────────────────────────────────
@@ -558,7 +540,7 @@ class yoru_train:
     def grab_bt(self):
         # print("quit_pushed")
         # self.m_dict["quit"] = True
-        subprocess.call(["python", "./yoru/grab_GUI.py"])
+        subprocess.Popen([sys.executable, "-m", "yoru.grab_GUI"])
         self._set_step_state("step2_state", "Complete!!")
         # dpg.destroy_context()  # <-- moved from __del__
 
@@ -703,152 +685,41 @@ class yoru_train:
         self.m_dict["train_epoch"]   = self.m_dict.get("train_total_epoch", total_epochs)
         self.m_dict["training_done"] = True
 
-    def run_yolov5(self):
-        # train
-        cmd = [
-            "python",
-            "./yoru/libs/yolov5/train.py",
-            "--imgsz",
-            str(self.m_dict["img"]),
-            "--batch-size",
-            str(self.m_dict["batch"]),
-            "--epochs",
-            str(self.m_dict["epoch"]),
-            "--data",
-            str(self.m_dict["yaml_path"]),
-            "--weights",
-            str(self.m_dict["weight"]),
-            "--project",
-            str(self.m_dict["project_dir"]),
-        ]
-
-        self.patience = False
-
-        if self.patience:
-            cmd.extend(["--patience", str(0)])
-
-        cr_project = create_project(self.m_dict)
-        cr_project.add_training_info()
-        print("added the information in yaml file")
-
-        try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-            )
-            print("start training")
-            total = int(self.m_dict.get("epoch", 300))
-            t = threading.Thread(target=self._monitor_training, args=(proc, total), daemon=True)
-            t.start()
-        except Exception as e:
-            print("error: ", e)
-            self._set_step_state("step6_state", "Error")
-
-    def run_yolo_ultralytics(self):
-        """Launch YOLOv8 / YOLO11 training via the ultralytics package."""
-        cmd = [
-            "python",
-            "./yoru/libs/train_ultralytics.py",
-            "--weights",
-            str(self.m_dict["weight"]),
-            "--data",
-            str(self.m_dict["yaml_path"]),
-            "--epochs",
-            str(self.m_dict["epoch"]),
-            "--imgsz",
-            str(self.m_dict["img"]),
-            "--batch",
-            str(self.m_dict["batch"]),
-            "--project",
-            str(self.m_dict["project_dir"]),
-        ]
-
-        cr_project = create_project(self.m_dict)
-        cr_project.add_training_info()
-        print("added the information in yaml file")
-
-        try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-            )
-            print("start training (ultralytics)")
-            total = int(self.m_dict.get("epoch", 300))
-            t = threading.Thread(target=self._monitor_training, args=(proc, total), daemon=True)
-            t.start()
-        except Exception as e:
-            print("error: ", e)
-            self._set_step_state("step6_state", "Error")
-
-    def run_torchvision(self):
-        """Launch Faster R-CNN / Mask R-CNN / SSD training via train_torchvision.py."""
-        family_to_model = {
-            "Faster R-CNN": "fasterrcnn",
-            "Mask R-CNN":   "maskrcnn",
-            "SSD":          "ssd",
-        }
-        model_type = family_to_model[self.m_dict.get("model_family", "Faster R-CNN")]
-
-        cmd = [
-            "python",
-            "./yoru/libs/train_torchvision.py",
-            "--model",   model_type,
-            "--data",    str(self.m_dict["yaml_path"]),
-            "--epochs",  str(self.m_dict["epoch"]),
-            "--batch",   str(self.m_dict["batch"]),
-            "--project", str(self.m_dict["project_dir"]),
-        ]
-
-        cr_project = create_project(self.m_dict)
-        cr_project.add_training_info()
-        print("added the information in yaml file")
-
-        try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-            )
-            print(f"start training ({model_type})")
-            total = int(self.m_dict.get("epoch", 50))
-            t = threading.Thread(target=self._monitor_training, args=(proc, total), daemon=True)
-            t.start()
-        except Exception as e:
-            print("error: ", e)
-            self._set_step_state("step6_state", "Error")
-
     def run_yolo(self):
-        """Dispatch training to the correct backend based on the selected model family."""
-        family = self.m_dict.get("model_family", "YOLO")
+        """Dispatch training to the correct backend plugin."""
+        from yoru.libs.plugins import detect_trainer_backend, get_trainer
 
-        if family in ("Faster R-CNN", "Mask R-CNN", "SSD"):
-            self.run_torchvision()
-        elif family == "RT-DETR":
-            self.run_yolo_ultralytics()
-        else:
-            weight = self.m_dict.get("weight", "").lower()
-            if "yolov8" in weight or "yolo8" in weight or \
-                    "yolo11" in weight or "yolov11" in weight:
-                self.run_yolo_ultralytics()
-            else:
-                self.run_yolov5()
+        backend = detect_trainer_backend(self.m_dict)
+        trainer = get_trainer(backend)
+
+        config = {
+            "img_size": int(self.m_dict["img"]),
+            "batch_size": int(self.m_dict["batch"]),
+            "epochs": int(self.m_dict["epoch"]),
+            "data_yaml": str(self.m_dict["yaml_path"]),
+            "weights": str(self.m_dict["weight"]),
+            "project_dir": str(self.m_dict["project_dir"]),
+            "model_family": self.m_dict.get("model_family", "YOLO"),
+        }
+
+        cr_project = create_project(self.m_dict)
+        cr_project.add_training_info()
+        print("added the information in yaml file")
+
+        try:
+            proc = trainer.train(config)
+            print(f"start training ({backend})")
+            total = int(self.m_dict.get("epoch", 300))
+            t = threading.Thread(
+                target=self._monitor_training, args=(proc, total), daemon=True,
+            )
+            t.start()
+        except Exception as e:
+            print("error: ", e)
+            self._set_step_state("step6_state", "Error")
 
     def __del__(self):
-        print("=== GUI window quit ===")
+        pass
 
 
 def main():

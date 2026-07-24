@@ -1,40 +1,41 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import glob
 import itertools
 import json
+import logging
 import os
-import time
-import tkinter as tk
 from collections import Counter
-from tkinter import filedialog
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import torch
 from tqdm import tqdm
 
-from yoru.libs.yolo_wrapper import load_yolo_model
+from yoru.libs.plugins import get_detector
+
+logger = logging.getLogger(__name__)
 
 
-class yolo_analysis_image:
+class EvaluationImageAnalyzer:
     def __init__(self, m_dict):
         self.m_dict = m_dict
         self.yolo_model_path = self.m_dict["model_path"]
         self.data_path = self.m_dict["data_dir"]
-        print(self.m_dict)
-        print("init")
+        logger.debug("EvaluationImageAnalyzer initialized")
 
     def analyze_image(self):
-        yolo_model = load_yolo_model(self.yolo_model_path)
+        detector = get_detector("auto", self.yolo_model_path)
 
         # クラス名の取得
-        class_names = yolo_model.names
-        print(class_names)
+        class_names = detector.names
+        logger.debug("Class names: %s", class_names)
 
         search_path = os.path.join(self.data_path, "*.png")
-        print(search_path)
+        logger.debug("Search path: %s", search_path)
         img_path_list = glob.glob(search_path)
         image_count = len(img_path_list)
 
@@ -45,34 +46,36 @@ class yolo_analysis_image:
             frame = cv2.imread(img_path)
             height, width, channels = frame.shape
 
-            yolo_result = yolo_model(frame)
+            detections = detector.detect(frame)
 
             # 出力パスの作成
             result_txt_path = os.path.join(
                 self.data_path, file_name_without_ext + "_yolo.txt"
             )
             result = []
-            for *box, conf, cls in yolo_result.xywhn[0]:
-                # xyxy形式（中心x, 中心y, 幅, 高さ）のリスト
-                class_name = class_names[int(cls.item())]
+            for d in detections:
+                # xywhn形式（中心x, 中心y, 幅, 高さ）に変換（正規化）
+                x_center = (d["x1"] + d["x2"]) / 2 / width
+                y_center = (d["y1"] + d["y2"]) / 2 / height
+                w = (d["x2"] - d["x1"]) / width
+                h = (d["y2"] - d["y1"]) / height
                 # 結果をリストに保存
                 result.append(
                     [
-                        int(cls.item()),
-                        conf.item(),
-                        box[0].item(),
-                        box[1].item(),
-                        box[2].item(),
-                        box[3].item(),
+                        d["class_id"],
+                        d["conf"],
+                        x_center,
+                        y_center,
+                        w,
+                        h,
                     ]
                 )
 
-            # print(result)
             with open(result_txt_path, "w") as file:
                 for sublist in result:
                     file.write(" ".join(map(str, sublist)) + "\n")
 
-        print("Complete!")
+        logger.info("Evaluation image analysis complete!")
 
 
 class ModelValidation:
@@ -93,7 +96,8 @@ class ModelValidation:
         area_A = (x2_A - x1_A) * (y2_A - y1_A)
         area_B = (x2_B - x1_B) * (y2_B - y1_B)
 
-        iou = intersection / (area_A + area_B - intersection)
+        denominator = area_A + area_B - intersection
+        iou = intersection / denominator if denominator > 0 else 0.0
 
         return iou
 
@@ -127,10 +131,8 @@ class ModelValidation:
         pred_boxes = sorted(pred_boxes, key=lambda x: x[0], reverse=True)
 
         tp = np.zeros(len(pred_boxes))
-        # print(len(tp))
         fp = np.zeros(len(pred_boxes))
         matched = []
-        # a = 0
 
         for i, pred_box in enumerate(pred_boxes):
             max_iou = -np.inf
@@ -142,7 +144,6 @@ class ModelValidation:
                 gt_box_corner = self.convert_to_corners(float_gt_box)
                 pred_box_corner = self.convert_to_corners(float_pred_box)
                 current_iou = self.calculate_iou(pred_box_corner, gt_box_corner)
-                # print(gt_box_corner, pred_box_corner)
 
                 if current_iou > max_iou:
                     max_iou = current_iou
@@ -151,8 +152,6 @@ class ModelValidation:
             # IOUリストに追加
             if max_iou >= 0:
                 iou_list.append(max_iou)
-
-            # print(max_gt_idx)
 
             if max_iou >= iou_threshold:
                 if max_gt_idx not in matched:
@@ -164,8 +163,6 @@ class ModelValidation:
                 fp[i] = 1
         return tp, fp, iou_list
 
-        # print(tp)
-
     def calculate_precision_recall(self, tp, fp, box_num):
         tp_sum = np.sum(tp)
         fp_sum = np.sum(fp)
@@ -176,8 +173,6 @@ class ModelValidation:
             return recall, precision
         recall = [tp_sum / float(box_num)]
         precision = [tp_sum / (tp_sum + fp_sum)]
-        # print(recall, precision)
-
         return recall, precision
 
     def calculate_ap(self, recalls, precisions):
@@ -205,7 +200,7 @@ class ModelValidation:
 class Evaluator(ModelValidation):
     def __init__(self, m_dict):
         super().__init__(m_dict)
-        print("Starting....")
+        logger.info("Starting evaluation...")
 
     def evaluate(self, gt_boxes, pred_boxes, classes, model_base_name):
         iou_thresholds = np.arange(0.50, 1.00, 0.05)
@@ -282,7 +277,6 @@ class Evaluator(ModelValidation):
             ap_50[class_id] = class_aps[0]
             ap_75[class_id] = class_aps[5]
             mAP_50_95[class_id] = np.mean(class_aps)
-            # iou_results[classes[class_id]] = iou_per_class
             iou_results[class_id] = iou_per_class
 
         mAP_50 = np.mean(list(ap_50.values()))
@@ -323,10 +317,10 @@ class Evaluator(ModelValidation):
         return df
 
     def read_yolo_det_box_txt(self):
-        yolo_model = load_yolo_model(self.m_dict["model_path"])
+        detector = get_detector("auto", self.m_dict["model_path"])
 
         # クラス名の取得
-        class_names = yolo_model.names
+        class_names = detector.names
         return class_names
 
     def save_dict_to_txt(self, dic, filename):
@@ -335,7 +329,6 @@ class Evaluator(ModelValidation):
 
     def list_counter(self, list_of_lists):
         # Extract the first element of each sublist
-        # print(list_of_lists)
         flattened_list = list(itertools.chain.from_iterable(list_of_lists))
 
         first_elements = [sublist[0] for sublist in flattened_list]
@@ -346,15 +339,15 @@ class Evaluator(ModelValidation):
 
     def keySort(self, dicts, reverse=False):
         dicts = sorted(dicts.items(), reverse=reverse)
-        dicts = fruits = dict((x, y) for x, y in dicts)
+        dicts = dict((x, y) for x, y in dicts)
         return dicts
 
     def create_info_text(self, class_names, gt_boxs_no, pred_boxs_no):
         gt_boxs_no = self.keySort(gt_boxs_no)
         pred_boxs_no = self.keySort(pred_boxs_no)
 
-        print("Ground truth", gt_boxs_no)
-        print("Predicted", pred_boxs_no)
+        logger.info("Ground truth: %s", gt_boxs_no)
+        logger.info("Predicted: %s", pred_boxs_no)
         # Prepare the file content
         file_content = "Ground truth bounding box counts\n"
         for class_num, count in gt_boxs_no.items():
@@ -443,7 +436,7 @@ class Evaluator(ModelValidation):
 
         # クラス名のリストを取得
         class_names = self.read_yolo_det_box_txt()
-        print(class_names)
+        logger.debug("Class names: %s", class_names)
 
         # count bounding boxes
         gt_boxes_no = self.list_counter(gt_boxes)
@@ -469,13 +462,13 @@ class Evaluator(ModelValidation):
         results["Total YOLO predictions"] = total_predictions
         results["Total correct predictions"] = correct_predictions
 
-        print(results)
+        logger.info("Results: %s", results)
 
         result_directory = os.path.join(
             self.m_dict["result_dir"], model_base_name + ".txt"
         )
         self.save_dict_to_txt(results, result_directory)
-        print(result_directory)
+        logger.info("Saved results to: %s", result_directory)
 
         # iou listの出力
         iou_dataframe = self.dict_to_dataframe(iou_res, class_names)
@@ -491,7 +484,7 @@ class Evaluator(ModelValidation):
         self.drawing_iou_boxplot_graph(
             iou_dataframe, class_names, self.m_dict["result_dir"], model_base_name
         )
-        print("Complete!")
+        logger.info("Evaluation complete!")
 
     def drawing_graph(self, results, classes_dict, result_dir, model_base_name):
         result = results["AP@[.50:.05:.95]_per_class"]
@@ -522,9 +515,6 @@ class Evaluator(ModelValidation):
     def drawing_iou_boxplot_graph(
         self, dataframe, classes_dict, result_dir, model_base_name
     ):
-        # # クラス名を変換
-        # dataframe["class"] = dataframe["class"].map(classes_dict)
-
         # データのプロット
         sns.set()
         sns.set_style("whitegrid")

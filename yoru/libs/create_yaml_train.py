@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import datetime
 import os
 
@@ -43,8 +46,9 @@ class create_project:
         if os.path.exists(file_path):
             print(file_path)
             with open(file_path, "r") as yf:
-                exsisting_data = yaml.safe_load(yf)
-                if exsisting_data.get("add_class_info_date"):
+                existing_data = yaml.safe_load(yf)
+                if existing_data and existing_data.get("add_class_info_date"):
+                    print("Class info already exists, skipping")
                     return None
             with open(file_path, "a") as yf:
                 yaml.dump(
@@ -64,34 +68,28 @@ class create_project:
 
         if os.path.exists(file_path):
             with open(file_path, "r") as yf:
-                exsisting_data = yaml.safe_load(yf)
-                if exsisting_data.get("training_date"):
-                    exsisting_data["image_size"] = self.m_dict["img"]
-                    exsisting_data["batch-size"] = self.m_dict["batch"]
-                    exsisting_data["epochs"] = self.m_dict["epoch"]
-                    exsisting_data["data"] = self.m_dict["yaml_path"]
-                    exsisting_data["weights"] = self.m_dict["weight"]
-                    exsisting_data["project_dir"] = self.m_dict["project_dir"]
-                    exsisting_data["patience"] = False
-                    exsisting_data["training_date"] = datetime.date.today()
-                    # 変更した内容をYAMLファイルに書き込みます
-                    with open(file_path, "w") as yf:
-                        yaml.dump(exsisting_data, yf, default_flow_style=False)
-                        return None
+                existing_data = yaml.safe_load(yf) or {}
+
+            training_info = {
+                "image_size": self.m_dict["img"],
+                "batch-size": self.m_dict["batch"],
+                "epochs": self.m_dict["epoch"],
+                "data": self.m_dict["yaml_path"],
+                "weights": self.m_dict["weight"],
+                "project_dir": self.m_dict["project_dir"],
+                "patience": False,
+                "training_date": datetime.date.today(),
+            }
+
+            if existing_data.get("training_date"):
+                # Update existing training info
+                existing_data.update(training_info)
+                with open(file_path, "w") as yf:
+                    yaml.dump(existing_data, yf, default_flow_style=False)
+                return None
+
             with open(file_path, "a") as yf:
-                yaml.dump(
-                    {
-                        "image_size": self.m_dict["img"],
-                        "batch-size": self.m_dict["batch"],
-                        "epochs": self.m_dict["epoch"],
-                        "data": self.m_dict["yaml_path"],
-                        "weights": self.m_dict["weight"],
-                        "project_dir": self.m_dict["project_dir"],
-                        "patience": False,
-                        "training_date": datetime.date.today(),
-                    },
-                    yf,
-                )
+                yaml.dump(training_info, yf)
             print("add class info in yaml file")
         else:
             print("failed....")

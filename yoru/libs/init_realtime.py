@@ -1,18 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import datetime
+import os
 import re
-import sys
 import time
 
 import numpy as np
 import torch
 
-sys.path.append("../yoru")
 from yoru.libs.util import loadingParam
-
-# try:
-#     from yoru.libs.util import loadingParam
-# except ModuleNotFoundError:
-#     from libs.util import loadingParam
 
 
 class init_asovi:

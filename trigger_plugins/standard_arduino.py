@@ -4,7 +4,7 @@ import time
 sys.path.append("../yoru")
 
 
-import libs.arduino as ard
+import yoru.libs.arduino as ard
 import serial
 import serial.tools.list_ports
 

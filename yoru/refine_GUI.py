@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
+import os
 import subprocess
 import sys
 import time
@@ -8,13 +12,7 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 from pynput import keyboard
 
-sys.path.append("../yoru")
-
-# try:
 from yoru.libs.file_operation_grab import file_dialog_tk
-
-# except(ModuleNotFoundError):
-#     from libs.file_operation_grab import file_dialog_tk
 
 
 class grab_gui:
@@ -67,7 +65,7 @@ class grab_gui:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="ASoVi-GUI beta 0.5", width=960, height=900)
+        dpg.create_viewport(title="ASoVi-GUI beta 0.5", width=1000, height=800, max_width=1000, max_height=800)
 
         # GUI-settings
         with dpg.texture_registry(show=False):

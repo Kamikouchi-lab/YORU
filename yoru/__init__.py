@@ -1,7 +1,4 @@
-import sys
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
 
-# for path in sys.path:
-#     print(path)
 __version__ = "1.1.0"  # ←リリース時にここだけ更新
-
-sys.path.append("../yoru")

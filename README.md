@@ -89,17 +89,15 @@ Follow these steps to install YORU quickly:
     nvidia-smi
     ```
 ## Install via uv
-Although not all functionality has been tested, installation via uv can be performed using the project.toml file below.
-[project.toml](https://github.com/Kamikouchi-lab/YORU/blob/uv_install/pyproject.toml)
-
-copy and paste this file to your YORU folder and
+Installation via [uv](https://docs.astral.sh/uv/) can be performed using the `pyproject.toml` included in this repository:
 
 ```
 cd "Path/to/YORU"
-uv init .
 uv sync
-python -m yoru
+uv run python -m yoru
 ```
+
+> **Note:** The launcher GUI uses [pywebview](https://pywebview.flowrl.com/) (native OS WebView). No external browser or local server is required.
 
 # Learn about YORU
 - [User guides](https://kamikouchi-lab.github.io/YORU_doc/guides/01-install/)
@@ -128,15 +126,25 @@ python -m yoru
 
 
 
-# License:
+# License
 
-AGPL-3.0 License:  YORU is intended for research/academic/personal use only. See the [LICENSE](LICENSE) file for more details.
+AGPL-3.0 License: YORU is intended for research/academic/personal use only. See the [LICENSE](LICENSE) file for more details.
 
-# Third-Party Libraries and Licenses
+## Third-Party Libraries and Licenses
 
 This project includes code from the following repositories:
 
 - [LabelImg](https://github.com/HumanSignal/labelImg): Licensed under the MIT License
 
-- [yolov5](https://github.com/ultralytics/yolov5): Licensed under the AGPL-3.0 License
+For a complete list of all dependencies and their licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+## Ultralytics Commercial Licensing Notice
+
+YORU uses [Ultralytics YOLO](https://ultralytics.com) for object detection, which is dual-licensed:
+
+- **AGPL-3.0 (default):** Requires that any project incorporating Ultralytics code or models trained with it must be open-sourced under AGPL-3.0. This obligation extends to training code and models produced by that code.
+
+- **Enterprise License:** Removes the open-source requirement, permitting proprietary and private use. Allows commercial deployment and distribution without disclosing source code.
+
+**For commercial use of YORU with Ultralytics components**, an Ultralytics Enterprise license is required in addition to complying with YORU's own AGPL-3.0 license. Submit a request at https://www.ultralytics.com/license for pricing and terms.
 

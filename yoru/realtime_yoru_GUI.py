@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import datetime
 import os
 import re
@@ -8,20 +11,12 @@ import threading
 import time
 import tkinter
 import tkinter.filedialog as filedialog
-from cProfile import label
 from multiprocessing import Manager, Process
-from turtle import Screen
 
 import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 
-# try:
-
-
-sys.path.append("../yoru")
-
-# from yoru.libs.Window import Window
 from yoru.libs.detection import yolo_detection
 from yoru.libs.drawing import yolo_drawing
 from yoru.libs.file_operation_realtime import file_dialog_tk
@@ -29,20 +24,6 @@ from yoru.libs.imager import capture_streamCV2, capture_streamMSS, select_run
 from yoru.libs.init_realtime import init_asovi
 from yoru.libs.trigger import read_condition, yolo_trigger
 from yoru.libs.util import loadingParam
-
-# except(ModuleNotFoundError):
-#     # import app
-#     from libs.file_operation_realtime import file_dialog_tk
-#     from libs.imager import capture_streamCV2, capture_streamMSS, select_run
-#     from libs.init_realtime import init_asovi
-#     # from triggers.trigger_default import yolo_trigger, read_com
-#     # from libs.trigger_fix import read_condition, yolo_trigger
-#     from libs.trigger import read_condition, yolo_trigger
-#     from libs.util import loadingParam
-#     # from libs.Window import Window
-#     from libs.detection import yolo_detection
-#     from libs.drawing import yolo_drawing
-#     import app as YORU
 
 
 class camGUI:
@@ -79,7 +60,7 @@ class camGUI:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Real-time Process", width=1280, height=700)
+        dpg.create_viewport(title="YORU - Real-time Process", width=1000, height=800, max_width=1000, max_height=800)
 
         imager_window = dpg.generate_uuid()
         imager_window2 = dpg.generate_uuid()

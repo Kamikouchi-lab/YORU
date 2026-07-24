@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 """Training script for Faster R-CNN, Mask R-CNN, and SSD using YOLO-format labels.
 
 Called by train_GUI.py via subprocess:

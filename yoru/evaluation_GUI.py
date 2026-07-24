@@ -1,29 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) YORU contributors — see LICENSE for details.
+
 import datetime
 import os
 import subprocess
 import sys
-import time
-from multiprocessing import Manager, Process
 
 import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 import yaml
-from pynput import keyboard
 
-sys.path.append("../yoru")
-
-from yoru.libs.evaluation_calculation import Evaluator, yolo_analysis_image
-from yoru.libs.file_operation_evaluation import file_dialog_tk
+from yoru.gui_base import process_frame as _process_frame
+from yoru.libs.evaluation_calculation import Evaluator, EvaluationImageAnalyzer
+from yoru.libs.file_operation_create_label import file_dialog_tk
 from yoru.libs.init_evaluation import init_evaluater
 
-# import yoru.app as YORU
-
-# except(ModuleNotFoundError):
-#     from libs.file_operation_evaluation import file_dialog_tk
-#     from libs.init_evaluation import init_evaluater
-#     from libs.evaluation_calculation import yolo_analysis_image, Evaluator
-#     import app as YORU
 
 
 class model_eval_gui:
@@ -48,27 +40,7 @@ class model_eval_gui:
         self.fd_tk = file_dialog_tk(self.m_dict)
 
     def process_frame(self):
-        if self.width >= self.height:
-            self.im_win_width = 400
-            self.im_win_height = self.height * (400 / self.width)
-        else:
-            self.im_win_width = self.width * (400 / self.height)
-            self.im_win_height = 400
-        # フレームのリサイズ
-        self.frame_re = cv2.resize(
-            self.frame, dsize=(int(self.im_win_width), int(self.im_win_height))
-        )
-        # 新しいフレームの作成 (全て黒で埋められたフレーム)
-        base_frame = np.zeros((400, 400, 3), np.uint8)
-        # リサイズしたフレームを新しいフレームの中央に配置
-        h, w = self.frame_re.shape[:2]
-        base_frame[
-            int(400 / 2 - h / 2) : int(400 / 2 + h / 2),
-            int(400 / 2 - w / 2) : int(400 / 2 + w / 2),
-            :,
-        ] = self.frame_re
-        # 更新
-        self.frame_re = base_frame
+        self.frame_re = _process_frame(self.frame, 400)
 
     def gui_configure(self):
         dpg.create_context()
@@ -77,7 +49,7 @@ class model_eval_gui:
             docking=True,
             docking_space=True,
         )
-        dpg.create_viewport(title="YORU - Evaluation", width=960, height=900)
+        dpg.create_viewport(title="YORU - Evaluation", width=1000, height=800, max_width=1000, max_height=800)
 
         # theme
         with dpg.theme() as global_theme:
@@ -295,7 +267,7 @@ class model_eval_gui:
         dpg.set_value("step3_state", "Complete!!")
 
     def yolo_detection(self):
-        yolo_det = yolo_analysis_image(self.m_dict)
+        yolo_det = EvaluationImageAnalyzer(self.m_dict)
         yolo_det.analyze_image()
         dpg.set_value("step4_state", "Complete!!")
 
@@ -316,10 +288,9 @@ class model_eval_gui:
         dpg.destroy_context()  # <-- moved from __del__
 
     def __del__(self):
-        if hasattr(self, "quit"):
+        if hasattr(self, "m_dict"):
             self.m_dict["quit"] = True
         print("=== GUI window quit ===")
-        dpg.destroy_context()
 
 
 def main():
