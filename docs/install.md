@@ -27,7 +27,7 @@
 
 4. Install the GPU driver and [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit).
 
-5. Create a virtual environment using [YORU.yml](YORU.yml) in command prompt or Anaconda prompt.
+5. Create a virtual environment using [YORU.yml](../YORU.yml) in command prompt or Anaconda prompt.
    
      ```
      conda env create -f "Path/to/YORU.yml"

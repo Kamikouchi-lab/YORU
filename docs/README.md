@@ -17,7 +17,7 @@
 
 # YORU documents
 - [Home](../README.md)
-- [Overview](overview.md)
+- [Overview](README.md)
 - [Install YORU](install.md)
 - [Create a model](training.md)
 - [Evaluate models](evaluation.md)
