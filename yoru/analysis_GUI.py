@@ -3,6 +3,7 @@
 
 import logging
 import os
+import threading
 from multiprocessing import Manager, Process
 
 import cv2
@@ -40,6 +41,7 @@ class analyze_GUI:
         self.process_frame()
         self.grab_count = 0
         self.speed = 1
+        self._job_active = False
 
     def process_frame(self):
         self.frame_re = _process_frame(
@@ -51,7 +53,7 @@ class analyze_GUI:
     def startDPG(self):
         dpg.create_context()
         dpg.configure_app(
-            init_file="./config/custom_layout_analysis.ini",
+            init_file="./logs/custom_layout_analysis.ini",
             docking=True,
             docking_space=True,
         )
@@ -355,7 +357,34 @@ class analyze_GUI:
                 dpg.destroy_context()
                 break
 
+    def _sync_analysis_progress(self) -> None:
+        """Copy worker-thread progress out of m_dict into the widgets.
+
+        Called once per rendered frame so that a long analysis no longer blocks
+        the GUI (the work itself runs on a background thread).
+        """
+        progress = self.m_dict.get("movie_progress", 0.0)
+        dpg.set_value("movie_progress_bar", progress)
+        dpg.configure_item("movie_progress_bar", overlay=f"{int(progress * 100)}%")
+        dpg.set_value("analy_time", self.m_dict.get("estimate_time", ""))
+        dpg.set_value("no_mov", self.m_dict.get("no_movies", ""))
+
+        img_progress = self.m_dict.get("image_progress", 0.0)
+        dpg.set_value("image_progress_bar", img_progress)
+        dpg.configure_item(
+            "image_progress_bar",
+            overlay=self.m_dict.get("image_progress_label", "0%"),
+        )
+        dpg.set_value("analy_state", self.m_dict.get("analy_state", "Ready"))
+
+        if self._job_active and not self.m_dict.get("analysis_running", False):
+            self._job_active = False
+            dpg.enable_item("analyze_btn")
+            dpg.enable_item("create_movie")
+            dpg.enable_item("analyze_img_btn")
+
     def plot_callback(self) -> None:
+        self._sync_analysis_progress()
         if dpg.get_value("streamingChkBox"):
             try:
                 speed = int(self.speed)
@@ -499,17 +528,53 @@ class analyze_GUI:
         self.m_dict["quit"] = True
         dpg.destroy_context()  # <-- moved from __del__
 
-    def analyze_movie(self):
+    def _start_job(self, worker, what: str) -> bool:
+        """Disable the run buttons and launch *worker* on a daemon thread."""
+        if self.m_dict.get("analysis_running", False):
+            logger.info("An analysis is already running")
+            return False
+
+        model_path = str(self.m_dict.get("model_path", ""))
+        if not os.path.isfile(model_path):
+            self.m_dict["analy_state"] = "Error: select a model file first"
+            logger.error("No model selected (model_path=%r)", model_path)
+            return False
+
+        self.m_dict["analysis_running"] = True
+        self.m_dict["analysis_error"] = ""
+        self.m_dict["analy_state"] = f"Analyzing {what}..."
+        self._job_active = True
+        dpg.disable_item("analyze_btn")
+        dpg.disable_item("create_movie")
+        dpg.disable_item("analyze_img_btn")
+        threading.Thread(target=self._run_job, args=(worker,), daemon=True).start()
+        return True
+
+    def _run_job(self, worker) -> None:
         logger.info("Start analyzing ....")
-        self.yolo_analysis = yolo_analysis(self.m_dict)
-        self.yolo_analysis.analyze()
-        logger.info("Analysis complete!!")
+        try:
+            worker()
+            logger.info("Analysis complete!!")
+        except Exception as e:
+            logger.exception("Analysis failed")
+            self.m_dict["analysis_error"] = f"{type(e).__name__}: {e}"
+            self.m_dict["analy_state"] = f"Error: {type(e).__name__}: {e}"
+        finally:
+            self.m_dict["analysis_running"] = False
+
+    def analyze_movie(self):
+        def _work():
+            self.yolo_analysis = yolo_analysis(self.m_dict)
+            self.yolo_analysis.analyze()
+
+        self._start_job(_work, "movies")
 
     def analyze_image(self):
-        logger.info("Start analyzing ....")
-        self.yolo_analysis = yolo_analysis_image(self.m_dict)
-        self.yolo_analysis.analyze_image()
-        logger.info("Analysis complete!!")
+        def _work():
+            self.yolo_analysis = yolo_analysis_image(self.m_dict)
+            self.yolo_analysis.analyze_image()
+
+        self._start_job(_work, "images")
 
     def create_condition(self):
         tf = dpg.get_value("create_movie")

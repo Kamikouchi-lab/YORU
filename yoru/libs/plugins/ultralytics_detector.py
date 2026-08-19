@@ -9,7 +9,11 @@ Requires: ``pip install ultralytics``
 import torch
 
 from yoru.libs.detector_base import DetectorBase
-from yoru.libs.plugins import register_detector
+from yoru.libs.plugins import (
+    DEFAULT_CONF_THRESH,
+    DEFAULT_IOU_THRESH,
+    register_detector,
+)
 
 
 class _UltralyticsDetectorBase(DetectorBase):
@@ -23,13 +27,20 @@ class _UltralyticsDetectorBase(DetectorBase):
         cls = getattr(ultralytics, self._model_cls_name)
         self._model = cls(model_path)
         self._names: dict = dict(self._model.names)
+        self._conf_thresh = float(kwargs.get("conf_thresh", DEFAULT_CONF_THRESH))
+        self._iou_thresh = float(kwargs.get("iou_thresh", DEFAULT_IOU_THRESH))
 
     @property
     def names(self) -> dict:
         return self._names
 
     def detect(self, image) -> list:
-        results = self._model(image, verbose=False)
+        results = self._model(
+            image,
+            conf=self._conf_thresh,
+            iou=self._iou_thresh,
+            verbose=False,
+        )
         boxes = results[0].boxes
 
         if boxes is None or len(boxes) == 0:

@@ -10,7 +10,6 @@ from multiprocessing import Manager, Process
 import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
-from pynput import keyboard
 
 from yoru.libs.file_operation_grab import file_dialog_tk
 
@@ -61,7 +60,7 @@ class grab_gui:
     def gui_configure(self):
         dpg.create_context()
         dpg.configure_app(
-            init_file="./config/custom_layout_grab.ini",
+            init_file="./logs/custom_layout_refine.ini",
             docking=True,
             docking_space=True,
         )
@@ -171,11 +170,23 @@ class grab_gui:
                     enabled=True,
                 )
 
+        # Shortcuts through DearPyGui's own handlers rather than a pynput
+        # listener: a pynput listener is a global OS hook, so these fired even
+        # while another application had focus, and this one was never stopped.
+        with dpg.handler_registry():
+            dpg.add_key_release_handler(
+                dpg.mvKey_Right, callback=lambda: self.advance_frame_bt()
+            )
+            dpg.add_key_release_handler(
+                dpg.mvKey_Left, callback=lambda: self.reverse_frame_bt()
+            )
+            dpg.add_key_release_handler(
+                dpg.mvKey_Alt, callback=lambda: self.grab_btn_cb()
+            )
+
         # setup
         dpg.setup_dearpygui()
         dpg.show_viewport()
-        listener = keyboard.Listener(on_press=self.on_key_press)
-        listener.start()
 
     def run(self):
         self.gui_configure()
@@ -217,20 +228,6 @@ class grab_gui:
         dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
         dpg.enable_item("streamingChkBox")
         dpg.enable_item("frame_bar")
-
-    # ショートカットキー設定
-    def on_key_press(self, key):
-        try:
-            if key == keyboard.Key.right:
-                self.advance_frame_bt()
-            elif key == keyboard.Key.left:
-                self.reverse_frame_bt()
-            elif (
-                key == keyboard.Key.alt_l or key == keyboard.Key.alt_r
-            ):  # 'ctrl_l'は左Ctrlキーを表します
-                self.grab_btn_cb()
-        except AttributeError:
-            pass
 
     def select_grab_dir(self):
         self.fd_tk = file_dialog_tk(self.m_dict)

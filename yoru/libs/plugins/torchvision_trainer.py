@@ -4,9 +4,14 @@
 """Torchvision (Faster R-CNN / Mask R-CNN / SSD) training plugin."""
 
 import subprocess
+import sys
+from pathlib import Path
 
 from yoru.libs.plugins import register_trainer
 from yoru.libs.trainer_base import TrainerBase
+
+# Resolve relative to this package, not the current working directory.
+_TRAIN_SCRIPT = Path(__file__).resolve().parent.parent / "train_torchvision.py"
 
 _FAMILY_TO_MODEL = {
     "Faster R-CNN": "fasterrcnn",
@@ -25,8 +30,8 @@ class TorchvisionTrainer(TrainerBase):
         )
 
         cmd = [
-            "python",
-            "./yoru/libs/train_torchvision.py",
+            sys.executable,
+            str(_TRAIN_SCRIPT),
             "--model",
             model_type,
             "--data",

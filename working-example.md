@@ -1,5 +1,11 @@
 # YORU Working Environment
 
+> **Note:** this is a record of one machine that was verified on the date below.
+> It predates the v2.0 launcher migration, so the package list still shows
+> `Eel 0.16.0` and does not include `pywebview` or `onnxruntime`. Use
+> `YORU.yml` / `uv.lock` for the current dependency set; this file has not been
+> re-measured.
+
 ## Date
 2026-03-26
 

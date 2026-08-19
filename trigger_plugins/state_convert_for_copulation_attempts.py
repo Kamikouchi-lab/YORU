@@ -5,13 +5,14 @@ import serial.tools.list_ports
 
 
 class trigger_condition:
-    def __init__(self):
+    def __init__(self, m_dict=None):
+        self.m_dict = m_dict if m_dict is not None else {}
         self.sig_state = 0
         self.no_sig_state = 0
         self.current_state = 0
         print("trigger_command")
 
-    def trigger(self, tri_cl, in_cl, ser, results, now):
+    def trigger(self, tri_cl, in_cl, arduino, results, now):
         # self: first argument (not used)
         # tri_cl: trigger class
         # in_cl: input class
@@ -39,11 +40,13 @@ class trigger_condition:
         # print(self.sig_state)
         # print(self.no_sig_state)
         # print(self.current_state)
-        self.trigger_to_arduino(ser)
+        self.trigger_to_arduino(arduino)
 
-    def trigger_to_arduino(self, ser):
+    def trigger_to_arduino(self, arduino):
         # Trigger to Arduino
+        if arduino is None:
+            return
         if self.current_state == 1:
-            ser.write(b"1")
+            arduino.writeDO_all(1)
         elif self.current_state == 0:
-            ser.write(b"0")
+            arduino.writeDO_all(0)

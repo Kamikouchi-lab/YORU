@@ -1,32 +1,33 @@
-name: fruit_fly_copulation
+# Closed-loop template: TTL out via Arduino on detection.
+# Model path and Arduino COM port are placeholders - set them for your setup
+# (or use "Create new config" in the launcher).
 
-root: 'C:/Users/nokai/desktop/'
-
-export: 'fruit_fly_copulation/'
-export_name: 'copulation_innervation_task_01'
-
+name: fruit_fly_copulation # Experimental name
+export: "./results/" # Output folder for videos and experiment information
+export_name: "copulation_innervation_task_01" # Base file name of the output video
 
 model:
- yolo_detection: False
- yolo_model_path: "C:/Users/nokai/Desktop/fruit_fly_copulation_dataset/detection_model/best.pt"
+ yolo_detection: False # Start inference immediately after the real-time process opens
+ yolo_model_path: "Path to YORU model" # Specify the YORU model (.pt / .onnx file)
+ yolo_model_type: "auto" # Model type: "auto", "yolov8", "yolo11", "rtdetr", "fasterrcnn", "maskrcnn", "ssd", "onnx"
  Trigger: False
 
 capture_style:
- stream_MSS: True
-
+ stream_MSS: True # When using the screen capture function, set to True.
 
 trigger:
- trigger_threshold_configuration: 0.5
- trigger_class: 'wing_extension'
+ trigger_threshold_configuration: 0.5 # Confidence threshold for firing the trigger
+ trigger_class: "wing_extension" # Which detected class fires the trigger
+ Arduino_COM: "None" # COM port the Arduino is connected to ("None" = no device)
+ trigger_pin: 13 # Digital pin used to output the TTL signal
+ trigger_style: standard_arduino # Which trigger plugin to use
 
- Arduino_COM: 13
- trigger_style: "standard_arduino"
- 
 hardware:
- use_camera: True
- camera_id: 0
- camera_width: 640
- camera_height: 480
- camera_scale: 1
- camera_fps: 30
- camera_imshow: False # opencv-window
+ use_camera: True # Whether to use the camera
+ camera_id: 0 # Camera ID
+ camera_width: 640 # Width (px) of images captured by the camera
+ camera_height: 480 # Height (px) of images captured by the camera
+ camera_scale: 1 # Scale factor applied to the camera image
+ camera_fps: 30 # Camera fps
+ camera_imshow: False # When True, an extra OpenCV window opens
+ camera_settings_dialog: False # When True, open the camera driver's property dialog on start

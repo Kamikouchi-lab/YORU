@@ -6,7 +6,6 @@ import os
 import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
-from pynput import keyboard
 
 from yoru.gui_base import apply_default_theme, frame_to_data_rgba, process_frame as _process_frame
 from yoru.libs.file_operation_grab import file_dialog_tk
@@ -38,7 +37,7 @@ class grab_gui:
     def gui_configure(self):
         dpg.create_context()
         dpg.configure_app(
-            init_file="./config/custom_layout_grab.ini",
+            init_file="./logs/custom_layout_grab.ini",
             docking=True,
             docking_space=True,
         )
@@ -164,23 +163,33 @@ class grab_gui:
                 enabled=True,
             )
 
+        # Shortcuts through DearPyGui's own handlers rather than a pynput
+        # listener: a pynput listener is a global OS hook, so Left/Right/Alt
+        # stepped and grabbed frames even while another application had focus.
+        # Key *release* (not press) gives one action per keystroke instead of
+        # repeating every rendered frame.
+        with dpg.handler_registry():
+            dpg.add_key_release_handler(
+                dpg.mvKey_Right, callback=lambda: self.advance_frame_bt()
+            )
+            dpg.add_key_release_handler(
+                dpg.mvKey_Left, callback=lambda: self.reverse_frame_bt()
+            )
+            dpg.add_key_release_handler(
+                dpg.mvKey_Alt, callback=lambda: self.grab_btn_cb()
+            )
+
         # setup
         dpg.setup_dearpygui()
         dpg.show_viewport()
-        self._kb_listener = keyboard.Listener(on_press=self.on_key_press)
-        self._kb_listener.start()
 
     def run(self):
         self.gui_configure()
-        try:
-            while dpg.is_dearpygui_running():
-                self.plot_callback()
-                dpg.render_dearpygui_frame()
-                if self.m_dict["quit"]:
-                    break
-        finally:
-            if hasattr(self, "_kb_listener"):
-                self._kb_listener.stop()
+        while dpg.is_dearpygui_running():
+            self.plot_callback()
+            dpg.render_dearpygui_frame()
+            if self.m_dict["quit"]:
+                break
 
     def plot_callback(self) -> None:
         if dpg.get_value("streamingChkBox"):
@@ -214,20 +223,6 @@ class grab_gui:
         dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
         dpg.enable_item("streamingChkBox")
         dpg.enable_item("frame_bar")
-
-    # ショートカットキー設定
-    def on_key_press(self, key):
-        try:
-            if key == keyboard.Key.right:
-                self.advance_frame_bt()
-            elif key == keyboard.Key.left:
-                self.reverse_frame_bt()
-            elif (
-                key == keyboard.Key.alt_l or key == keyboard.Key.alt_r
-            ):  # 'ctrl_l'は左Ctrlキーを表します
-                self.grab_btn_cb()
-        except AttributeError:
-            pass
 
     def select_grab_dir(self):
         self.fd_tk = file_dialog_tk(self.m_dict)

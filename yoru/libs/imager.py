@@ -20,7 +20,9 @@ class capture_streamCV2:
         self.m_dict = m_dict
         self.src = srcCam
         self.t0 = self.m_dict["t0"]
-        self.default_FPS = self.m_dict["camera_fps"]
+        # Configured fps. The run loop republishes the *measured* rate into
+        # m_dict["camera_fps"] for the GUI read-out, so keep the configured one.
+        self.default_FPS = max(1, int(self.m_dict["camera_fps"]))
         self.resized_resolution = (
             int(self.m_dict["camera_width"] * self.m_dict["camera_scale"]),
             int(self.m_dict["camera_height"] * self.m_dict["camera_scale"]),
@@ -39,13 +41,24 @@ class capture_streamCV2:
         self.capture = cv2.VideoCapture(self.src + cv2.CAP_DSHOW)
         self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.m_dict["camera_width"])
         self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.m_dict["camera_height"])
-        print(self.m_dict["camera_fps"])
-        self.capture.set(cv2.CAP_PROP_FPS, self.m_dict["camera_fps"])
-        self.capture.set(cv2.CAP_PROP_SETTINGS, 1)
+        self.capture.set(cv2.CAP_PROP_FPS, self.default_FPS)
+        # Opt-in: this pops up the DirectShow driver property dialog, which used
+        # to appear on every start of the real-time process.
+        if self.m_dict.get("camera_settings_dialog", False):
+            self.capture.set(cv2.CAP_PROP_SETTINGS, 1)
         self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2000)
+        if not self.capture.isOpened():
+            raise RuntimeError(
+                f"Could not open camera id {self.src}. "
+                "Check hardware.camera_id in the condition file."
+            )
         (status, frame) = self.capture.read()
-        print(status)
-        halfImg = cv2.resize(frame, self.resized_resolution)
+        if not status or frame is None:
+            self.capture.release()
+            raise RuntimeError(
+                f"Camera id {self.src} opened but returned no frame. "
+                "Another application may be using it."
+            )
         print("CV-capture start success")
 
     def run(self):
@@ -61,7 +74,7 @@ class capture_streamCV2:
                 self.vwriter = cv2.VideoWriter(
                     curVidName,
                     self.fmt,
-                    self.m_dict["camera_fps"],
+                    self.default_FPS,
                     self.resized_resolution,
                     1,
                 )
@@ -118,25 +131,25 @@ class capture_streamCV2:
                 (status, frame) = self.capture.read()
                 t1 = time.perf_counter()
                 self.m_dict["total_time"] = t1 - self.m_dict["t0"]
+
+                # Check the read succeeded *before* using the frame: a failed
+                # read yields None and cv2.resize would raise a cryptic error.
+                if not status or frame is None:
+                    print("Camera returned no frame; stopping capture.")
+                    break
+
                 halfImg = cv2.resize(frame, self.resized_resolution)
 
-                if status:
-                    if self.m_dict["camera_imshow"]:
-                        cv2.imshow("frame", halfImg)
-                    if self.m_dict["stream"] and stream_flag:
-                        self.vwriter.write(halfImg)
-                        "# Date, total time, Count, Speed, Position, Dark, Z-stage, di"
-                        # self.currentLogFile.write(
-                        #     str(now) + ", " + str(self.m_dict["total_time"]) + "\r"
-                        # )
-                        self.log_writer.writerows(
-                            [[self.frame_count, str(self.m_dict["total_time"])]]
-                        )
-                        if self.m_dict["yolo_process_state"]:
-                            self.rtesult_writer.writerows(self.m_dict["yolo_results"])
-                        self.frame_count += 1
-                else:
-                    break
+                if self.m_dict["camera_imshow"]:
+                    cv2.imshow("frame", halfImg)
+                if self.m_dict["stream"] and stream_flag:
+                    self.vwriter.write(halfImg)
+                    self.log_writer.writerows(
+                        [[self.frame_count, str(self.m_dict["total_time"])]]
+                    )
+                    if self.m_dict["yolo_process_state"]:
+                        self.rtesult_writer.writerows(self.m_dict["yolo_results"])
+                    self.frame_count += 1
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
                 elif self.m_dict["quit"]:
@@ -146,7 +159,8 @@ class capture_streamCV2:
                 t1 = time.perf_counter()
             # while (t1-t0) < 1/(self.default_FPS+1.0):
             #     t1 = time.perf_counter()
-            self.m_dict["camera_fps"] = int(1 / (t1 - t0))
+            elapsed = t1 - t0
+            self.m_dict["camera_fps"] = int(1 / elapsed) if elapsed > 0 else 0
             t0 = t1 * 1
             if self.m_dict["quit"]:
                 break
@@ -183,6 +197,9 @@ class capture_streamMSS:
 
         self.disp = m_dict["capture_area"]
         self.t0 = self.m_dict["t0"]
+        # Captured before the run loop starts overwriting camera_fps with the
+        # measured rate; this is what the recorded video is timestamped with.
+        self.default_FPS = max(1, int(self.m_dict["camera_fps"]))
         self.resized_resolution = (
             int(self.m_dict["camera_width"] * self.m_dict["camera_scale"]),
             int(self.m_dict["camera_height"] * self.m_dict["camera_scale"]),
@@ -196,10 +213,18 @@ class capture_streamMSS:
         self.fmt = cv2.VideoWriter_fourcc("D", "I", "V", "X")
         print("CV-initialization Finished")
 
+    @staticmethod
+    def _to_bgr(frame):
+        """mss grabs BGRA frames; the VideoWriter, the detector backends and
+        the DearPyGui textures all expect 3-channel BGR."""
+        if frame.ndim == 3 and frame.shape[2] == 4:
+            return cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        return frame
+
     def startCapture(self):
         self.src = mss.mss()
-        frame = np.array(self.src.grab(self.disp))
-        halfImg = cv2.resize(frame, self.resized_resolution)
+        frame = self._to_bgr(np.array(self.src.grab(self.disp), dtype=np.uint8))
+        cv2.resize(frame, self.resized_resolution)
         print("CV-capture start success")
 
     def run(self):
@@ -216,7 +241,7 @@ class capture_streamMSS:
                 self.vwriter = cv2.VideoWriter(
                     curVidName,
                     self.fmt,
-                    self.m_dict["camera_fps"],
+                    self.default_FPS,
                     self.resized_resolution,
                     1,
                 )
@@ -270,7 +295,9 @@ class capture_streamMSS:
 
             # Ensure camera is connected
             if True:  # self.capture.isOpened():
-                frame = np.array(self.src.grab(self.disp), dtype=np.uint8)
+                frame = self._to_bgr(
+                    np.array(self.src.grab(self.disp), dtype=np.uint8)
+                )
                 t1 = time.perf_counter()
                 self.m_dict["total_time"] = t1 - self.m_dict["t0"]
                 halfImg = cv2.resize(frame, self.resized_resolution)
@@ -298,7 +325,8 @@ class capture_streamMSS:
                 t1 = time.perf_counter()
             while (t1 - t0) < 1 / 16:
                 t1 = time.perf_counter()
-            self.m_dict["camera_fps"] = int(1 / (t1 - t0))
+            elapsed = t1 - t0
+            self.m_dict["camera_fps"] = int(1 / elapsed) if elapsed > 0 else 0
             t0 = t1 * 1
 
             if self.m_dict["quit"]:
@@ -311,8 +339,8 @@ class capture_streamMSS:
         self.frameTimeStamp = np.zeros((self.frameBufLen))
         while not self.m_dict["quit"]:
             self.frameTimeStamp[k % self.frameBufLen] = time.perf_counter() - self.t0
-            frame = self.src.grab(self.disp)
-            self.m_dict["currentFrame"] = np.array(frame)
+            frame = self._to_bgr(np.array(self.src.grab(self.disp), dtype=np.uint8))
+            self.m_dict["currentFrame"] = frame
             self.frameBuffer[:, :, :, k % self.frameBufLen] = frame
             self.fps = self.frameBufLen / (
                 np.max(self.frameTimeStamp) - np.min(self.frameTimeStamp)

@@ -7,10 +7,19 @@ This module is part of YORU core and is NOT subject to any plugin's license.
 """
 
 import importlib
+import logging
 import os
 
 from yoru.libs.detector_base import DetectorBase
 from yoru.libs.trainer_base import TrainerBase
+
+logger = logging.getLogger(__name__)
+
+# Shared detection thresholds.  Every backend is given these explicitly so that
+# the same model/video yields the same detections regardless of which plugin
+# happens to serve it (previously each plugin applied its own default).
+DEFAULT_CONF_THRESH = 0.25
+DEFAULT_IOU_THRESH = 0.45
 
 # ---------------------------------------------------------------------------
 # Registries
@@ -19,6 +28,7 @@ from yoru.libs.trainer_base import TrainerBase
 _DETECTOR_REGISTRY: dict[str, type[DetectorBase]] = {}
 _TRAINER_REGISTRY: dict[str, type[TrainerBase]] = {}
 _plugins_loaded = False
+_PLUGIN_IMPORT_ERRORS: dict[str, str] = {}
 
 
 def register_detector(name: str):
@@ -63,8 +73,12 @@ def _ensure_plugins_loaded():
     for mod in _PLUGIN_MODULES:
         try:
             importlib.import_module(mod)
-        except ImportError:
-            pass
+        except Exception as e:
+            # Not only ImportError: a missing CUDA/onnxruntime DLL raises OSError.
+            # Record the reason so get_detector() can explain *why* a backend is
+            # missing instead of just reporting an unknown backend name.
+            _PLUGIN_IMPORT_ERRORS[mod] = f"{type(e).__name__}: {e}"
+            logger.warning("Backend plugin %s unavailable - %s: %s", mod, type(e).__name__, e)
 
 
 # ---------------------------------------------------------------------------
@@ -106,22 +120,50 @@ def _auto_detect_backend(model_path: str) -> str:
         return "ultralytics"
 
     # For ambiguous names (e.g. "best.pt"), inspect the checkpoint contents.
-    try:
-        import torch
-
-        ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
-        if isinstance(ckpt, dict):
-            if "model_type" in ckpt:
-                return _normalize_backend(ckpt["model_type"])
-            model_obj = ckpt.get("ema") or ckpt.get("model")
-            if model_obj is not None:
-                module = type(model_obj).__module__ or ""
-                if "ultralytics" in module:
-                    return "ultralytics"
-    except Exception:
-        pass
+    sniffed = _sniff_checkpoint(model_path)
+    if sniffed is not None:
+        return sniffed
 
     return "ultralytics"
+
+
+def _sniff_checkpoint(model_path: str):
+    """Identify the backend from a ``.pt`` file without unpickling it.
+
+    A torch ``.pt`` file is a ZIP archive whose ``data.pkl`` entry names the
+    classes the checkpoint will construct.  Reading those names as plain bytes
+    is enough to tell the backends apart, and avoids ``torch.load(...,
+    weights_only=False)``, which would execute arbitrary code from the file and
+    pull the entire model (hundreds of MB for e.g. rtdetr-x) into memory just to
+    read one field.
+
+    Returns the backend name, or ``None`` when the file cannot be identified.
+    """
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(model_path) as zf:
+            entry = next(
+                (n for n in zf.namelist() if n.endswith("data.pkl")), None
+            )
+            if entry is None:
+                return None
+            blob = zf.read(entry)
+    except (OSError, zipfile.BadZipFile):
+        # Not a zip-format checkpoint (torch < 1.6) or unreadable.
+        return None
+
+    # Checkpoints written by yoru/libs/train_torchvision.py carry a
+    # "model_type" field holding one of these names.
+    if b"model_type" in blob:
+        for marker in (b"fasterrcnn", b"maskrcnn", b"ssd"):
+            if marker in blob:
+                return "torchvision"
+    if b"ultralytics" in blob:
+        return "ultralytics"
+    if b"torchvision" in blob:
+        return "torchvision"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -129,13 +171,21 @@ def _auto_detect_backend(model_path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def get_detector(backend: str, model_path: str, **kwargs) -> DetectorBase:
+def get_detector(
+    backend: str,
+    model_path: str,
+    conf_thresh: float = DEFAULT_CONF_THRESH,
+    iou_thresh: float = DEFAULT_IOU_THRESH,
+    **kwargs,
+) -> DetectorBase:
     """Instantiate, load, and return a detector plugin.
 
     Args:
         backend: One of ``'ultralytics'``, ``'rtdetr'``,
                  ``'torchvision'``, ``'onnx'``, or ``'auto'``.
         model_path: Path to model weights.
+        conf_thresh: Confidence threshold applied by every backend.
+        iou_thresh: NMS IoU threshold applied by every backend.
         **kwargs: Forwarded to ``DetectorBase.load()``.
     """
     _ensure_plugins_loaded()
@@ -146,13 +196,21 @@ def get_detector(backend: str, model_path: str, **kwargs) -> DetectorBase:
         backend = _normalize_backend(backend)
 
     if backend not in _DETECTOR_REGISTRY:
-        raise ValueError(
+        msg = (
             f"Unknown detector backend: {backend!r}. "
             f"Available: {sorted(_DETECTOR_REGISTRY)}"
         )
+        if _PLUGIN_IMPORT_ERRORS:
+            details = "; ".join(
+                f"{m} ({why})" for m, why in sorted(_PLUGIN_IMPORT_ERRORS.items())
+            )
+            msg += f". Some backends failed to load: {details}"
+        raise ValueError(msg)
 
     detector = _DETECTOR_REGISTRY[backend]()
-    detector.load(model_path, **kwargs)
+    detector.load(
+        model_path, conf_thresh=conf_thresh, iou_thresh=iou_thresh, **kwargs
+    )
     return detector
 
 

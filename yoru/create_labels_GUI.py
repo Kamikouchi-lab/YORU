@@ -44,7 +44,7 @@ class model_eval_gui:
     def gui_configure(self):
         dpg.create_context()
         dpg.configure_app(
-            init_file="./config/custom_layout_evaluater_gui.ini",
+            init_file="./logs/custom_layout_create_labels.ini",
             docking=True,
             docking_space=True,
         )

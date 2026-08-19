@@ -6,7 +6,7 @@ This document lists all third-party dependencies used by YORU and their respecti
 
 | Package | Version | License | URL |
 |---------|---------|---------|-----|
-| eel | 0.16.0 | MIT | https://github.com/python-eel/Eel |
+| pywebview | >=5.0 | BSD-3-Clause | https://pywebview.flowrl.com |
 | nidaqmx | 0.9.0 | MIT | https://github.com/ni/nidaqmx-python |
 | numpy | >=1.24.4 | BSD-3-Clause | https://www.numpy.org |
 | dearpygui | 1.11.1 | MIT | https://github.com/hoffstadt/DearPyGui |
@@ -29,6 +29,7 @@ This document lists all third-party dependencies used by YORU and their respecti
 | tqdm | 4.66.4 | MPL-2.0 AND MIT | https://tqdm.github.io |
 | ultralytics | >=8.3.0 | AGPL-3.0 | https://ultralytics.com |
 | ultralytics-thop | 2.0.0 | AGPL-3.0 | https://github.com/ultralytics/thop |
+| onnxruntime | >=1.16 | MIT | https://onnxruntime.ai |
 | mss | 9.0.1 | MIT | https://github.com/BoboTiG/python-mss |
 | scikit-image | 0.21.0 | BSD-3-Clause | https://scikit-image.org |
 | imgui | 2.0.0 | BSD | https://github.com/pyimgui/pyimgui |
@@ -48,15 +49,17 @@ This document lists all third-party dependencies used by YORU and their respecti
 
 ## Notable Transitive Dependencies
 
+Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency set.
+
 | Package | License | URL |
 |---------|---------|-----|
-| bottle | MIT | http://bottlepy.org |
-| bottle-websocket | MIT | https://github.com/bottlepy/bottle |
 | certifi | MPL-2.0 | https://github.com/certifi/python-certifi |
+| clr-loader | MIT | https://github.com/pythonnet/clr-loader |
+| coloredlogs | MIT | https://github.com/xolox/python-coloredlogs |
 | contourpy | BSD-3-Clause | https://github.com/contourpy/contourpy |
 | filelock | Unlicense | https://github.com/tox-dev/filelock |
-| gevent | MIT | https://www.gevent.org |
-| greenlet | MIT | https://github.com/gevent/greenlet |
+| flatbuffers | Apache-2.0 | https://github.com/google/flatbuffers |
+| humanfriendly | MIT | https://github.com/xolox/python-humanfriendly |
 | imageio | BSD-2-Clause | https://github.com/imageio/imageio |
 | jinja2 | BSD-3-Clause | https://jinja.palletsprojects.com |
 | lxml | BSD-3-Clause | https://lxml.de |
@@ -64,7 +67,11 @@ This document lists all third-party dependencies used by YORU and their respecti
 | pyqt5 | GPL v3 | https://www.riverbankcomputing.com/software/pyqt/ |
 | pyqt5-qt5 | LGPL v3 | https://www.riverbankcomputing.com/software/pyqt/ |
 | pyqt5-sip | SIP License | https://www.riverbankcomputing.com/software/pyqt/ |
+| pyreadline3 | BSD-3-Clause | https://github.com/pyreadline3/pyreadline3 |
 | polars | MIT | https://github.com/pola-rs/polars |
+| protobuf | BSD-3-Clause | https://github.com/protocolbuffers/protobuf |
+| proxy-tools | MIT | https://github.com/jtatum/proxy_tools |
+| pythonnet | MIT | https://github.com/pythonnet/pythonnet |
 | sympy | BSD | https://www.sympy.org |
 
 ## Bundled Code

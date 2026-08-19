@@ -45,7 +45,7 @@ class model_eval_gui:
     def gui_configure(self):
         dpg.create_context()
         dpg.configure_app(
-            init_file="./config/custom_layout_evaluater_gui.ini",
+            init_file="./logs/custom_layout_evaluater_gui.ini",
             docking=True,
             docking_space=True,
         )
@@ -259,11 +259,22 @@ class model_eval_gui:
         dpg.set_value("step1_state", "Complete!!")
 
     def grab_bt(self):
-        subprocess.call(["python", "./yoru/grab_GUI.py"])
+        # Launch as a module with this interpreter: running the file directly
+        # puts yoru/ (not the repo root) on sys.path and breaks "from yoru...".
+        # Popen, not call, so the GUI keeps rendering.
+        try:
+            subprocess.Popen([sys.executable, "-m", "yoru.grab_GUI"])
+        except OSError as e:
+            print(f"Failed to launch frame capture: {e}")
+            return
         dpg.set_value("step2_state", "Complete!!")
 
     def labelImg_bt(self):
-        subprocess.call(["labelImg"])
+        try:
+            subprocess.Popen(["labelImg"])
+        except OSError as e:
+            print(f"Failed to launch labelImg: {e}")
+            return
         dpg.set_value("step3_state", "Complete!!")
 
     def yolo_detection(self):

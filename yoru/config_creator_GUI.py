@@ -9,7 +9,6 @@ widgets; class information is loaded automatically when a .pt model
 file is selected.
 """
 
-import glob
 import os
 import threading
 import tkinter
@@ -19,15 +18,20 @@ import dearpygui.dearpygui as dpg
 import serial.tools.list_ports
 import yaml
 
+from yoru.libs.paths import list_trigger_plugins
+
 
 class ConfigCreatorGUI:
     def __init__(self):
         self.class_list = ["None"]
         self.com_list = self._get_com_ports()
         self.plugin_list = self._get_plugins()
+        # "yolov5" is deliberately not offered for new configs: the bundled
+        # yolov5 backend was removed in v2.0.  Existing configs that still say
+        # "yolov5" keep working via the alias in yoru.libs.plugins.
         self.model_type_list = [
-            "auto", "yolov5", "yolov8", "yolo11", "rtdetr",
-            "fasterrcnn", "maskrcnn", "ssd",
+            "auto", "yolov8", "yolo11", "rtdetr",
+            "fasterrcnn", "maskrcnn", "ssd", "onnx",
         ]
 
     # ------------------------------------------------------------------
@@ -39,8 +43,9 @@ class ConfigCreatorGUI:
         return result if result else ["None"]
 
     def _get_plugins(self):
-        paths = glob.glob("./trigger_plugins/*.py", recursive=True)
-        result = [os.path.splitext(os.path.basename(p))[0] for p in paths]
+        # Same resolution as yoru.libs.trigger, so the list offered here always
+        # matches the plugins the real-time process can actually load.
+        result = list_trigger_plugins()
         return result if result else ["standard_arduino"]
 
     # ------------------------------------------------------------------

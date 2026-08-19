@@ -176,9 +176,7 @@ cython_debug/
 
 logs/
 
-custom_layout_grab.ini
-custom_layout_analysis.ini
-custom_layout_evaluater_gui.ini
+# DearPyGui window-layout state now lives under logs/ (already ignored above).
 desktop.ini
 
 others/

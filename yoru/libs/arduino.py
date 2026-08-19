@@ -55,6 +55,24 @@ class dio:
         for i, do in enumerate(self.doChs):
             do.write(num)
 
+    def close(self):
+        """Release the serial port held by the pyfirmata board.
+
+        ``trigger_python.close()`` calls this whenever a trigger session ends;
+        without it the COM port stays open until the process exits.
+        """
+        board = getattr(self, "board", None)
+        if board is None:
+            return
+        try:
+            board.exit()  # pyfirmata: detaches servos and closes the serial port
+        except Exception as e:
+            print(f"Failed to close Arduino board cleanly: {e}")
+        finally:
+            self.board = None
+            self.diChs = []
+            self.doChs = []
+
 
 class ser_recount:
     def __init__(self, comport="COM1", rate=115200):

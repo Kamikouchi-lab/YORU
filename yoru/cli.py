@@ -45,12 +45,13 @@ Examples:
         help="Launch the YORU GUI.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p_gui.add_argument("--config", default="config/template.yaml",
-                       help="Condition YAML to load at startup")
+    p_gui.add_argument("--config", default=None,
+                       help="Condition YAML to load at startup "
+                            "(default: the last-used file)")
     p_gui.set_defaults(func=_cmd_gui)
 
     # ここがポイント：引数なしのときは GUI を既定動作にする
-    parser.set_defaults(func=_cmd_gui, command="gui", config="config/template.yaml")
+    parser.set_defaults(func=_cmd_gui, command="gui", config=None)
     return parser
 
 def main(argv: list[str] | None = None) -> int:
@@ -74,20 +75,34 @@ def _cmd_gui(args) -> int:
 
     cfg = getattr(args, "config", None)
     try:
-        # app_main のシグネチャが不明な場合に備えて安全に呼ぶ
-        if cfg is not None:
-            # app_main(config_path=...) に対応していれば使う
-            try:
-                return int(bool(app_main(cfg)))  # 位置引数で渡す版
-            except TypeError:
-                try:
-                    return int(bool(app_main(config=cfg)))  # キーワードで渡す版
-                except TypeError:
-                    pass
-        # 引数なし版（多くの実装はこれでOK）
+        # Decide how to call app_main by inspecting its signature.  Catching
+        # TypeError instead would misread an error raised *inside* the GUI as a
+        # signature mismatch and launch the GUI a second time.
+        if cfg is not None and _accepts_config(app_main):
+            return int(bool(app_main(cfg)))
         return int(bool(app_main()))
     except SystemExit as se:
-        return int(se.code or 0)
+        code = se.code
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return code
+        print(f"[yoru] {code}")  # SystemExit("message") means failure
+        return 1
     except Exception as e:
         print(f"[yoru] GUI crashed: {e}")
         return 1
+
+
+def _accepts_config(func) -> bool:
+    """True if *func* takes a leading positional parameter for the config path."""
+    import inspect
+
+    try:
+        params = list(inspect.signature(func).parameters.values())
+    except (TypeError, ValueError):
+        return False
+    return bool(params) and params[0].kind in (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )

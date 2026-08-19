@@ -7,7 +7,8 @@ import yoru.libs.nidaq as daq
 
 
 class trigger_condition:
-    def __init__(self):
+    def __init__(self, m_dict=None):
+        self.m_dict = m_dict if m_dict is not None else {}
         print("trigger_command")
         self.mydaqDO = daq.dio(
             devID="Dev1", taskType="do", port="port0", lineCh="line0:1"

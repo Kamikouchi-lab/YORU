@@ -10,7 +10,7 @@ import torch
 from torchvision.transforms.functional import to_tensor
 
 from yoru.libs.detector_base import DetectorBase
-from yoru.libs.plugins import register_detector
+from yoru.libs.plugins import DEFAULT_CONF_THRESH, register_detector
 
 
 @register_detector("torchvision")
@@ -22,7 +22,7 @@ class TorchvisionDetector(DetectorBase):
         self._model_type = checkpoint["model_type"]
         self._num_classes = checkpoint["num_classes"]
         self._names: dict = checkpoint["names"]
-        self._conf_thresh = kwargs.get("conf_thresh", 0.5)
+        self._conf_thresh = float(kwargs.get("conf_thresh", DEFAULT_CONF_THRESH))
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self._model = self._build_model()

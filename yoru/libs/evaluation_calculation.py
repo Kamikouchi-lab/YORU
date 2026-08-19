@@ -34,9 +34,13 @@ class EvaluationImageAnalyzer:
         class_names = detector.names
         logger.debug("Class names: %s", class_names)
 
-        search_path = os.path.join(self.data_path, "*.png")
-        logger.debug("Search path: %s", search_path)
-        img_path_list = glob.glob(search_path)
+        # run_evaluation() below also accepts .jpg, so gather the same set here;
+        # a JPEG dataset used to produce no _yolo.txt files at all.
+        img_path_list = []
+        for ext in ("*.png", "*.jpg", "*.jpeg"):
+            img_path_list.extend(glob.glob(os.path.join(self.data_path, ext)))
+        img_path_list.sort()
+        logger.debug("Found %d images under %s", len(img_path_list), self.data_path)
         image_count = len(img_path_list)
 
         for img_path in tqdm(img_path_list, desc="Processing images"):
@@ -379,7 +383,9 @@ class Evaluator(ModelValidation):
 
         for file in tqdm(os.listdir(directory)):
             if file.endswith(".png") or file.endswith(".jpg"):
-                base_filename = file.split(".")[0]
+                # splitext, not split("."): a name like "fly.2024-05-01.png"
+                # would otherwise be truncated to "fly" and never matched.
+                base_filename = os.path.splitext(file)[0]
                 label_file = os.path.join(directory, base_filename + ".txt")
                 yolo_file = os.path.join(directory, base_filename + "_yolo.txt")
 
@@ -490,6 +496,9 @@ class Evaluator(ModelValidation):
         result = results["AP@[.50:.05:.95]_per_class"]
         x = [0.5 + i * 0.05 for i in range(10)]
         colors = plt.cm.rainbow(np.linspace(0, 1, len(results)))
+        # Draw on a fresh figure: without this the plot was added to whatever
+        # figure was current, so a second evaluation overlaid the first.
+        plt.figure()
         # データのプロット
         for key, color in zip(result, colors):
             plt.plot(x, result[key], color=color, marker="o", label=classes_dict[key])
@@ -511,6 +520,7 @@ class Evaluator(ModelValidation):
         # グラフを保存
         result_directory = os.path.join(result_dir, model_base_name + "_ap50-95.png")
         plt.savefig(result_directory)
+        plt.close()
 
     def drawing_iou_boxplot_graph(
         self, dataframe, classes_dict, result_dir, model_base_name

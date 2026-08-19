@@ -1,10 +1,10 @@
 # Install
 
-0. Check the instllation of [Google Chrome](https://www.google.com/intl/ja/chrome/)
+> **Note:** From v2.0 the launcher uses [pywebview](https://pywebview.flowrl.com/)
+> (the native OS WebView), so no external browser and no local web server are
+> required. Earlier versions needed Google Chrome for the `eel` package.
 
-- eel package need to use Google Chrome.
-
-1. Check the instllation of [Miniconda](https://docs.anaconda.com/miniconda/)
+1. Check the installation of [Miniconda](https://docs.anaconda.com/miniconda/)
 
 > Anaconda's [TERMS OF SERVICE](https://legal.anaconda.com/policies/en?name=terms-of-service#terms-of-service) was changed. If you used Anaconda in an organization that has two hundred (200) or more employees or contractors, you have to be careful.
 
@@ -62,3 +62,14 @@
     cd "Path/to/YORU/project/folder"
     python -m yoru
     ```
+
+## Alternative: install with uv
+
+[uv](https://docs.astral.sh/uv/) resolves everything from `pyproject.toml` /
+`uv.lock`, so steps 5-7 are not needed:
+
+```
+cd "Path/to/YORU"
+uv sync
+uv run python -m yoru
+```

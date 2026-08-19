@@ -25,6 +25,8 @@ from yoru.libs.init_realtime import init_asovi
 from yoru.libs.trigger import read_condition, yolo_trigger
 from yoru.libs.util import loadingParam
 
+DEFAULT_CONFIG_PATH = "./config/yoru_default.yaml"
+
 
 class camGUI:
     def __init__(self, config_file=[], m_dict={}):
@@ -48,9 +50,6 @@ class camGUI:
         # trigger pluginsの読み込み
         self.read_condi.list_plugins()
 
-        # flatten camera data to a 1 d stricture
-        data = np.flip(self.m_dict["current_camera_frame"], 2).ravel()
-        data = np.asfarray(data, dtype="f")
         self.texture_data = np.true_divide(self.m_dict["current_camera_frame"], 255.0)
 
     def startDPG(self):
@@ -214,7 +213,7 @@ class camGUI:
                 dpg.add_text(label="pin_input", default_value="  Pin No.:")
                 dpg.add_input_text(
                     tag="pin_in",
-                    default_value=self.m_dict["pin"],
+                    default_value=str(self.m_dict["pin"]),
                     width=100,
                     hint="integer only",
                     callback=lambda: self.pin_input(),
@@ -348,13 +347,12 @@ class camGUI:
 
     def pin_input(self):
         tf = dpg.get_value("pin_in")
-        self.m_dict["pin"] = tf
-        # if isinstance(tf, int):
-        #     self.m_dict["baudrate"] = tf
-        # else:
-        #     print(f"{tf} is not int")
-        #     dpg.set_value("baudrate_in", self.m_dict["baudrate"])
-        #     time.sleep(0.5)
+        # pyfirmata indexes board.digital[pin]; a str here would break the trigger.
+        try:
+            self.m_dict["pin"] = int(tf)
+        except (TypeError, ValueError):
+            print(f"{tf!r} is not an integer pin number")
+            dpg.set_value("pin_in", str(self.m_dict["pin"]))
 
     def list_in_plugin(self):
         tf = dpg.get_value("plugin_list")
@@ -421,7 +419,6 @@ def main(confFileName):
         yolo_det = yolo_detection(m_dict=d)
         yolo_draw = yolo_drawing(m_dict=d)
         yolo_tri = yolo_trigger(m_dict=d)
-        gui = camGUI(config_file=confFileName, m_dict=d)
 
         d["camera_imshow"] = False
 
@@ -448,50 +445,30 @@ def main(confFileName):
         print(d)
 
 
+def _parse_args(argv=None):
+    """Resolve the condition-file path from the command line.
+
+    Launched by ``yoru.app`` as ``python -m yoru.realtime_yoru_GUI <config.yaml>``.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="yoru.realtime_yoru_GUI",
+        description="YORU real-time detection / closed-loop process.",
+    )
+    parser.add_argument(
+        "config",
+        nargs="?",
+        default=DEFAULT_CONFIG_PATH,
+        help="Condition YAML file to load",
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    confFileName = "C:/Users/nokai/Desktop/yoru_default.yaml"
-    main(confFileName)
-
-    # with Manager() as manager:
-    #     d = manager.dict()
-    #     d["initialized"] = False
-    #     init_md = init_asovi(config_file=confFileName, m_dict=d)
-
-    #     # MSS or Camera
-    #     d["stream_MSS"] = False
-    #     if d["stream_MSS"]:
-    #         SR = select_run(m_dict=d)
-    #         SR.main()
-    #         imgWin = capture_streamMSS(m_dict=d)
-    #     else:
-    #         imgWin = capture_streamCV2(srcCam=d["camera_id"], m_dict=d)
-
-    #     gui = camGUI(config_file=confFileName, m_dict=d)
-    #     yolo_det = yolo_detection(m_dict=d)
-    #     yolo_draw = yolo_drawing(m_dict=d)
-    #     yolo_tri = yolo_trigger(m_dict=d)
-    #     gui = camGUI(config_file=confFileName, m_dict=d)
-
-    #     d["camera_imshow"] = False
-
-    #     process_pool = []
-
-    #     prc_imager = Process(target=imgWin.run)
-    #     prc_gui = Process(target=gui.run)
-    #     prc_yolo = Process(target=yolo_det.detect, args=(d,))
-    #     prc_yolo_draw = Process(target=yolo_draw.YOLOdraw, args=(d,))
-    #     prc_tri = Process(target=yolo_tri.init_trigger)
-
-    #     prc_gui.start()
-    #     prc_imager.start()
-    #     prc_yolo.start()
-    #     prc_yolo_draw.start()
-    #     prc_tri.start()
-
-    #     prc_gui.join()
-    #     prc_imager.join()
-    #     prc_yolo.join()
-    #     prc_yolo_draw.join()
-    #     prc_tri.join()
-
-    #     print(d)
+    args = _parse_args()
+    config_path = args.config
+    if not os.path.isfile(config_path):
+        print(f"[yoru] Condition file not found: {config_path}", file=sys.stderr)
+        raise SystemExit(1)
+    main(config_path)

@@ -18,6 +18,8 @@ class trigger_condition:
 
     def trigger(self, tri_cl, in_cl, arduino, results, now):
         # print(tri_cl, in_cl, arduino, results, now)
+        if arduino is None:
+            return
         if tri_cl in in_cl:
             arduino.writeDO_all(1)
         else:

@@ -40,9 +40,27 @@ def fake_serial():
     list_ports_mod = types.ModuleType("serial.tools.list_ports")
     list_ports_mod.comports = lambda: []
 
-    # ---- libs.arduino package stub ----
-    libs_pkg = types.ModuleType("libs"); libs_pkg.__path__ = []
-    libs_arduino_mod = types.ModuleType("libs.arduino")
+    # ---- serial.serialutil (yoru.libs.trigger catches SerialException here) ----
+    serialutil_mod = types.ModuleType("serial.serialutil")
+    serialutil_mod.SerialException = SerialException
+    serial_mod.serialutil = serialutil_mod
+    serial_mod.PARITY_NONE = "N"
+
+    # ---- pyfirmata stub (imported by yoru.libs.arduino) ----
+    pyfirmata_mod = types.ModuleType("pyfirmata")
+    pyfirmata_mod.INPUT = "input"
+    pyfirmata_mod.OUTPUT = "output"
+
+    class _Iterator:
+        def __init__(self, board): self.board = board
+        def start(self): pass
+
+    pyfirmata_mod.util = types.SimpleNamespace(Iterator=_Iterator)
+
+    def _no_board(*a, **kw):
+        raise SerialException("no Arduino attached (test stub)")
+
+    pyfirmata_mod.Arduino = _no_board
 
     # ---- nidaqmx package + submodules ----
     nidaqmx_mod = types.ModuleType("nidaqmx"); nidaqmx_mod.__path__ = []
@@ -68,8 +86,8 @@ def fake_serial():
     _put("serial", serial_mod)
     _put("serial.tools", tools_mod)
     _put("serial.tools.list_ports", list_ports_mod)
-    _put("libs", libs_pkg)
-    _put("libs.arduino", libs_arduino_mod)
+    _put("serial.serialutil", serialutil_mod)
+    _put("pyfirmata", pyfirmata_mod)
     _put("nidaqmx", nidaqmx_mod)
     _put("nidaqmx.constants", nidaqmx_constants)
     _put("nidaqmx.errors", nidaqmx_errors)

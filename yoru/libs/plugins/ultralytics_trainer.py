@@ -7,9 +7,14 @@ Requires: ``pip install ultralytics``
 """
 
 import subprocess
+import sys
+from pathlib import Path
 
 from yoru.libs.plugins import register_trainer
 from yoru.libs.trainer_base import TrainerBase
+
+# Resolve relative to this package, not the current working directory.
+_TRAIN_SCRIPT = Path(__file__).resolve().parent.parent / "train_ultralytics.py"
 
 
 @register_trainer("ultralytics")
@@ -18,8 +23,8 @@ class UltralyticsTrainer(TrainerBase):
 
     def train(self, config: dict) -> subprocess.Popen:
         cmd = [
-            "python",
-            "./yoru/libs/train_ultralytics.py",
+            sys.executable,
+            str(_TRAIN_SCRIPT),
             "--weights",
             str(config["weights"]),
             "--data",
@@ -33,6 +38,8 @@ class UltralyticsTrainer(TrainerBase):
             "--project",
             str(config["project_dir"]),
         ]
+        if config.get("device"):
+            cmd += ["--device", str(config["device"])]
 
         return subprocess.Popen(
             cmd,

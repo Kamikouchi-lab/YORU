@@ -1,31 +1,33 @@
-name: demo_VR
+# Display demo: flash an on-screen marker when the class is detected.
+# Model path and Arduino COM port are placeholders - set them for your setup
+# (or use "Create new config" in the launcher).
 
-root: 'C:/Users/nokai/Documents/GitHub/Asovi_VR/'
-
-export: 'camera_test/'
-export_name: 'YMH_100'
-
+name: yoru_demo_display # Experimental name
+export: "./results/" # Output folder for videos and experiment information
+export_name: "yoru_demo_display" # Base file name of the output video
 
 model:
- yolo_detection: False
- yolo_model_path: './config/yolov5s.pt'
+ yolo_detection: False # Start inference immediately after the real-time process opens
+ yolo_model_path: "Path to YORU model" # Specify the YORU model (.pt / .onnx file)
+ yolo_model_type: "auto" # Model type: "auto", "yolov8", "yolo11", "rtdetr", "fasterrcnn", "maskrcnn", "ssd", "onnx"
  Trigger: False
 
 capture_style:
- stream_MSS: False
-
+ stream_MSS: False # When using the screen capture function, set to True.
 
 trigger:
- trigger_threshold_configuration: 0.5
- trigger_class: 'cell phone'
- Arduino_COM: 'None'
- trigger_style: "straight_display"
- 
+ trigger_threshold_configuration: 0.5 # Confidence threshold for firing the trigger
+ trigger_class: "cell phone" # Which detected class fires the trigger
+ Arduino_COM: "None" # COM port the Arduino is connected to ("None" = no device)
+ trigger_pin: 13 # Digital pin used to output the TTL signal
+ trigger_style: straight_display # Which trigger plugin to use
+
 hardware:
- use_camera: True
- camera_id: 0
- camera_width: 640
- camera_height: 480
- camera_scale: 1
- camera_fps: 30
- camera_imshow: False # opencv-window
+ use_camera: True # Whether to use the camera
+ camera_id: 0 # Camera ID
+ camera_width: 640 # Width (px) of images captured by the camera
+ camera_height: 480 # Height (px) of images captured by the camera
+ camera_scale: 1 # Scale factor applied to the camera image
+ camera_fps: 30 # Camera fps
+ camera_imshow: False # When True, an extra OpenCV window opens
+ camera_settings_dialog: False # When True, open the camera driver's property dialog on start

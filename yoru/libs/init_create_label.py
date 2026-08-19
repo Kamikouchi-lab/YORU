@@ -8,8 +8,13 @@ class init_create_label:
         self.m_dict["model_path"] = ""
         self.m_dict["config_file_path"] = ""
         self.m_dict["project_dir"] = ""
+        # Read by the GUI run loop on exit; without them Quit raised KeyError.
+        self.m_dict["quit"] = False
+        self.m_dict["back_to_home"] = False
         self.m_dict["result_dir"] = ""
         self.m_dict["datas_dir"] = ""
+        # Confidence threshold used when auto-generating labels.
+        self.m_dict["threshold"] = 0.25
 
     def __del__(self):
         print("== Initialization finished ==.")

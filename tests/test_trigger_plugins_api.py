@@ -20,3 +20,25 @@ def test_trigger_plugin_api_shape(plugin_path, fake_serial):
     # The trigger signature in current plugins is (self, tri_cl, in_cl, arduino, results, now)
     sig = inspect.signature(cls.trigger)
     assert len(sig.parameters) >= 6, f"trigger(...) should accept >= 6 params, got: {sig}"
+
+@pytest.mark.parametrize("plugin_path", PLUGIN_PATHS)
+def test_trigger_plugin_constructor_takes_m_dict(plugin_path, fake_serial):
+    """yoru.libs.trigger builds every plugin as ``trigger_condition(m_dict)``.
+
+    Three bundled plugins previously declared ``__init__(self)`` and therefore
+    could not be instantiated at all; the API check above did not catch it
+    because it only inspected ``trigger()``.
+    """
+    mod = importlib.import_module(f"trigger_plugins.{plugin_path.stem}")
+    sig = inspect.signature(mod.trigger_condition.__init__)
+    params = list(sig.parameters.values())[1:]  # drop self
+    required = [p.name for p in params if p.default is inspect.Parameter.empty]
+    assert len(required) <= 1, (
+        f"trigger_condition(m_dict) must be constructible, but "
+        f"{plugin_path.name} requires {required}"
+    )
+    if params:
+        assert params[0].kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ), f"{plugin_path.name}: first parameter must accept m_dict positionally"

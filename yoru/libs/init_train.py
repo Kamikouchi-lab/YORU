@@ -14,7 +14,9 @@ class loadingParam:
 # Per-family option definitions
 MODEL_FAMILY_CONFIG = {
     "YOLO": {
-        "versions":  ["YOLOv5", "YOLOv8", "YOLO11"],
+        # YOLOv5 is intentionally absent: the bundled yolov5 backend was removed
+        # in v2.0 and ultralytics cannot train a legacy yolov5 checkpoint.
+        "versions":  ["YOLOv8", "YOLO11"],
         "sizes":     ["n", "s", "m", "l", "x"],
     },
     "RT-DETR": {
@@ -39,8 +41,6 @@ class init_train:
         self.m_dict["project_dir"] = "."
         self.m_dict["yaml_path"] = self.m_dict["project_dir"] + "/config.yaml"
         self.m_dict["weight_list"] = [
-            # YOLOv5
-            "yolov5n.pt", "yolov5s.pt", "yolov5m.pt", "yolov5l.pt", "yolov5x.pt",
             # YOLOv8
             "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
             # YOLO11
@@ -48,7 +48,7 @@ class init_train:
             # RT-DETR
             "rtdetr-l.pt", "rtdetr-x.pt",
         ]
-        self.m_dict["weight"] = "yolov5s.pt"
+        self.m_dict["weight"] = "yolo11s.pt"
 
         # Model family
         self.m_dict["model_family_list"] = list(MODEL_FAMILY_CONFIG.keys())
@@ -56,7 +56,7 @@ class init_train:
 
         # YOLO-specific
         self.m_dict["yolo_version_list"] = MODEL_FAMILY_CONFIG["YOLO"]["versions"]
-        self.m_dict["yolo_version"]      = "YOLOv5"
+        self.m_dict["yolo_version"]      = "YOLO11"
         self.m_dict["yolo_size_list"]    = MODEL_FAMILY_CONFIG["YOLO"]["sizes"]
         self.m_dict["yolo_size"]         = "s"
 

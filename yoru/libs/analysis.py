@@ -8,16 +8,23 @@ import tkinter as tk
 from tkinter import filedialog
 
 import cv2
-import dearpygui.dearpygui as dpg
 import numpy as np
 import pandas as pd
 import torch
 from munkres import Munkres
 
 from yoru.libs.drawing import get_colormap
-from yoru.libs.plugins import get_detector
+from yoru.libs.plugins import DEFAULT_CONF_THRESH, get_detector
 
 logger = logging.getLogger(__name__)
+
+
+def _conf_thresh(m_dict) -> float:
+    """Confidence threshold chosen in the GUI, as a float."""
+    try:
+        return float(m_dict.get("threshold", DEFAULT_CONF_THRESH))
+    except (TypeError, ValueError):
+        return DEFAULT_CONF_THRESH
 
 
 class yolo_analysis:
@@ -117,12 +124,17 @@ class yolo_analysis:
         return img
 
     def analyze(self):
-        dpg.disable_item("analyze_btn")
-        dpg.disable_item("create_movie")
+        """Detect on every configured movie and write one CSV per movie.
 
-        dpg.set_value("analy_time", "Estimated remaining time: calculating...")
-        dpg.set_value("no_mov", "Leaving movies: calculating...")
-        detector = get_detector("auto", self.yolo_model_path)
+        Progress is published through ``m_dict`` so that this method can run on
+        a worker thread; the GUI render loop copies it into the widgets.
+        """
+        self.m_dict["estimate_time"] = "Estimated remaining time: calculating..."
+        self.m_dict["no_movies"] = "Leaving movies: calculating..."
+        self.m_dict["movie_progress"] = 0.0
+        detector = get_detector(
+            "auto", self.yolo_model_path, conf_thresh=_conf_thresh(self.m_dict)
+        )
 
         # クラス名の取得
         self.class_names = detector.names
@@ -131,7 +143,6 @@ class yolo_analysis:
 
         movie_count = len(self.mov_path_list)
         self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
-        dpg.set_value("no_mov", self.m_dict["no_movies"])
 
         for self.mov_path in self.mov_path_list:
             df_results = pd.DataFrame()
@@ -174,16 +185,14 @@ class yolo_analysis:
 
                 result_list = []
                 pre_ids = []
-                dpg.set_value("movie_progress_bar", 0.0)
-                dpg.configure_item("movie_progress_bar", overlay="0%")
+                self.m_dict["movie_progress"] = 0.0
 
                 while video.isOpened():
                     ret, frame = video.read()
                     if not ret:
                         self.m_dict["estimate_time"] = (
-                            f"Estimated remaining time: Processing"
+                            "Estimated remaining time: Processing"
                         )
-                        dpg.set_value("analy_time", self.m_dict["estimate_time"])
                         break
 
                     start_time = time.time()
@@ -261,8 +270,7 @@ class yolo_analysis:
                     result_list = result_list + result
 
                     progress = frame_count / total_frames if total_frames > 0 else 0.0
-                    dpg.set_value("movie_progress_bar", progress)
-                    dpg.configure_item("movie_progress_bar", overlay=f"{int(progress * 100)}%")
+                    self.m_dict["movie_progress"] = progress
 
                     end_time = time.time()
                     process_time = end_time - start_time
@@ -274,7 +282,6 @@ class yolo_analysis:
                     self.m_dict["estimate_time"] = (
                         f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
                     )
-                    dpg.set_value("analy_time", self.m_dict["estimate_time"])
 
                 # リストをデータフレームに変換
                 if self.m_dict["tracking_state"]:
@@ -318,20 +325,31 @@ class yolo_analysis:
 
             movie_count = movie_count - 1
             self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
-            dpg.set_value("no_mov", self.m_dict["no_movies"])
 
         self.m_dict["estimate_time"] = "Estimated remaining time: none"
         self.m_dict["no_movies"] = "Leaving movies: none"
-        dpg.set_value("analy_time", self.m_dict["estimate_time"])
-        dpg.set_value("no_mov", self.m_dict["no_movies"])
-        dpg.set_value("movie_progress_bar", 1.0)
-        dpg.configure_item("movie_progress_bar", overlay="Done")
-        dpg.enable_item("analyze_btn")
-        dpg.enable_item("create_movie")
+        self.m_dict["movie_progress"] = 1.0
 
-    def create_video(self):
-        dpg.set_value("cr_analy_time", "Estimated remaining time: calculating...")
-        detector = get_detector("auto", self.yolo_model_path)
+    def create_video(self, mov_path=None):
+        """Render an annotated copy of *mov_path*.
+
+        *mov_path* defaults to the movie analysed most recently, then to the
+        first configured input, so the method no longer depends on ``analyze()``
+        having populated ``self.mov_path`` as a side effect.
+        """
+        if mov_path is None:
+            mov_path = getattr(self, "mov_path", None)
+        if mov_path is None:
+            mov_path = self.mov_path_list[0] if len(self.mov_path_list) else None
+        if mov_path is None:
+            raise ValueError("No input movie selected for create_video()")
+        self.mov_path = mov_path
+
+        conf_thresh = _conf_thresh(self.m_dict)
+        self.m_dict["cr_estimate_time"] = "Estimated remaining time: calculating..."
+        detector = get_detector(
+            "auto", self.yolo_model_path, conf_thresh=conf_thresh
+        )
         self.class_names = detector.names
         self.colormap = get_colormap(self.class_names, "gist_rainbow")
 
@@ -362,9 +380,8 @@ class yolo_analysis:
                 ret, frame = cap.read()
                 if not ret:
                     self.m_dict["cr_estimate_time"] = (
-                        f"Estimated remaining time: Processing"
+                        "Estimated remaining time: Processing"
                     )
-                    dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
                     break
 
                 start_time = time.time()
@@ -379,6 +396,8 @@ class yolo_analysis:
 
                 result = []
                 for d in detections:
+                    if d["conf"] < conf_thresh:
+                        continue
                     x_center = (d["x1"] + d["x2"]) / 2
                     y_center = (d["y1"] + d["y2"]) / 2
                     result.append([
@@ -402,13 +421,11 @@ class yolo_analysis:
                 self.m_dict["cr_estimate_time"] = (
                     f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
                 )
-                dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
         finally:
             cap.release()
             out.release()
 
         self.m_dict["cr_estimate_time"] = "Estimated remaining time: none"
-        dpg.set_value("cr_analy_time", self.m_dict["cr_estimate_time"])
 
 
 class yolo_analysis_image:
@@ -446,13 +463,18 @@ class yolo_analysis_image:
         return img
 
     def analyze_image(self):
-        dpg.disable_item("analyze_img_btn")
+        """Detect on every configured image and write one combined CSV.
 
-        dpg.set_value("analy_state", "Analyzing...")
-        dpg.set_value("image_progress_bar", 0.0)
-        dpg.configure_item("image_progress_bar", overlay="0%")
+        Progress is published through ``m_dict`` so this can run off the GUI thread.
+        """
+        conf_thresh = _conf_thresh(self.m_dict)
+        self.m_dict["analy_state"] = "Analyzing..."
+        self.m_dict["image_progress"] = 0.0
+        self.m_dict["image_progress_label"] = "0%"
 
-        detector = get_detector("auto", self.yolo_model_path)
+        detector = get_detector(
+            "auto", self.yolo_model_path, conf_thresh=conf_thresh
+        )
 
         # クラス名の取得
         self.class_names = detector.names
@@ -484,6 +506,8 @@ class yolo_analysis_image:
 
             result_frame = frame
             for d in detections:
+                if d["conf"] < conf_thresh:
+                    continue
                 x_center = (d["x1"] + d["x2"]) / 2
                 y_center = (d["y1"] + d["y2"]) / 2
 
@@ -517,8 +541,8 @@ class yolo_analysis_image:
             cv2.imwrite(result_file_path, result_frame)
 
             progress = (image_index + 1) / image_count if image_count > 0 else 0.0
-            dpg.set_value("image_progress_bar", progress)
-            dpg.configure_item("image_progress_bar", overlay=f"{image_index + 1}/{image_count}")
+            self.m_dict["image_progress"] = progress
+            self.m_dict["image_progress_label"] = f"{image_index + 1}/{image_count}"
 
         # リストをデータフレームに変換
         df_results = pd.DataFrame(
@@ -539,10 +563,9 @@ class yolo_analysis_image:
         # csvとして出力
         df_results.to_csv(file_path, index=False)
 
-        dpg.set_value("analy_state", "Done!")
-        dpg.set_value("image_progress_bar", 1.0)
-        dpg.configure_item("image_progress_bar", overlay="Done")
-        dpg.enable_item("analyze_img_btn")
+        self.m_dict["analy_state"] = "Done!"
+        self.m_dict["image_progress"] = 1.0
+        self.m_dict["image_progress_label"] = "Done"
 
 
 class file_open:

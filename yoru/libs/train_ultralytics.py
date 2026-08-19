@@ -29,6 +29,9 @@ def main():
     parser.add_argument("--imgsz",   type=int, default=640, help="Input image size")
     parser.add_argument("--batch",   type=int, default=16,  help="Batch size")
     parser.add_argument("--project", default=".",           help="Project output directory")
+    parser.add_argument("--device",  default=None,
+                        help="Training device, e.g. '0', '0,1' or 'cpu' "
+                             "(default: chosen by ultralytics)")
     args = parser.parse_args()
 
     try:
@@ -38,18 +41,26 @@ def main():
         else:
             from ultralytics import YOLO
             model = YOLO(args.weights)
-        model.train(
+        train_kwargs = dict(
             data=args.data,
             epochs=args.epochs,
             imgsz=args.imgsz,
             batch=args.batch,
             project=args.project,
         )
+        if args.device is not None:
+            train_kwargs["device"] = args.device
+        model.train(**train_kwargs)
     except FileNotFoundError as e:
         print(f"[yoru] Model weights not found: {e}")
         raise SystemExit(1)
     except Exception as e:
+        # Print the traceback: a one-line message is not enough to diagnose or
+        # report a training failure.
+        import traceback
+
         print(f"[yoru] Training failed: {e}")
+        traceback.print_exc()
         raise SystemExit(1)
 
 

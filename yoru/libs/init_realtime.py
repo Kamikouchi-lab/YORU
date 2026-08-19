@@ -7,7 +7,6 @@ import re
 import time
 
 import numpy as np
-import torch
 
 from yoru.libs.util import loadingParam
 
@@ -18,7 +17,7 @@ class init_asovi:
         self.m_dict = m_dict
 
         # Essential & Control
-        self.m_dict["now"] = datetime.datetime.now()
+        self.m_dict["now"] = time.perf_counter()
         self.m_dict["t0"] = time.perf_counter()
         self.m_dict["quit"] = False
         self.m_dict["back_to_home"] = False
@@ -67,6 +66,10 @@ class init_asovi:
             dtype="uint8",
         )
         self.m_dict["camera_imshow"] = self.conf["hardware"]["camera_imshow"]
+        # Opt-in DirectShow driver property dialog (off unless requested).
+        self.m_dict["camera_settings_dialog"] = bool(
+            self.conf["hardware"].get("camera_settings_dialog", False)
+        )
 
         # Camera
         # self.m_dict["camera_fps"] = 0.0
@@ -86,7 +89,14 @@ class init_asovi:
         # trigger conditions
         self.m_dict["Trigger"] = False
         self.m_dict["COM_list"] = []
-        self.m_dict["pin"] = 13
+        try:
+            self.m_dict["pin"] = int(self.conf["trigger"].get("trigger_pin", 13))
+        except (TypeError, ValueError):
+            print(
+                f"Invalid trigger_pin {self.conf['trigger'].get('trigger_pin')!r}; "
+                "falling back to 13"
+            )
+            self.m_dict["pin"] = 13
         self.m_dict["trigger_th_conf"] = self.conf["trigger"][
             "trigger_threshold_configuration"
         ]
@@ -104,14 +114,13 @@ class init_asovi:
         self.m_dict["trigger_signal"] = 0
 
         # VR environment
-        self.m_dict["now"] = datetime.datetime.now()
         self.m_dict["FileNameHead"] = self.conf["export_name"]
         self.m_dict["initialized"] = True
 
     def listCh(self, linestr="line0:3", default=False):
         daqreg = r"(\d{1,}):(\d{1,})"
         if not (re.search(daqreg, linestr)):
-            daqChlist = [default]
+            daqChList = [default]
         else:
             daqCh = np.double(
                 [re.search(daqreg, linestr).group(x) for x in range(1, 3)]

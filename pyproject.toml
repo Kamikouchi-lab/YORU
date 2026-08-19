@@ -1,6 +1,6 @@
 [project]
 name = "yoru"
-version = "1.1.1"
+version = "2.0.0b2"
 description = "YORU - Your Own Research Utility for real-time behavioral analysis"
 readme = "README.md"
 requires-python = ">=3.9,<3.10"
@@ -28,6 +28,7 @@ dependencies = [
     "tqdm==4.66.4",
     "ultralytics>=8.3.0",
     "ultralytics-thop==2.0.0",
+    "onnxruntime>=1.16",
     "mss==9.0.1",
     "scikit-image==0.21.0",
     "imgui==2.0.0",
@@ -51,6 +52,29 @@ yoru = "yoru.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# YORU is run from a project directory: web/, config/ and trigger_plugins/ sit
+# beside the package so that users can read and edit their own trigger plugins
+# and condition files. The wheel therefore ships only the importable package,
+# while the sdist carries the whole runnable project.
+[tool.hatch.build.targets.wheel]
+packages = ["yoru"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/yoru",
+    "/trigger_plugins",
+    "/config",
+    "/web",
+    "/docs",
+    "/logos",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/THIRD_PARTY_LICENSES.md",
+    "/YORU.yml",
+    "/pytest.ini",
+]
 
 [tool.uv]
 dev-dependencies = [

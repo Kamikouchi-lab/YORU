@@ -399,14 +399,17 @@ class yoru_train:
         )
         file_path = self.m_dict["project_dir"] + "/config.yaml"
         if not os.path.exists(file_path):
-            os.makedirs(self.m_dict["project_dir"])
-            os.makedirs(self.m_dict["project_dir"] + "/train")
-            os.makedirs(self.m_dict["project_dir"] + "/train/images")
-            os.makedirs(self.m_dict["project_dir"] + "/train/labels")
-            os.makedirs(self.m_dict["project_dir"] + "/val")
-            os.makedirs(self.m_dict["project_dir"] + "/val/images")
-            os.makedirs(self.m_dict["project_dir"] + "/val/labels")
-            os.makedirs(self.m_dict["project_dir"] + "/all_label_images")
+            for sub in (
+                "",
+                "/train",
+                "/train/images",
+                "/train/labels",
+                "/val",
+                "/val/images",
+                "/val/labels",
+                "/all_label_images",
+            ):
+                os.makedirs(self.m_dict["project_dir"] + sub, exist_ok=True)
             self.m_dict["yaml_path"] = self.m_dict["project_dir"] + "/config.yaml"
             self.m_dict["all_label_dir"] = (
                 self.m_dict["project_dir"] + "/all_label_images"
@@ -425,7 +428,14 @@ class yoru_train:
         """ウェイトファイル名からモデルファミリー/バージョン/サイズのUIを復元する。"""
         w = weight.lower()
         if w.startswith("yolov5"):
-            family, version, size = "YOLO", "YOLOv5", w[6] if len(w) > 6 else "s"
+            # v1 projects: YOLOv5 training is no longer bundled, so restore the
+            # same size on YOLO11 instead of showing an unusable selection.
+            size = w[6] if len(w) > 6 else "s"
+            print(
+                f"[yoru] This project was trained with '{weight}'. YOLOv5 training "
+                f"is no longer bundled; switching to yolo11{size}.pt."
+            )
+            family, version = "YOLO", "YOLO11"
         elif w.startswith("yolov8"):
             family, version, size = "YOLO", "YOLOv8", w[6] if len(w) > 6 else "s"
         elif w.startswith("yolo11"):
@@ -458,6 +468,11 @@ class yoru_train:
             if size in self.m_dict.get("rtdetr_size_list", []):
                 self.m_dict["rtdetr_size"] = size
                 dpg.set_value("rtdetr_size_combo", size)
+
+        # Keep the weight in step with the restored combos; this is what remaps
+        # a legacy yolov5 selection onto a weight that can actually be trained.
+        self.m_dict["weight"] = self._build_weight()
+        dpg.set_value("weight_display_text", self.m_dict["weight"])
 
     def load_pr_dir(self):
         print("load project")
@@ -545,11 +560,15 @@ class yoru_train:
         # dpg.destroy_context()  # <-- moved from __del__
 
     def labelImg_bt(self):
-        # print("quit_pushed")
-        # self.m_dict["quit"] = True
-        subprocess.call(["labelImg"])
+        # Popen, not call: subprocess.call would freeze the training GUI for as
+        # long as labelImg stays open.
+        try:
+            subprocess.Popen(["labelImg"])
+        except OSError as e:
+            print(f"Failed to launch labelImg: {e}")
+            self._set_step_state("step3_state", "Error")
+            return
         self._set_step_state("step3_state", "Complete!!")
-        # dpg.destroy_context()  # <-- moved from __del__
 
     def quit_cb(self):
         print("quit_pushed")
@@ -563,19 +582,25 @@ class yoru_train:
         dpg.destroy_context()  # <-- moved from __del__
 
     def add_class_file(self):
-        cr_project = create_project(self.m_dict)
-        if "classes.txt" in self.m_dict["classes_path"] and os.path.exists(
-            self.m_dict["classes_path"]
-        ):
-            cr_project.add_class_info()
+        classes_path = self.m_dict.get("classes_path", "")
+        if "classes.txt" not in classes_path or not os.path.exists(classes_path):
+            print(f"Select a valid classes.txt first (got {classes_path!r})")
+            self._set_step_state("step5_state", "Error")
+            return
+        try:
+            create_project(self.m_dict).add_class_info()
+        except Exception as e:
+            print(f"Failed to add class info: {e}")
+            self._set_step_state("step5_state", "Error")
+            return
         self._set_step_state("step5_state", "Complete!!")
 
     def _build_weight(self) -> str:
         """選択中のモデルファミリー・バージョン・サイズからウェイトファイル名を生成する。"""
         family = self.m_dict.get("model_family", "YOLO")
         if family == "YOLO":
-            prefix_map = {"YOLOv5": "yolov5", "YOLOv8": "yolov8", "YOLO11": "yolo11"}
-            prefix = prefix_map.get(self.m_dict.get("yolo_version", "YOLOv5"), "yolov5")
+            prefix_map = {"YOLOv8": "yolov8", "YOLO11": "yolo11"}
+            prefix = prefix_map.get(self.m_dict.get("yolo_version", "YOLO11"), "yolo11")
             size = self.m_dict.get("yolo_size", "s")
             return f"{prefix}{size}.pt"
         elif family == "RT-DETR":
@@ -587,7 +612,7 @@ class yoru_train:
             return "maskrcnn_resnet50_best.pt"
         elif family == "SSD":
             return "ssd_vgg16_best.pt"
-        return "yolov5s.pt"
+        return "yolo11s.pt"
 
     def select_family(self):
         family = dpg.get_value("model_family_combo")

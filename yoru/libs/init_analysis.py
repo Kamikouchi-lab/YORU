@@ -29,6 +29,15 @@ class init_analysis:
         self.m_dict["threshold"] = 0.3
         self.m_dict["tracking_exclude_classes"] = []
 
+        # Progress published by the analysis worker thread and mirrored into
+        # the widgets by analyze_GUI.plot_callback().
+        self.m_dict["movie_progress"] = 0.0
+        self.m_dict["image_progress"] = 0.0
+        self.m_dict["image_progress_label"] = "0%"
+        self.m_dict["analy_state"] = "Ready"
+        self.m_dict["analysis_running"] = False
+        self.m_dict["analysis_error"] = ""
+
     def __del__(self):
         print("== Initialization finished ==.")
 

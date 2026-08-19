@@ -1,6 +1,12 @@
 """Test to verify PyTorch works correctly in CUDA environment"""
 
-import torch
+import pytest
+
+# Skip (rather than break collection of the whole suite) when torch is absent,
+# e.g. on a CPU-only machine or in a docs/lint CI job.
+torch = pytest.importorskip("torch", reason="torch not installed")
+
+pytestmark = pytest.mark.slow
 
 
 def test_cuda_available():

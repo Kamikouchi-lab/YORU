@@ -7,7 +7,6 @@ import time
 import cv2
 import numpy as np
 
-from yoru.libs.drawing import get_colormap
 from yoru.libs.plugins import get_detector
 
 logger = logging.getLogger(__name__)
@@ -19,31 +18,6 @@ class yolo_detection:
         self.yolo_model_path = self.m_dict["yolo_model"]
         self.names = {}
         self.colormap = {}
-
-    def drawing(self, img, results):
-        for *box, conf, cls in self.m_dict["yolo_results"]:
-            label = f"{self.names[int(cls)]} {conf:.2f}"
-
-            cv2.rectangle(
-                img,
-                pt1=(int(box[0]), int(box[1])),
-                pt2=(int(box[2]), int(box[3])),
-                color=self.colormap[int(cls)],
-                thickness=4,
-                lineType=cv2.LINE_4,
-                shift=0,
-            )
-            cv2.putText(
-                img,
-                text=label,
-                org=(int(box[0]), int(box[1]) - 10),
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                fontScale=1.5,
-                color=self.colormap[int(cls)],
-                thickness=5,
-                lineType=cv2.LINE_4,
-            )
-        return img
 
     def detect(self, m_dict):
         logger.info("YOLO detection start...")
