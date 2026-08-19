@@ -25,9 +25,15 @@ Saved checkpoint format (loadable by TorchvisionWrapper):
         "model_type": "fasterrcnn" | "maskrcnn" | "ssd",
     }
 Output files: <project>/<name>/<model_type>_best.pt  and  <model_type>_last.pt
+where <name> defaults to exp_<model_type> (exp_fasterrcnn, exp_fasterrcnn2, ...)
+
+--stop-file names a file that ends training after the epoch in progress as
+soon as it appears; the training GUI's "Stop after this epoch" button writes
+it.  See libs/train_stop.py.
 """
 
 import argparse
+import sys
 from pathlib import Path
 
 import torch
@@ -35,6 +41,13 @@ import yaml
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms.functional import to_tensor
+
+# Run as a script (see plugins/torchvision_trainer.py), so only this file's own
+# directory is on sys.path; put the repository root back on it so that YORU is
+# importable from a source checkout too.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from yoru.libs.train_stop import clear_stop, stop_requested  # noqa: E402
 
 
 class YOLOFormatDataset(Dataset):
@@ -143,6 +156,30 @@ def collate_fn(batch):
     return tuple(zip(*batch))
 
 
+def run_name(model_type: str) -> str:
+    """Name of the results folder for this run: ``exp_<model>``.
+
+    The old default was ``train``, which is also where YORU keeps the training
+    images (``<project>/train/``), so checkpoints were written straight into
+    the dataset split.
+    """
+    return "exp_" + model_type
+
+
+def unique_run_dir(project: Path, name: str) -> Path:
+    """``<project>/<name>``, or ``<name>2``, ``<name>3``, ... if taken.
+
+    Same scheme as ultralytics, so a second run of the same model never
+    overwrites the weights of the first one.
+    """
+    candidate = project / name
+    index = 2
+    while candidate.exists():
+        candidate = project / f"{name}{index}"
+        index += 1
+    return candidate
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Train Faster R-CNN / Mask R-CNN / SSD with YOLO-format labels."
@@ -155,7 +192,13 @@ def main():
     parser.add_argument("--epochs",  type=int, default=50)
     parser.add_argument("--batch",   type=int, default=4)
     parser.add_argument("--project", required=True, help="Output directory")
-    parser.add_argument("--name",    default="train")
+    parser.add_argument("--name",    default=None,
+                        help="Results folder under --project "
+                             "(default: exp_<model>, e.g. exp_fasterrcnn)")
+    parser.add_argument("--stop-file", default=None,
+                        help="Path of the stop-request file: training ends "
+                             "after the epoch during which this file appears "
+                             "(default: no cooperative stop)")
     args = parser.parse_args()
 
     with open(args.data) as f:
@@ -195,10 +238,14 @@ def main():
         optimizer, step_size=max(1, args.epochs // 3), gamma=0.1
     )
 
-    output_dir = Path(args.project) / args.name
+    output_dir = unique_run_dir(
+        Path(args.project), args.name or run_name(args.model)
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Results will be saved to {output_dir}")
 
     best_loss = float("inf")
+    stopped_early = False
 
     for epoch in range(args.epochs):
         model.train()
@@ -242,7 +289,18 @@ def main():
             torch.save(checkpoint, output_dir / f"{args.model}_best.pt")
             print(f"  -> Best model saved (loss={best_loss:.4f})")
 
-    print(f"Training complete. Results saved to {output_dir}")
+        # End of an epoch, with both checkpoints written: the one point where
+        # stopping costs nothing.  See libs/train_stop.py.
+        if stop_requested(args.stop_file):
+            clear_stop(args.stop_file)
+            print(f"[yoru] Stop requested: ending after epoch {epoch+1}.")
+            stopped_early = True
+            break
+
+    if stopped_early:
+        print(f"Training stopped early. Results saved to {output_dir}")
+    else:
+        print(f"Training complete. Results saved to {output_dir}")
 
 
 if __name__ == "__main__":

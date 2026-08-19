@@ -38,6 +38,11 @@ class UltralyticsTrainer(TrainerBase):
             "--project",
             str(config["project_dir"]),
         ]
+        if config.get("stop_file"):
+            # Lets the GUI end the run cleanly at an epoch boundary;
+            # see libs/train_stop.py.
+            cmd += ["--stop-file", str(config["stop_file"])]
+
         if config.get("device"):
             cmd += ["--device", str(config["device"])]
 

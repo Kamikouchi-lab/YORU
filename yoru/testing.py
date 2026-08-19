@@ -69,6 +69,7 @@ def run_training(
     ``config.yaml``.  Raises if the training subprocess fails.
     """
     from yoru.libs.plugins import get_trainer
+    from yoru.libs.train_progress import ProgressPrinter
 
     data = Path(data_dir)
     if data.is_dir():
@@ -97,8 +98,11 @@ def run_training(
         }
     )
     if proc.stdout is not None:
-        for line in proc.stdout:
-            print(line, end="")
+        # Collapse the per-batch progress redraws; see train_progress.py.
+        printer = ProgressPrinter()
+        for raw_line in proc.stdout:
+            printer.write(printer.clean(raw_line))
+        printer.close()
     returncode = proc.wait()
     if returncode != 0:
         raise RuntimeError(

@@ -15,12 +15,47 @@ import yaml
 from yoru.libs.create_yaml_train import create_project
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.init_train import init_train
+from yoru.libs.train_progress import ProgressPrinter
+from yoru.libs.train_stop import (
+    clear_stop,
+    request_stop,
+    stop_file_for,
+    terminate_process_tree,
+)
+from yoru.libs.vram_estimate import (
+    check_training_vram,
+    get_gpu_info,
+    read_dataset_stats,
+)
 
 
 class yoru_train:
     def __init__(self, m_dict=None):
         self.m_dict = m_dict if m_dict is not None else {}
         self.fd_tk = file_dialog_tk(self.m_dict)
+
+        # VRAM estimate caches.  The estimate is recomputed every frame from
+        # whatever is on screen, so everything that costs more than a dict
+        # lookup -- polling the driver, walking the label directory -- is
+        # cached and refreshed only when its input actually changed.
+        self._gpu_info = None
+        self._vram_key = None
+        self._dataset_stats = None
+        self._dataset_key = None
+        self._last_verdict = None
+        self._gpu_ready = False
+        # A plain flag, not a threading.Event: main() hands this object to
+        # Process(target=gui.run), which pickles it, and a lock cannot be
+        # pickled.  The poller is a daemon thread, so a lazy stop is enough.
+        self._gpu_stop = False
+        self._last_valid_nums = (640, 16)
+
+        # Training subprocess state.  The handle only means anything in the
+        # process that started it -- the same one that runs the callbacks --
+        # so what the render loop needs is mirrored in m_dict instead.
+        self._train_proc = None
+        self._stop_file = None
+        self._stop_ui_state = None
 
     def startDPG(self):
         dpg.create_context()
@@ -88,6 +123,16 @@ class yoru_train:
             with dpg.theme_component(dpg.mvText):
                 dpg.add_theme_color(dpg.mvThemeCol_Text, (210, 60, 60),  category=dpg.mvThemeCat_Core)
         self._error_theme = _error_theme
+
+        with dpg.theme() as _warn_theme:
+            with dpg.theme_component(dpg.mvText):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (230, 145, 40), category=dpg.mvThemeCat_Core)
+        self._warn_theme = _warn_theme
+
+        with dpg.theme() as _info_theme:
+            with dpg.theme_component(dpg.mvText):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (150, 155, 165), category=dpg.mvThemeCat_Core)
+        self._info_theme = _info_theme
 
         with dpg.theme() as _train_btn_theme:
             with dpg.theme_component(dpg.mvButton):
@@ -303,10 +348,34 @@ class yoru_train:
                         )
 
             dpg.add_spacer(height=8)
-            dpg.add_button(
-                label="Train Model", tag="str_btn",
-                width=150, height=35, callback=lambda: self.run_yolo(), enabled=True,
-            )
+            with dpg.group(horizontal=True):
+                dpg.add_text(default_value="GPU memory:")
+                dpg.add_text(tag="vram_headline", default_value="checking...")
+            dpg.add_text(tag="vram_detail", default_value="", wrap=700, indent=12)
+            dpg.add_spacer(height=6)
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Train Model", tag="str_btn",
+                    width=150, height=35, callback=lambda: self.run_yolo(), enabled=True,
+                )
+                dpg.add_spacer(width=10)
+                # Live only while a run is: it asks the trainer to finish the
+                # epoch it is on -- and write its checkpoint -- instead of
+                # killing it somewhere in the middle of one.
+                dpg.add_button(
+                    label="Stop after this epoch", tag="stop_btn",
+                    width=200, height=35, callback=lambda: self.stop_after_epoch(),
+                    enabled=False,
+                )
+                dpg.add_spacer(width=10)
+                # Only offered once a stop is pending, for an epoch too long
+                # to sit through.
+                dpg.add_button(
+                    label="Force stop", tag="force_stop_btn",
+                    width=120, height=35, callback=lambda: self.force_stop_prompt(),
+                    show=False,
+                )
+            dpg.add_text(tag="train_stop_text", default_value="", wrap=700)
             dpg.add_spacer(height=4)
             with dpg.group(horizontal=True):
                 dpg.add_text(default_value="Progress: ")
@@ -331,8 +400,57 @@ class yoru_train:
                     width=80, height=30, callback=lambda: self.quit_cb(), enabled=True,
                 )
 
+        # ── Out-of-memory confirmation ────────────────────────────────────────
+        # A modal rather than a passive label: by the time the estimate says
+        # the run will not fit, starting it anyway costs the user the minutes
+        # it takes CUDA to reach the allocation that fails.
+        with dpg.window(
+            label="GPU memory warning", tag="vram_modal", modal=True, show=False,
+            no_resize=True, no_collapse=True, width=560, height=230, pos=(180, 200),
+        ):
+            dpg.add_text(tag="vram_modal_text", default_value="", wrap=520)
+            dpg.add_spacer(height=10)
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Use suggested batch", tag="vram_modal_fix",
+                    width=180, height=30, callback=lambda: self.vram_modal_use_batch(),
+                )
+                dpg.add_button(
+                    label="Train anyway", tag="vram_modal_force",
+                    width=130, height=30, callback=lambda: self.vram_modal_force(),
+                )
+                dpg.add_button(
+                    label="Cancel", tag="vram_modal_cancel",
+                    width=100, height=30, callback=lambda: self.vram_modal_cancel(),
+                )
+
+        # ── Force-stop confirmation ───────────────────────────────────────────
+        # Killing the trainer costs the epoch it is in the middle of, and with
+        # it the validation and best-weights pass that only runs once the epoch
+        # loop ends by itself.  The button that does it therefore asks first.
+        with dpg.window(
+            label="Force stop training", tag="force_stop_modal", modal=True,
+            show=False, no_resize=True, no_collapse=True,
+            width=520, height=210, pos=(200, 220),
+        ):
+            dpg.add_text(tag="force_stop_modal_text", default_value="", wrap=480)
+            dpg.add_spacer(height=10)
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Force stop now", tag="force_stop_confirm",
+                    width=170, height=30, callback=lambda: self.force_stop(),
+                )
+                dpg.add_button(
+                    label="Keep training", tag="force_stop_keep",
+                    width=150, height=30, callback=lambda: self.force_stop_cancel(),
+                )
+
         # ── Bind per-widget themes ────────────────────────────────────────────
         dpg.bind_item_theme("str_btn",  self._train_btn_theme)
+        dpg.bind_item_theme("vram_modal_force", self._quit_btn_theme)
+        dpg.bind_item_theme("force_stop_btn", self._quit_btn_theme)
+        dpg.bind_item_theme("force_stop_confirm", self._quit_btn_theme)
+        dpg.bind_item_theme("train_stop_text", self._warn_theme)
         dpg.bind_item_theme("quit_btn", self._quit_btn_theme)
         dpg.bind_item_theme("home_btn", self._home_btn_theme)
         for _tag in ["step1_state", "step2_state", "step3_state",
@@ -341,21 +459,203 @@ class yoru_train:
 
         dpg.setup_dearpygui()
         dpg.show_viewport()
+        self._start_gpu_poller()
 
     def _set_step_state(self, tag: str, state: str) -> None:
         """Update a step state text and apply the matching color theme."""
         dpg.set_value(tag, state)
         if state == "Complete!!":
             dpg.bind_item_theme(tag, self._complete_theme)
+        elif state == "Stopped":
+            dpg.bind_item_theme(tag, self._warn_theme)
         elif state == "Error":
             dpg.bind_item_theme(tag, self._error_theme)
         else:
             dpg.bind_item_theme(tag, self._yet_theme)
 
-    def plot_callback(self) -> None:
+    # ── GPU memory estimate ───────────────────────────────────────────────
+    # The driver is polled off the render thread: nvidia-smi takes ~100 ms to
+    # answer, which is several dropped frames if it is called from the frame
+    # loop.  The loop only reads the value the poller last stored.
+    _GPU_POLL_INTERVAL = 2.0
+
+    def _start_gpu_poller(self) -> None:
+        """Refresh the cached GPU reading in the background until quit."""
+
+        def _poll():
+            while not self._gpu_stop:
+                self._gpu_info = get_gpu_info()
+                self._gpu_ready = True
+                time.sleep(self._GPU_POLL_INTERVAL)
+
+        threading.Thread(target=_poll, daemon=True).start()
+
+    def _invalidate_dataset_stats(self) -> None:
+        """Force the next estimate to re-walk the dataset."""
+        self._dataset_key = None
+        self._vram_key = None
+
+    def _current_vram_inputs(self):
+        """Model, image size, batch and dataset YAML as the widgets have them.
+
+        Image Size and Batch are free-text fields, so they are empty or
+        half-typed for a moment on every edit.  Those transient values fall
+        back to the last ones that parsed, which keeps the estimate steady
+        instead of snapping to a default mid-keystroke.
+        """
+        last_img, last_batch = self._last_valid_nums
+
+        def _int(tag, fallback):
+            try:
+                value = int(str(dpg.get_value(tag)).strip())
+            except (TypeError, ValueError):
+                return fallback
+            return value if value > 0 else fallback
+
+        imgsz = _int("img_num_in", last_img)
+        batch = _int("batch_num_in", last_batch)
+        self._last_valid_nums = (imgsz, batch)
+        return (
+            str(self.m_dict.get("weight", "")),
+            imgsz,
+            batch,
+            str(self.m_dict.get("yaml_path", "")),
+        )
+
+    def _current_dataset_stats(self, yaml_path):
+        """Dataset stats for *yaml_path*, re-read only when the YAML changes."""
+        key = None
+        if yaml_path and os.path.exists(yaml_path):
+            try:
+                key = (yaml_path, os.path.getmtime(yaml_path))
+            except OSError:
+                key = (yaml_path, 0.0)
+        if key != self._dataset_key:
+            self._dataset_key = key
+            self._dataset_stats = read_dataset_stats(yaml_path) if key else None
+        return self._dataset_stats
+
+    def _refresh_vram(self) -> None:
+        """Recompute the memory readout when any of its inputs moved."""
+        if not self._gpu_ready:
+            return
+        weight, imgsz, batch, yaml_path = self._current_vram_inputs()
+        gpu = self._gpu_info
+        key = (weight, imgsz, batch, yaml_path, gpu)
+        if key == self._vram_key:
+            return
+        self._vram_key = key
+
+        stats = self._current_dataset_stats(yaml_path)
+        verdict = check_training_vram(weight, imgsz, batch, stats, gpu)
+        self._last_verdict = verdict
+
+        dpg.set_value("vram_headline", verdict.headline)
+        dpg.set_value("vram_detail", verdict.detail)
+        theme = {
+            "ok":    self._complete_theme,
+            "tight": self._warn_theme,
+            "over":  self._error_theme,
+        }.get(verdict.level, self._info_theme)
+        dpg.bind_item_theme("vram_headline", theme)
+        dpg.bind_item_theme("vram_detail", self._info_theme)
+
+    def _show_vram_modal(self, verdict) -> None:
+        dpg.set_value(
+            "vram_modal_text",
+            verdict.headline + "\n\n" + verdict.detail,
+        )
+        if verdict.suggested_batch:
+            dpg.configure_item(
+                "vram_modal_fix", show=True,
+                label=f"Use Batch {verdict.suggested_batch}",
+            )
+        else:
+            dpg.configure_item("vram_modal_fix", show=False)
+        dpg.configure_item("vram_modal", show=True)
+
+    def vram_modal_use_batch(self):
+        """Apply the largest batch that is estimated to fit, then train."""
+        batch = getattr(self._last_verdict, "suggested_batch", None)
+        if batch:
+            dpg.set_value("batch_num_in", str(batch))
+            self.m_dict["batch"] = str(batch)
+            self._refresh_vram()
+        dpg.configure_item("vram_modal", show=False)
+        self._start_training()
+
+    def vram_modal_force(self):
+        dpg.configure_item("vram_modal", show=False)
+        self._start_training()
+
+    def vram_modal_cancel(self):
+        dpg.configure_item("vram_modal", show=False)
+
+    def _sync_stop_controls(self) -> None:
+        """Match the stop controls to what the training subprocess is doing.
+
+        Driven from m_dict by the render loop rather than set directly by
+        the monitor thread: DearPyGui is the render thread's to touch, and
+        the thread reading the pipe has no business in it.
+        """
+        active = bool(self.m_dict.get("training_active", False))
+        mode = self.m_dict.get("train_stop_mode", "")
+        state = (active, mode)
+        if state == self._stop_ui_state:
+            return
+        self._stop_ui_state = state
+
+        dpg.configure_item("str_btn", enabled=not active)
+        dpg.configure_item("stop_btn", enabled=active and not mode)
+        dpg.configure_item("force_stop_btn", show=active and mode == "graceful")
+        if active and mode == "graceful":
+            dpg.set_value(
+                "train_stop_text",
+                "Stopping: the epoch in progress is run to the end and saved first, so this takes until it finishes.",
+            )
+        elif active:
+            dpg.set_value("train_stop_text", "")
+        # When the run is over the text is left alone: it holds the outcome
+        # message written by _show_training_outcome().
+
+    def _show_training_outcome(self) -> None:
+        """Report how the run that just ended finished: done, or stopped."""
+        mode = self.m_dict.get("train_stop_mode", "")
         epoch = self.m_dict.get("train_epoch", 0)
         total = self.m_dict.get("train_total_epoch", 0)
-        if total > 0:
+        # A stop asked for during the last epoch changes nothing: the run
+        # reached its end either way.
+        if not mode or (total and epoch >= total):
+            self._set_step_state("step6_state", "Complete!!")
+            dpg.set_value("train_progress_bar", 1.0)
+            dpg.set_value("train_progress_text", "Done!")
+            dpg.set_value("train_eta_text", "0s")
+            dpg.set_value("train_stop_text", "")
+            return
+
+        self._set_step_state("step6_state", "Stopped")
+        dpg.set_value("train_progress_text", f"Stopped at epoch {epoch} / {total}")
+        dpg.set_value("train_eta_text", "---")
+        if mode == "force":
+            dpg.set_value(
+                "train_stop_text",
+                "Force-stopped. The epoch that was running is lost; the checkpoints written before it are in the run folder.",
+            )
+        else:
+            dpg.set_value(
+                "train_stop_text",
+                f"Stopped after epoch {epoch}. Its weights are saved in the run folder of the project directory.",
+            )
+
+    def plot_callback(self) -> None:
+        self._refresh_vram()
+        self._sync_stop_controls()
+        epoch = self.m_dict.get("train_epoch", 0)
+        total = self.m_dict.get("train_total_epoch", 0)
+        # Only while a run is going: DearPyGui keeps the last value it was
+        # given, so re-deriving the line from the epoch counters afterwards
+        # would do nothing but overwrite the outcome with "Epoch 12 / 300".
+        if total > 0 and self.m_dict.get("training_active", False):
             progress = epoch / total
             dpg.set_value("train_progress_bar", progress)
             dpg.set_value("train_progress_text", f"Epoch {epoch} / {total}")
@@ -371,11 +671,8 @@ class yoru_train:
                 else:
                     dpg.set_value("train_eta_text", f"{s}s")
         if self.m_dict.get("training_done", False):
-            self._set_step_state("step6_state", "Complete!!")
-            dpg.set_value("train_progress_bar", 1.0)
-            dpg.set_value("train_progress_text", "Done!")
-            dpg.set_value("train_eta_text", "0s")
             self.m_dict["training_done"] = False
+            self._show_training_outcome()
 
     def run(self):
         self.startDPG()
@@ -550,6 +847,7 @@ class yoru_train:
         if data.get("training_date"):
             self._set_step_state("step6_state", "Complete!!")
 
+        self._invalidate_dataset_stats()
         print("load complete")
 
     def grab_bt(self):
@@ -572,11 +870,13 @@ class yoru_train:
 
     def quit_cb(self):
         print("quit_pushed")
+        self._gpu_stop = True
         self.m_dict["quit"] = True
         dpg.destroy_context()  # <-- moved from __del__
 
     def home_cb(self):
         print("Back home")
+        self._gpu_stop = True
         self.m_dict["back_to_home"] = True
         self.m_dict["quit"] = True
         dpg.destroy_context()  # <-- moved from __del__
@@ -662,6 +962,7 @@ class yoru_train:
         self.fmrd = file_move_random(self.m_dict)
         print(self.m_dict["all_label_dir"])
         self.fmrd.move()
+        self._invalidate_dataset_stats()
         dpg.disable_item("move_label_images")
         self._set_step_state("step4_state", "Complete!!")
 
@@ -673,12 +974,55 @@ class yoru_train:
         tf = dpg.get_value("batch_num_in")
         self.m_dict["batch"] = tf
 
+    def stop_after_epoch(self):
+        """Ask the trainer to end the run once this epoch is finished."""
+        if self._stop_file is None:
+            print("[yoru] no training run to stop")
+            return
+        request_stop(self._stop_file)
+        self.m_dict["train_stop_mode"] = "graceful"
+        print("[yoru] stop requested: training ends after the current epoch")
+
+    def force_stop_prompt(self):
+        """Ask before killing the trainer: the running epoch is lost."""
+        epoch = self.m_dict.get("train_epoch", 0)
+        total = self.m_dict.get("train_total_epoch", 0)
+        dpg.set_value(
+            "force_stop_modal_text",
+            f"Training is in epoch {epoch} of {total}.\n\n"
+            "Forcing a stop kills the training process now. The epoch it is "
+            "running is lost, and so is the final validation pass that picks "
+            "the best weights. Checkpoints from earlier epochs stay on disk.\n\n"
+            "Waiting for the epoch to end keeps all of them.",
+        )
+        dpg.configure_item("force_stop_modal", show=True)
+
+    def force_stop_cancel(self):
+        dpg.configure_item("force_stop_modal", show=False)
+
+    def force_stop(self):
+        """Kill the training subprocess, epoch in progress and all."""
+        dpg.configure_item("force_stop_modal", show=False)
+        proc = self._train_proc
+        if proc is None or proc.poll() is not None:
+            return
+        self.m_dict["train_stop_mode"] = "force"
+        print("[yoru] force-stopping the training process")
+        # Off the render thread: killing the tree waits on the processes in it.
+        threading.Thread(
+            target=terminate_process_tree, args=(proc,), daemon=True,
+        ).start()
+
     def _monitor_training(self, proc, total_epochs: int) -> None:
         """Read subprocess stdout line by line, parse epoch progress, update m_dict."""
         # Matches: "Epoch [1/50]" (torchvision) or "      1/100 " (ultralytics/yolov5)
         torchvision_re = re.compile(r"Epoch\s*\[\s*(\d+)/(\d+)\s*\]")
         ultralytics_re = re.compile(r"^\s+(\d+)/(\d+)\s")
-        ansi_re = re.compile(r"\x1b\[[0-9;]*[mK]")
+
+        # Ultralytics redraws its progress bar with a carriage return, which
+        # the pipe translates into a newline: echo through ProgressPrinter so
+        # the console keeps one line per epoch instead of one per batch.
+        printer = ProgressPrinter()
 
         self.m_dict["train_epoch"] = 0
         self.m_dict["train_total_epoch"] = total_epochs
@@ -687,35 +1031,69 @@ class yoru_train:
         start_time = None
         start_epoch = 0
 
-        for raw_line in proc.stdout:
-            line = ansi_re.sub("", raw_line).rstrip()
-            print(line)  # pass-through to console
-            m = torchvision_re.search(line) or ultralytics_re.match(line)
-            if m:
-                current = int(m.group(1))
-                total   = int(m.group(2))
-                if start_time is None:
-                    start_time = time.monotonic()
-                    start_epoch = current - 1
-                self.m_dict["train_epoch"]       = current
-                self.m_dict["train_total_epoch"] = total
-                elapsed = time.monotonic() - start_time
-                completed = current - start_epoch
-                remaining = total - current
-                if completed > 0:
-                    sec_per_epoch = elapsed / completed
-                    self.m_dict["train_eta_seconds"] = sec_per_epoch * remaining
-
-        proc.wait()
-        self.m_dict["train_epoch"]   = self.m_dict.get("train_total_epoch", total_epochs)
-        self.m_dict["training_done"] = True
+        try:
+            for raw_line in proc.stdout:
+                line = printer.clean(raw_line)
+                printer.write(line)  # pass-through to console, one row per epoch
+                m = torchvision_re.search(line) or ultralytics_re.match(line)
+                if m:
+                    current = int(m.group(1))
+                    total   = int(m.group(2))
+                    if start_time is None:
+                        start_time = time.monotonic()
+                        start_epoch = current - 1
+                    self.m_dict["train_epoch"]       = current
+                    self.m_dict["train_total_epoch"] = total
+                    elapsed = time.monotonic() - start_time
+                    completed = current - start_epoch
+                    remaining = total - current
+                    if completed > 0:
+                        sec_per_epoch = elapsed / completed
+                        self.m_dict["train_eta_seconds"] = sec_per_epoch * remaining
+        finally:
+            # Whatever happened to the pipe, the GUI has to be told the run is
+            # over: the Train button stays disabled until it is.
+            printer.close()
+            proc.wait()
+            if not self.m_dict.get("train_stop_mode", ""):
+                # Ran to its last epoch: fill the bar even if the closing line
+                # was never parsed.
+                self.m_dict["train_epoch"] = self.m_dict.get(
+                    "train_total_epoch", total_epochs
+                )
+            self.m_dict["train_eta_seconds"] = None
+            # A request the trainer never got to (a forced kill beat it there)
+            # would otherwise stop the next run after one epoch.
+            clear_stop(self._stop_file)
+            self.m_dict["training_active"] = False
+            # Last, once the rest of the state is settled: this is the flag the
+            # render loop watches.
+            self.m_dict["training_done"] = True
 
     def run_yolo(self):
+        """Confirm the run fits in VRAM, then hand it to the backend.
+
+        A passive warning label is not enough here: an over-budget run does
+        not fail at once, it fails after CUDA has worked its way to the
+        allocation that does not fit, which can be several minutes in.
+        """
+        verdict = self._last_verdict
+        if verdict is not None and verdict.level == "over":
+            self._show_vram_modal(verdict)
+            return
+        self._start_training()
+
+    def _start_training(self):
         """Dispatch training to the correct backend plugin."""
         from yoru.libs.plugins import detect_trainer_backend, get_trainer
 
         backend = detect_trainer_backend(self.m_dict)
         trainer = get_trainer(backend)
+
+        # One stop file per project, cleared before every run: a request
+        # nobody consumed must not end this run after a single epoch.
+        self._stop_file = stop_file_for(self.m_dict["project_dir"])
+        clear_stop(self._stop_file)
 
         config = {
             "img_size": int(self.m_dict["img"]),
@@ -725,6 +1103,7 @@ class yoru_train:
             "weights": str(self.m_dict["weight"]),
             "project_dir": str(self.m_dict["project_dir"]),
             "model_family": self.m_dict.get("model_family", "YOLO"),
+            "stop_file": str(self._stop_file),
         }
 
         cr_project = create_project(self.m_dict)
@@ -735,12 +1114,17 @@ class yoru_train:
             proc = trainer.train(config)
             print(f"start training ({backend})")
             total = int(self.m_dict.get("epoch", 300))
+            self._train_proc = proc
+            self.m_dict["train_stop_mode"] = ""
+            self.m_dict["training_active"] = True
             t = threading.Thread(
                 target=self._monitor_training, args=(proc, total), daemon=True,
             )
             t.start()
         except Exception as e:
             print("error: ", e)
+            self._train_proc = None
+            self.m_dict["training_active"] = False
             self._set_step_state("step6_state", "Error")
 
     def __del__(self):

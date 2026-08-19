@@ -4,7 +4,9 @@
 
 2. Load a project config.yaml file and a model.
     
-    > The model is in the "exp" folder.
+    > The model is in the "exp_<model name>" folder of the project, e.g.
+    > `exp_yolo11s/weights/best.pt` or `exp_fasterrcnn/fasterrcnn_best.pt`.
+    > Training the same model again creates `exp_yolo11s2`, `exp_yolo11s3`, ...
 
 3. Extract frames for labeling using Grab GUI. 
 

@@ -20,6 +20,9 @@ class TrainerBase:
             data_yaml (str): path to data YAML file
             weights (str): path to pretrained weights
             project_dir (str): output project directory
+            stop_file (str, optional): path of the stop-request file.
+                Training ends cleanly after the epoch during which the
+                file appears (see libs/train_stop.py).
 
         Returns:
             subprocess.Popen: the training process handle.
