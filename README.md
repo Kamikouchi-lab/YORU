@@ -10,11 +10,11 @@
 | Channel | Version | Notes |
 |---------|---------|-------|
 | **Latest Release** | [v1.1.1](https://github.com/Kamikouchi-lab/YORU/releases/tag/v1.1.1) | Stable release recommended for general use |
-| **Latest Beta** | [v2.0.0-beta.1](https://github.com/Kamikouchi-lab/YORU/releases/tag/v2.0.0-beta.1) | Preview of the next major version — may contain bugs |
+| **Latest Beta** | [v2.0.0-beta.2](https://github.com/Kamikouchi-lab/YORU/releases/tag/v2.0.0-beta.2) | Preview of the next major version — may contain bugs |
 
 > To use the beta version, check out the corresponding tag:
 > ```
-> git checkout v2.0.0-beta.1
+> git checkout v2.0.0-beta.2
 > ```
 
 ## Features
