@@ -4,7 +4,7 @@
 <img src="docs/imgs/title_movie.gif" width="50%">
 
 [![Latest release](https://img.shields.io/github/v/release/Kamikouchi-lab/YORU?label=release)](https://github.com/Kamikouchi-lab/YORU/releases/latest)
-[![Latest beta](https://img.shields.io/github/v/release/Kamikouchi-lab/YORU?include_prereleases&label=beta)](https://github.com/Kamikouchi-lab/YORU/releases)
+[![Latest beta](https://img.shields.io/github/v/release/Kamikouchi-lab/YORU?include_prereleases&label=beta&color=orange)](https://github.com/Kamikouchi-lab/YORU/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Documentation](https://img.shields.io/badge/docs-YORU-brightgreen.svg)](https://kamikouchi-lab.github.io/YORU_doc/)
 [![GitHub stars](https://img.shields.io/github/stars/Kamikouchi-lab/YORU.svg?style=social&label=Star)](https://github.com/Kamikouchi-lab/YORU)
