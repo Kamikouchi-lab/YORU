@@ -7,9 +7,8 @@
 [![Latest beta](https://img.shields.io/github/v/release/Kamikouchi-lab/YORU?include_prereleases&label=beta&color=orange)](https://github.com/Kamikouchi-lab/YORU/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Documentation](https://img.shields.io/badge/docs-YORU-brightgreen.svg)](https://kamikouchi-lab.github.io/YORU_doc/)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ff69b4?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/HMYamano)
 [![GitHub stars](https://img.shields.io/github/stars/Kamikouchi-lab/YORU.svg?style=social&label=Star)](https://github.com/Kamikouchi-lab/YORU)
-[![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/Kamikouchi-lab/YORU.svg)](http://isitmaintained.com/project/Kamikouchi-lab/YORU "Average time to resolve an issue")
-[![Percentage of issues still open](http://isitmaintained.com/badge/open/Kamikouchi-lab/YORU.svg)](http://isitmaintained.com/project/Kamikouchi-lab/YORU "Percentage of issues still open")
 [![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg)](https://github.com/Kamikouchi-lab/YORU/issues)
 
 “YORU” (Your Optimal Recognition Utility) is an open-source animal behavior recognition system using Python. YORU can detect animal behaviors, not only single-animal behaviors but also social behaviors. YORU also provides online/offline analysis and closed-loop manipulation.
