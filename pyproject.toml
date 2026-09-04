@@ -37,7 +37,8 @@ dependencies = [
     "pyserial==3.5",
     # Windows-only, and not imported anywhere in the source tree.
     "pywin32==306; sys_platform == 'win32'",
-    "setuptools<70",
+    # pkg_resources was removed in setuptools 81 and eel still imports it.
+    "setuptools<81",
     "torch>=2.0",
     "torchvision>=0.15",
 ]
@@ -77,14 +78,12 @@ environments = [
 required-environments = [
     "sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
-override-dependencies = [
-    "torch>=2.0",
-]
-# torch 2.12 dropped to macosx_14_0 wheels; staying below it keeps macOS 11+
-# installable and matches the range this project has been tested against.
+# torchvision's detection heads diverge on MPS before 0.29 (measured: Avg Loss
+# inf on 0.26.0 against 0.42-0.50 on 0.29.0), so macOS takes 0.29 or newer.
+# That pulls torch 2.14, whose macOS wheels are macosx_14_0 -- hence the
+# macOS 14 floor in the README.
 constraint-dependencies = [
-    "torch<2.12; sys_platform == 'darwin'",
-    "torchvision<0.27; sys_platform == 'darwin'",
+    "torchvision>=0.29; sys_platform == 'darwin'",
 ]
 
 [[tool.uv.index]]

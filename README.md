@@ -128,6 +128,8 @@ On Windows, `set YORU_DEVICE=cpu` before the launch command. If the requested de
 
 On Apple Silicon, MPS clearly helps training, but it is *not* faster than the CPU for single-frame realtime inference with the small YOLO models: we measured 60.8 FPS on MPS against 68.7 FPS on CPU for yolov8n at 640x480. For realtime detection on a Mac, `YORU_DEVICE=cpu` is worth trying.
 
+The Faster R-CNN / Mask R-CNN / SSD models need torchvision 0.29 or newer to train on MPS at all; earlier releases diverge to an infinite loss within one epoch. The uv environment pins a new enough build, but the conda environment may not, so YORU checks the installed version and falls back to the CPU with a message when it is too old.
+
 # Learn about YORU
 - [User guides](https://kamikouchi-lab.github.io/YORU_doc/guides/01-install/)
 
@@ -140,7 +142,7 @@ On Apple Silicon, MPS clearly helps training, but it is *not* faster than the CP
 ## OS
 - Windows 10 or later, with an NVIDIA GPU. This is the primary target, and the only platform tested end to end including the closed-loop hardware.
 - Linux, with an NVIDIA GPU and CUDA. It uses the same CUDA wheels as Windows, but has seen much less testing.
-- macOS 13 (Ventura) or later, on Apple Silicon.
+- macOS 14 (Sonoma) or later, on Apple Silicon. The floor comes from PyTorch: torchvision 0.29 is the first release whose detection models train correctly on MPS, and it requires a torch build whose macOS wheels target 14.0.
 
 ## Hardware
 - Memory: 16 GB RAM or more

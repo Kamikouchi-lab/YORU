@@ -11,9 +11,9 @@ Called by train_GUI.py via subprocess:
 
 Supported models: fasterrcnn, maskrcnn, ssd
 
---device accepts auto / cuda / mps / cpu. "auto" resolves to CUDA or CPU only:
-these torchvision models do not train correctly on Apple MPS, so MPS has to be
-requested explicitly (see _resolve_device below).
+--device accepts auto / cuda / mps / cpu. On Apple Silicon these models need
+torchvision 0.29 or newer to train correctly; below that "auto" falls back to
+CPU (see _resolve_device below).
 
 Label format (YOLO-style .txt):
     <class_id> <x_center> <y_center> <width> <height>  (all normalized to [0, 1])
@@ -35,6 +35,7 @@ import sys
 from pathlib import Path
 
 import torch
+import torchvision
 import yaml
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
@@ -156,27 +157,43 @@ def collate_fn(batch):
     return tuple(zip(*batch))
 
 
-def _resolve_device(preference: str):
-    """Pick the training device, keeping "auto" off MPS.
+#: First torchvision whose detection heads train correctly on Apple MPS.
+#: Measured on this dataset: 0.26.0 reaches "Avg Loss: inf" in one epoch while
+#: 0.29.0 converges to 0.42-0.50, matching the CPU run.
+MPS_MIN_TORCHVISION = (0, 29)
 
-    torchvision's detection heads mis-train on Apple MPS: on the same dataset
-    and seed the loss diverges past 1e28 within one epoch while the identical
-    CPU run converges (reproduced on torch 2.8 and 2.12). CUDA and CPU are
-    unaffected, so only an explicit request -- ``--device mps`` or
-    ``YORU_DEVICE=mps`` -- is honoured here.
+
+def _torchvision_trains_on_mps() -> bool:
+    """True when the installed torchvision is new enough to train on MPS."""
+    try:
+        parts = torchvision.__version__.split("+")[0].split(".")
+        return (int(parts[0]), int(parts[1])) >= MPS_MIN_TORCHVISION
+    except (AttributeError, IndexError, ValueError):
+        return False
+
+
+def _resolve_device(preference: str):
+    """Pick the training device, keeping older torchvision off MPS.
+
+    Before torchvision 0.29 the detection heads mis-train on Apple MPS: on the
+    same dataset the loss diverges to inf within one epoch while the identical
+    CPU run converges. macOS installs are pinned to 0.29+, but the conda
+    environment can carry an older build, so the version is checked here and
+    "auto" falls back to CPU when it is too old. CUDA and CPU are unaffected.
     """
     device = torch_device(preference)
-    if device.type != "mps":
+    if device.type != "mps" or _torchvision_trains_on_mps():
         return device
 
     requested = str(preference or "auto").strip().lower()
     if requested == "auto":
         requested = os.environ.get("YORU_DEVICE", "auto").strip().lower()
+    version = torchvision.__version__
     if requested == "mps":
-        print("Warning: MPS training is unreliable for torchvision detection models.")
+        print(f"Warning: torchvision {version} mis-trains detection models on MPS.")
         return device
 
-    print("Note: MPS is unreliable for torchvision detection models; using CPU.")
+    print(f"Note: torchvision {version} mis-trains detection models on MPS; using CPU.")
     return torch.device("cpu")
 
 
