@@ -193,9 +193,9 @@ def run_evaluate_gui():
 
 @eel.expose
 def run_config_creator_gui():
-    subprocess.Popen(
+    _launch_gui(
         [sys.executable, "-c", "from yoru import config_creator_GUI; config_creator_GUI.main()"],
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
+        "Config Creator GUI",
     )
 
 

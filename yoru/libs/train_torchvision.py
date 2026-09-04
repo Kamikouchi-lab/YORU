@@ -6,9 +6,14 @@ Called by train_GUI.py via subprocess:
         --data    path/to/config.yaml \\
         --epochs  50 \\
         --batch   4 \\
-        --project path/to/project_dir
+        --project path/to/project_dir \\
+        --device  auto
 
 Supported models: fasterrcnn, maskrcnn, ssd
+
+--device accepts auto / cuda / mps / cpu. On Apple Silicon these models need
+torchvision 0.29 or newer to train correctly; below that "auto" falls back to
+CPU (see _resolve_device below).
 
 Label format (YOLO-style .txt):
     <class_id> <x_center> <y_center> <width> <height>  (all normalized to [0, 1])
@@ -25,13 +30,25 @@ Output files: <project>/<name>/<model_type>_best.pt  and  <model_type>_last.pt
 """
 
 import argparse
+import os
+import sys
 from pathlib import Path
 
 import torch
+import torchvision
 import yaml
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms.functional import to_tensor
+
+if __package__ in (None, ""):
+    # train_GUI.py launches this file by path, so sys.path[0] is yoru/libs and
+    # the repo root has to be added before the yoru package can be imported.
+    _ROOT = str(Path(__file__).resolve().parents[2])
+    if _ROOT not in sys.path:
+        sys.path.append(_ROOT)
+
+from yoru.libs.device import torch_device
 
 
 class YOLOFormatDataset(Dataset):
@@ -140,6 +157,46 @@ def collate_fn(batch):
     return tuple(zip(*batch))
 
 
+#: First torchvision whose detection heads train correctly on Apple MPS.
+#: Measured on this dataset: 0.26.0 reaches "Avg Loss: inf" in one epoch while
+#: 0.29.0 converges to 0.42-0.50, matching the CPU run.
+MPS_MIN_TORCHVISION = (0, 29)
+
+
+def _torchvision_trains_on_mps() -> bool:
+    """True when the installed torchvision is new enough to train on MPS."""
+    try:
+        parts = torchvision.__version__.split("+")[0].split(".")
+        return (int(parts[0]), int(parts[1])) >= MPS_MIN_TORCHVISION
+    except (AttributeError, IndexError, ValueError):
+        return False
+
+
+def _resolve_device(preference: str):
+    """Pick the training device, keeping older torchvision off MPS.
+
+    Before torchvision 0.29 the detection heads mis-train on Apple MPS: on the
+    same dataset the loss diverges to inf within one epoch while the identical
+    CPU run converges. macOS installs are pinned to 0.29+, but the conda
+    environment can carry an older build, so the version is checked here and
+    "auto" falls back to CPU when it is too old. CUDA and CPU are unaffected.
+    """
+    device = torch_device(preference)
+    if device.type != "mps" or _torchvision_trains_on_mps():
+        return device
+
+    requested = str(preference or "auto").strip().lower()
+    if requested == "auto":
+        requested = os.environ.get("YORU_DEVICE", "auto").strip().lower()
+    version = torchvision.__version__
+    if requested == "mps":
+        print(f"Warning: torchvision {version} mis-trains detection models on MPS.")
+        return device
+
+    print(f"Note: torchvision {version} mis-trains detection models on MPS; using CPU.")
+    return torch.device("cpu")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Train Faster R-CNN / Mask R-CNN / SSD with YOLO-format labels."
@@ -153,6 +210,10 @@ def main():
     parser.add_argument("--batch",   type=int, default=4)
     parser.add_argument("--project", required=True, help="Output directory")
     parser.add_argument("--name",    default="train")
+    parser.add_argument(
+        "--device", default="auto",
+        help="auto, cuda, mps, or cpu ('auto' skips mps: it mis-trains these models)"
+    )
     args = parser.parse_args()
 
     with open(args.data) as f:
@@ -177,7 +238,7 @@ def main():
         val_ds,   batch_size=args.batch, shuffle=False, collate_fn=collate_fn
     )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = _resolve_device(args.device)
     print(f"Device: {device}")
     print(f"Train: {len(train_ds)} images  Val: {len(val_ds)} images")
 

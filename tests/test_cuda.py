@@ -1,33 +1,48 @@
-"""Test to verify PyTorch works correctly in CUDA environment"""
+"""Test to verify PyTorch works correctly on the available accelerator
 
+The CUDA-specific checks are skipped when no NVIDIA GPU is present, so the
+suite still reports honestly on Apple Silicon and CPU-only machines.
+"""
+
+import pytest
 import torch
 
+from yoru.libs.device import cuda_available, describe, mps_available, resolve_device
 
+requires_cuda = pytest.mark.skipif(not cuda_available(), reason="CUDA is not available")
+
+
+def test_accelerator_available():
+    """Check that PyTorch has a usable backend on this machine"""
+    resolved = resolve_device("auto")
+    print(f"PyTorch version: {torch.__version__}")
+    print(f"CUDA available: {cuda_available()}")
+    print(f"MPS available: {mps_available()}")
+    print(f"Selected device: {resolved} ({describe('auto')})")
+
+    # A CUDA index such as "0" is a valid answer too: YORU_DEVICE can name one.
+    assert resolved in ("cuda", "mps", "cpu") or resolved.replace(",", "").isdigit()
+
+
+@requires_cuda
 def test_cuda_available():
     """Check if CUDA is available"""
-    print(f"PyTorch version: {torch.__version__}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
+    print(f"CUDA version: {torch.version.cuda}")
+    print(f"cuDNN version: {torch.backends.cudnn.version()}")
+    print(f"GPU count: {torch.cuda.device_count()}")
 
-    if torch.cuda.is_available():
-        print(f"CUDA version: {torch.version.cuda}")
-        print(f"cuDNN version: {torch.backends.cudnn.version()}")
-        print(f"GPU count: {torch.cuda.device_count()}")
-
-        for i in range(torch.cuda.device_count()):
-            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
-            props = torch.cuda.get_device_properties(i)
-            print(f"    Memory: {props.total_memory / 1024**3:.2f} GB")
-            print(f"    Compute capability: {props.major}.{props.minor}")
+    for i in range(torch.cuda.device_count()):
+        print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+        props = torch.cuda.get_device_properties(i)
+        print(f"    Memory: {props.total_memory / 1024**3:.2f} GB")
+        print(f"    Compute capability: {props.major}.{props.minor}")
 
     assert torch.cuda.is_available(), "CUDA is not available"
 
 
+@requires_cuda
 def test_cuda_tensor_operations():
     """Check if tensor operations work correctly on CUDA"""
-    if not torch.cuda.is_available():
-        print("Skipping: CUDA not available")
-        return
-
     device = torch.device("cuda")
 
     # Transfer tensors to GPU
@@ -47,12 +62,9 @@ def test_cuda_tensor_operations():
     assert c_cpu.shape == (1000, 1000)
 
 
+@requires_cuda
 def test_cuda_neural_network():
     """Check if a simple neural network works on CUDA"""
-    if not torch.cuda.is_available():
-        print("Skipping: CUDA not available")
-        return
-
     device = torch.device("cuda")
 
     # Simple model
@@ -79,12 +91,9 @@ def test_cuda_neural_network():
     assert output.shape == (32, 10)
 
 
+@requires_cuda
 def test_cuda_memory():
     """Check CUDA memory usage"""
-    if not torch.cuda.is_available():
-        print("Skipping: CUDA not available")
-        return
-
     torch.cuda.empty_cache()
 
     allocated_before = torch.cuda.memory_allocated()
@@ -105,16 +114,23 @@ def test_cuda_memory():
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("PyTorch CUDA Test")
+    print("PyTorch device test")
     print("=" * 50)
 
-    test_cuda_available()
-    print()
-    test_cuda_tensor_operations()
-    print()
-    test_cuda_neural_network()
-    print()
-    test_cuda_memory()
+    test_accelerator_available()
+
+    if cuda_available():
+        print()
+        test_cuda_available()
+        print()
+        test_cuda_tensor_operations()
+        print()
+        test_cuda_neural_network()
+        print()
+        test_cuda_memory()
+    else:
+        print()
+        print("Skipping the CUDA-only tests: CUDA not available")
 
     print()
     print("=" * 50)
