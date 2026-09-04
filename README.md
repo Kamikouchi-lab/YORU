@@ -41,6 +41,9 @@
 
 Follow these steps to install YORU quickly:
 
+> These steps describe the conda route, which targets Windows (and Linux) with an NVIDIA GPU.
+> On macOS, or if you already use [uv](https://docs.astral.sh/uv/), [Install via uv](#install-via-uv) below is simpler.
+
 1. Download or clone the YORU project.
     ```
     cd "Path/to/download"
@@ -56,6 +59,8 @@ Follow these steps to install YORU quickly:
      ```
      conda env create -f "Path/to/YORU.yml"
      ```
+
+    The environment file pins Python 3.10, which is the version YORU targets.
 
 4. Activate the virtual environment in the command prompt or Anaconda prompt.
 
@@ -97,17 +102,31 @@ Follow these steps to install YORU quickly:
     nvidia-smi
     ```
 ## Install via uv
-Although not all functionality has been tested, installation via uv can be performed using the pyproject.toml file below.
-[pyproject.toml](https://github.com/Kamikouchi-lab/YORU/blob/uv_install/pyproject.toml)
 
-copy and paste this file to your YORU folder and
+The repository ships its own `pyproject.toml` and `uv.lock`, so [uv](https://docs.astral.sh/uv/) builds the whole environment in one step on Windows, Linux and macOS. uv also picks the right PyTorch build for your platform automatically: the CUDA wheels on Windows and Linux, and the MPS-enabled build from PyPI on macOS.
 
 ```
-cd "Path/to/YORU"
-uv init .
+git clone https://github.com/Kamikouchi-lab/YORU.git
+cd YORU
 uv sync
-python -m yoru
+uv run yoru
 ```
+
+`uv run python -m yoru` does the same thing. There is no `uv init` step: the project is already initialised, and uv refuses to re-initialise a folder that already has a `pyproject.toml`.
+
+## Compute device
+
+YORU picks its compute device automatically, in this order: CUDA, then Apple MPS, then CPU. Nothing has to be configured for the usual cases.
+
+To choose the device yourself, set the `YORU_DEVICE` environment variable before launching (`cuda`, `mps`, `cpu`, or a CUDA index such as `0`), or use the device selector in the training GUI:
+
+```
+YORU_DEVICE=cpu uv run yoru
+```
+
+On Windows, `set YORU_DEVICE=cpu` before the launch command. If the requested device is unavailable, YORU falls back to the next best one and writes a warning to `~/.yoru/logs/yoru.log` (`%USERPROFILE%\.yoru\logs\yoru.log` on Windows).
+
+On Apple Silicon, MPS clearly helps training, but it is *not* faster than the CPU for single-frame realtime inference with the small YOLO models: we measured 60.8 FPS on MPS against 68.7 FPS on CPU for yolov8n at 640x480. For realtime detection on a Mac, `YORU_DEVICE=cpu` is worth trying.
 
 # Learn about YORU
 - [User guides](https://kamikouchi-lab.github.io/YORU_doc/guides/01-install/)
@@ -119,17 +138,26 @@ python -m yoru
 # Requirements
 
 ## OS
-- Windows 10 or later
+- Windows 10 or later, with an NVIDIA GPU. This is the primary target, and the only platform tested end to end including the closed-loop hardware.
+- Linux, with an NVIDIA GPU and CUDA. It uses the same CUDA wheels as Windows, but has seen much less testing.
+- macOS 13 (Ventura) or later, on Apple Silicon.
 
 ## Hardware
 - Memory: 16 GB RAM or more
-- GPU: NVIDIA GPU compatible with the required CUDA version
+- GPU: NVIDIA GPU compatible with the required CUDA version, or an Apple Silicon (M-series) Mac, which uses MPS. YORU also runs on the CPU alone, but detection is much slower.
 
 ### Development environments
 - OS: Windows 11
 - CPU: Intel Core i9 (11th)
 - GPU: NVIDIA RTX 3080
 - Memory: DDR4 32 GB
+
+## Software
+- Python 3.10
+
+### Platform notes
+- On macOS, training and inference are verified end to end, but the GUI has had far less testing there than on Windows.
+- The closed-loop hardware manipulation depends on drivers we only use on Windows: NI-DAQ (via `nidaqmx`) needs the NI-DAQmx driver, and the Arduino path is untested elsewhere. Detection, training and analysis do not need any of it.
 
 # Reference
  - Yamanouchi, H. M., Takeuchi, R. F., Chiba, N., Hashimoto, K., Shimizu, T., Osakada, F., Tanaka, R., & Kamikouchi, A. (2026). YORU: Animal behavior detection with object-based approach for real-time closed-loop feedback. *Science Advances*, 12(7). https://doi.org/10.1126/sciadv.adw2109

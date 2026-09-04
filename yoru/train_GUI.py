@@ -18,6 +18,7 @@ sys.path.append("../yoru")
 
 # try:
 from yoru.libs.create_yaml_train import create_project
+from yoru.libs.device import KNOWN_DEVICES, describe, resolve_device
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.init_train import init_train
@@ -41,6 +42,8 @@ from yoru.libs.user_paths import log_message
 class yoru_train(GuiErrorMixin):
     def __init__(self, m_dict={}):
         self.m_dict = m_dict
+        # init_train may not define a device, so default it before the GUI reads it.
+        self.m_dict["device"] = self.m_dict.get("device", "auto")
         self.fd_tk = file_dialog_tk(self.m_dict)
 
     def startDPG(self):
@@ -321,6 +324,19 @@ class yoru_train(GuiErrorMixin):
                             default_value=self.m_dict["batch"],
                             width=120,
                             callback=lambda: self.in_batch(),
+                        )
+                    with dpg.group(horizontal=True):
+                        dpg.add_text(default_value="  Device        ")
+                        dpg.add_combo(
+                            items=list(KNOWN_DEVICES),
+                            tag="device_combo",
+                            default_value=self.m_dict.get("device", "auto"),
+                            width=120,
+                            callback=lambda: self.select_device(),
+                        )
+                        dpg.add_text(
+                            tag="device_display_text",
+                            default_value=describe(self.m_dict.get("device", "auto")),
                         )
 
             dpg.add_spacer(height=8)
@@ -709,6 +725,10 @@ class yoru_train(GuiErrorMixin):
         self.m_dict["weight"] = self._build_weight()
         dpg.set_value("weight_display_text", self.m_dict["weight"])
 
+    def select_device(self):
+        self.m_dict["device"] = dpg.get_value("device_combo")
+        dpg.set_value("device_display_text", describe(self.m_dict["device"]))
+
     def in_epoch(self):
         tf = dpg.get_value("epoc_num_in")
         self.m_dict["epoch"] = tf
@@ -782,6 +802,11 @@ class yoru_train(GuiErrorMixin):
 
     def run_yolov5(self):
         # train
+        # yolov5's select_device() knows neither "auto" nor a bare "cuda", and
+        # naming an index would pin CUDA_VISIBLE_DEVICES over the user's own.
+        # Its default ("") already picks the best CUDA device, so only name a
+        # device when we mean something other than that.
+        device = resolve_device(self.m_dict.get("device", "auto"))
         cmd = [
             sys.executable,
             "./yoru/libs/yolov5/train.py",
@@ -798,6 +823,9 @@ class yoru_train(GuiErrorMixin):
             "--project",
             str(self.m_dict["project_dir"]),
         ]
+
+        if device != "cuda":
+            cmd.extend(["--device", device])
 
         self.patience = False
 
@@ -843,6 +871,8 @@ class yoru_train(GuiErrorMixin):
             str(self.m_dict["batch"]),
             "--project",
             str(self.m_dict["project_dir"]),
+            "--device",
+            str(self.m_dict.get("device", "auto")),
         ]
 
         cr_project = create_project(self.m_dict)
@@ -884,6 +914,7 @@ class yoru_train(GuiErrorMixin):
             "--epochs",  str(self.m_dict["epoch"]),
             "--batch",   str(self.m_dict["batch"]),
             "--project", str(self.m_dict["project_dir"]),
+            "--device",  str(self.m_dict.get("device", "auto")),
         ]
 
         cr_project = create_project(self.m_dict)

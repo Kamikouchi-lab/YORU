@@ -25,6 +25,8 @@ import os
 
 import torch
 
+from yoru.libs.device import resolve_device, torch_device
+
 
 def detect_model_type(model_path: str) -> str:
     """Infer model type from the model file name, with checkpoint inspection fallback.
@@ -66,7 +68,7 @@ def detect_model_type(model_path: str) -> str:
     return "yolov5"
 
 
-def load_yolo_model(model_path: str, model_type: str = "auto"):
+def load_yolo_model(model_path: str, model_type: str = "auto", device: str = "auto"):
     """Factory function – returns the appropriate wrapper for the given weights.
 
     Args:
@@ -74,6 +76,10 @@ def load_yolo_model(model_path: str, model_type: str = "auto"):
         model_type: One of 'yolov5', 'yolov8', 'yolo11', 'rtdetr',
                     'fasterrcnn', 'maskrcnn', 'ssd', or 'auto'.
                     When 'auto', the type is inferred from the file name.
+        device: One of 'auto', 'cuda', 'mps', 'cpu', or a CUDA index.
+                When 'auto', the wrapper picks the best available device.
+                Ignored for 'yolov5', which lets torch.hub select its own
+                device (CUDA when available, otherwise CPU).
 
     Returns:
         YOLOv5Wrapper       – for YOLOv5 models
@@ -84,14 +90,18 @@ def load_yolo_model(model_path: str, model_type: str = "auto"):
     if model_type == "auto":
         model_type = detect_model_type(model_path)
 
+    # Forward the device only when one was asked for; the wrappers resolve
+    # 'auto' themselves.
+    device_kwargs = {} if device == "auto" else {"device": device}
+
     if model_type in ("fasterrcnn", "maskrcnn", "ssd"):
-        return TorchvisionWrapper(model_path)
+        return TorchvisionWrapper(model_path, **device_kwargs)
     elif model_type == "rtdetr":
-        return RTDETRWrapper(model_path)
+        return RTDETRWrapper(model_path, **device_kwargs)
     elif model_type == "yolov5":
         return YOLOv5Wrapper(model_path)
     else:
-        return UltralyticsWrapper(model_path)
+        return UltralyticsWrapper(model_path, **device_kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -232,32 +242,36 @@ class YOLOv5Wrapper:
 class UltralyticsWrapper:
     """Wraps a YOLOv8 or YOLO11 model from the ``ultralytics`` package."""
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, device: str = "auto"):
         from ultralytics import YOLO
         self._model = YOLO(model_path)
+        # ultralytics never auto-selects MPS, so the device has to be named
+        # explicitly on every predict call.
+        self._device = resolve_device(device)
 
     @property
     def names(self) -> dict:
         return self._model.names
 
     def __call__(self, image):
-        results = self._model(image, verbose=False)
+        results = self._model(image, verbose=False, device=self._device)
         return UltralyticsResult(results[0])
 
 
 class RTDETRWrapper:
     """Wraps a RT-DETR model from the ``ultralytics`` package."""
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, device: str = "auto"):
         from ultralytics import RTDETR
         self._model = RTDETR(model_path)
+        self._device = resolve_device(device)
 
     @property
     def names(self) -> dict:
         return self._model.names
 
     def __call__(self, image):
-        results = self._model(image, verbose=False)
+        results = self._model(image, verbose=False, device=self._device)
         return UltralyticsResult(results[0])
 
 
@@ -268,12 +282,12 @@ class TorchvisionWrapper:
     The checkpoint must contain: model_state_dict, num_classes, names, model_type.
     """
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, device: str = "auto"):
         checkpoint       = torch.load(model_path, map_location="cpu")
         self._model_type = checkpoint["model_type"]
         self._num_classes = checkpoint["num_classes"]
         self._names      = checkpoint["names"]
-        self._device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._device     = torch_device(device)
         self._model      = self._build_model()
         self._model.load_state_dict(checkpoint["model_state_dict"])
         self._model.to(self._device)

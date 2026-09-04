@@ -3,11 +3,13 @@ name = "yoru_uv"
 version = "1.1.1"
 description = "YORU - Your Own Research Utility for real-time behavioral analysis"
 readme = "README.md"
-requires-python = ">=3.9,<3.10"
+requires-python = ">=3.10,<3.11"
 dependencies = [
     "eel==0.16.0",
     "nidaqmx==0.9.0",
-    "numpy>=1.24.4",
+    # opencv-python 4.10.0.82 is built against the NumPy 1.x ABI; an unbounded
+    # NumPy resolves to 2.x on Python 3.10+ and breaks `import cv2`.
+    "numpy>=1.24.4,<2",
     "dearpygui==1.11.1",
     "opencv-python==4.10.0.82",
     "pyglet==2.0.15",
@@ -32,9 +34,9 @@ dependencies = [
     "scikit-image==0.21.0",
     "imgui==2.0.0",
     "pyopengl==3.1.7",
-    "pyopengl-accelerate==3.1.7",
     "pyserial==3.5",
-    "pywin32==306",
+    # Windows-only, and not imported anywhere in the source tree.
+    "pywin32==306; sys_platform == 'win32'",
     "setuptools<70",
     "torch>=2.0",
     "torchvision>=0.15",
@@ -52,14 +54,37 @@ yoru = "yoru.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
+# The distribution is named yoru_uv but the package directory is yoru, so
+# hatchling cannot infer what to ship.
+[tool.hatch.build.targets.wheel]
+packages = ["yoru"]
+
+[dependency-groups]
+dev = [
     "pytest==7.4.0",
 ]
-environments = ["sys_platform == 'win32'"]
+
+[tool.uv]
+# One lockfile has to serve all three targets, so the resolution is forked
+# explicitly instead of being pinned to whichever host last ran `uv lock`.
+environments = [
+    "sys_platform == 'win32'",
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin'",
+]
+# Force uv to pick versions that actually ship Apple-Silicon wheels rather than
+# resolving to a version whose only macOS wheel is x86_64 (PyQt5-Qt5 does this).
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 override-dependencies = [
-    "pyqt5-qt5==5.15.2",
     "torch>=2.0",
+]
+# torch 2.12 dropped to macosx_14_0 wheels; staying below it keeps macOS 11+
+# installable and matches the range this project has been tested against.
+constraint-dependencies = [
+    "torch<2.12; sys_platform == 'darwin'",
+    "torchvision<0.27; sys_platform == 'darwin'",
 ]
 
 [[tool.uv.index]]
@@ -67,6 +92,12 @@ name = "pytorch-cu124"
 url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
+# The cu124 index publishes only linux_x86_64 and win_amd64 wheels. macOS takes
+# torch from PyPI instead, which is the build carrying Metal (MPS) support.
 [tool.uv.sources]
-torch = { index = "pytorch-cu124" }
-torchvision = { index = "pytorch-cu124" }
+torch = [
+    { index = "pytorch-cu124", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cu124", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+]

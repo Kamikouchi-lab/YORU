@@ -6,9 +6,14 @@ Called by train_GUI.py via subprocess:
         --data    path/to/config.yaml \\
         --epochs  50 \\
         --batch   4 \\
-        --project path/to/project_dir
+        --project path/to/project_dir \\
+        --device  auto
 
 Supported models: fasterrcnn, maskrcnn, ssd
+
+--device accepts auto / cuda / mps / cpu. "auto" resolves to CUDA or CPU only:
+these torchvision models do not train correctly on Apple MPS, so MPS has to be
+requested explicitly (see _resolve_device below).
 
 Label format (YOLO-style .txt):
     <class_id> <x_center> <y_center> <width> <height>  (all normalized to [0, 1])
@@ -25,6 +30,8 @@ Output files: <project>/<name>/<model_type>_best.pt  and  <model_type>_last.pt
 """
 
 import argparse
+import os
+import sys
 from pathlib import Path
 
 import torch
@@ -32,6 +39,15 @@ import yaml
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms.functional import to_tensor
+
+if __package__ in (None, ""):
+    # train_GUI.py launches this file by path, so sys.path[0] is yoru/libs and
+    # the repo root has to be added before the yoru package can be imported.
+    _ROOT = str(Path(__file__).resolve().parents[2])
+    if _ROOT not in sys.path:
+        sys.path.append(_ROOT)
+
+from yoru.libs.device import torch_device
 
 
 class YOLOFormatDataset(Dataset):
@@ -140,6 +156,30 @@ def collate_fn(batch):
     return tuple(zip(*batch))
 
 
+def _resolve_device(preference: str):
+    """Pick the training device, keeping "auto" off MPS.
+
+    torchvision's detection heads mis-train on Apple MPS: on the same dataset
+    and seed the loss diverges past 1e28 within one epoch while the identical
+    CPU run converges (reproduced on torch 2.8 and 2.12). CUDA and CPU are
+    unaffected, so only an explicit request -- ``--device mps`` or
+    ``YORU_DEVICE=mps`` -- is honoured here.
+    """
+    device = torch_device(preference)
+    if device.type != "mps":
+        return device
+
+    requested = str(preference or "auto").strip().lower()
+    if requested == "auto":
+        requested = os.environ.get("YORU_DEVICE", "auto").strip().lower()
+    if requested == "mps":
+        print("Warning: MPS training is unreliable for torchvision detection models.")
+        return device
+
+    print("Note: MPS is unreliable for torchvision detection models; using CPU.")
+    return torch.device("cpu")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Train Faster R-CNN / Mask R-CNN / SSD with YOLO-format labels."
@@ -153,6 +193,10 @@ def main():
     parser.add_argument("--batch",   type=int, default=4)
     parser.add_argument("--project", required=True, help="Output directory")
     parser.add_argument("--name",    default="train")
+    parser.add_argument(
+        "--device", default="auto",
+        help="auto, cuda, mps, or cpu ('auto' skips mps: it mis-trains these models)"
+    )
     args = parser.parse_args()
 
     with open(args.data) as f:
@@ -177,7 +221,7 @@ def main():
         val_ds,   batch_size=args.batch, shuffle=False, collate_fn=collate_fn
     )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = _resolve_device(args.device)
     print(f"Device: {device}")
     print(f"Train: {len(train_ds)} images  Val: {len(val_ds)} images")
 
