@@ -63,16 +63,22 @@ and analysis each open their own native window.
 
 ## An NVIDIA driver, to use a GPU (Windows / Linux)
 
-The driver is the only system-level piece YORU needs for CUDA. The PyTorch
-wheels ship their own CUDA runtime, so installing the full
-[CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) is optional -- do it
-only if you want `nvcc` and the profilers. The driver has to support CUDA 12.x:
-527.41 or newer on Windows, 525.60.13 or newer on Linux. Check what you have
-with:
+The driver is the only system-level piece YORU needs for CUDA, on both the uv
+and the conda route. The PyTorch wheels ship their own CUDA runtime -- `cudart`,
+cuBLAS and cuDNN live inside the installed `torch` package -- so **the
+[CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) does not have to be
+installed at all**. Install it only if you need `nvcc` to compile CUDA
+extensions of your own, or want the profilers. The driver has to support CUDA
+12.x: 527.41 or newer on Windows, 525.60.13 or newer on Linux. Check what you
+have with:
 
 ```
 nvidia-smi
 ```
+
+The `CUDA Version` that `nvidia-smi` prints is the highest your driver can
+serve, not the version YORU uses -- a driver reporting 13.x runs the CUDA 12.4
+wheels fine.
 
 With no usable GPU, YORU falls back to the CPU, which is much slower but
 otherwise works.
@@ -110,10 +116,10 @@ Follow these steps to install YORU quickly:
     ```
 
 2. Install the appropriate GPU driver (see
-   [Prerequisites](#an-nvidia-driver-to-use-a-gpu-windows--linux)). The conda
-   route pins an older PyTorch, so if you install the
-   [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) as well, match its
-   version to the wheels you pick in step 5.
+   [Prerequisites](#an-nvidia-driver-to-use-a-gpu-windows--linux)). The CUDA
+   toolkit is not needed here either: the PyTorch wheels in step 5 bring their
+   own CUDA runtime. What the `cu118` / `cu121` choice there has to match is
+   your **driver**, not an installed toolkit.
 
 3. Create a virtual environment.
 

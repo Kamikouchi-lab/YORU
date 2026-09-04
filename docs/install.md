@@ -45,11 +45,15 @@ Windows, 525.60.13 or newer on Linux**. Check the installed version with:
 nvidia-smi
 ```
 
-The PyTorch wheels carry their own CUDA runtime, so the full
-[CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) is **not required** by
-the uv route; install it only if you want `nvcc` and the profiling tools. The
-conda route pins an older PyTorch, so there you should match the toolkit and
-wheel versions (steps 4 and 7 below).
+The PyTorch wheels carry their own CUDA runtime -- `cudart`, cuBLAS and cuDNN
+are shipped inside the `torch` package itself -- so the
+[CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) is **not required by
+either route**. Install it only if you need `nvcc` to compile CUDA extensions of
+your own, or want the profiling tools.
+
+The `CUDA Version` reported by `nvidia-smi` is the highest your driver supports,
+not the version in use: a driver reporting 13.x runs the CUDA 12.4 wheels
+without a toolkit installed.
 
 Without a usable GPU, YORU runs on the CPU. Everything works, just more slowly.
 
@@ -160,7 +164,7 @@ uv run python -c "import torch; print(torch.cuda.is_available())"
     git clone https://github.com/Kamikouchi-lab/YORU.git 
     ```
 
-4. Install the GPU driver, and the [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) matching the PyTorch wheels you install in step 7.
+4. Install the GPU driver. The [CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) is not needed -- the wheels in step 7 carry their own CUDA runtime -- so the `cu118` / `cu121` choice there only has to be one your driver supports.
 
 5. Create a virtual environment using [YORU.yml](../YORU.yml) in command prompt or Anaconda prompt.
    
