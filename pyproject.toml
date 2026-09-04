@@ -1,6 +1,6 @@
 [project]
 name = "yoru_uv"
-version = "1.1.1"
+version = "1.1.2"
 description = "YORU - Your Own Research Utility for real-time behavioral analysis"
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
