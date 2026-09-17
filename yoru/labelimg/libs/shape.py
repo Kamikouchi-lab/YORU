@@ -10,6 +10,15 @@ except ImportError:
     from PyQt4.QtCore import *
 
 from .utils import distance
+# YORU's single definition of a rotated box: the annotation tool, the detector
+# and the real-time drawing all reduce corners to (cx, cy, w, h, theta) the
+# same way, so a box means the same thing at every stage of the pipeline.
+from yoru.libs.obb import (
+    corners_to_obb,
+    is_rotated as _is_rotated,
+    obb_corners,
+    rotate_points,
+)
 import sys
 
 DEFAULT_LINE_COLOR = QColor(0, 255, 0, 128)
@@ -175,6 +184,54 @@ class Shape(object):
 
     def move_vertex_by(self, i, offset):
         self.points[i] = self.points[i] + offset
+
+    # -- Oriented bounding boxes ------------------------------------------
+    #
+    # A rotated box needs no new storage: it is still the four corners in
+    # self.points, only no longer axis-aligned.  Everything that paints,
+    # hit-tests or moves a shape already works corner by corner and therefore
+    # needs no change; only the operations below and Canvas.bounded_move_vertex
+    # care about the difference.
+
+    def center(self):
+        """Centre of the shape, as a QPointF."""
+        if not self.points:
+            return QPointF()
+        x = sum(p.x() for p in self.points) / len(self.points)
+        y = sum(p.y() for p in self.points) / len(self.points)
+        return QPointF(x, y)
+
+    def obb(self):
+        """``(cx, cy, w, h, theta)`` for this shape, or ``None`` if not a box."""
+        if len(self.points) != 4:
+            return None
+        return corners_to_obb([(p.x(), p.y()) for p in self.points])
+
+    def is_rotated(self):
+        """True when this shape is a rectangle that is not axis-aligned."""
+        if len(self.points) != 4:
+            return False
+        return _is_rotated([(p.x(), p.y()) for p in self.points])
+
+    def rotate(self, theta, center=None):
+        """Turn the shape by *theta* radians about *center* (default: its own).
+
+        Rotating about the centre rather than a corner is what makes the key
+        held down to spin a box feel like turning the animal in place: the box
+        stays on the animal instead of swinging away from it.
+        """
+        if len(self.points) < 2:
+            return
+        pivot = self.center() if center is None else center
+        rotated = rotate_points(
+            [(p.x(), p.y()) for p in self.points], theta, (pivot.x(), pivot.y())
+        )
+        self.points = [QPointF(x, y) for x, y in rotated]
+
+    def set_obb(self, cx, cy, w, h, theta):
+        """Replace the four corners with those of this oriented box."""
+        self.points = [QPointF(x, y) for x, y in obb_corners((cx, cy, w, h, theta))]
+        self._closed = True
 
     def highlight_vertex(self, i, action):
         self._highlight_index = i

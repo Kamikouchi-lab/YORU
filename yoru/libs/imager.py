@@ -13,6 +13,8 @@ import numpy as np
 from PIL import Image, ImageTk
 from pynput import mouse
 
+from yoru.libs.detector_base import DETECTION_COLUMNS
+
 
 class capture_streamCV2:
     def __init__(self, srcCam=1, m_dict={}):
@@ -99,20 +101,9 @@ class capture_streamCV2:
                     file_name_base + "_detect.csv", "a+", newline=""
                 )
                 self.rtesult_writer = csv.writer(self.detectionlogfile)
-                self.rtesult_writer.writerows(
-                    [
-                        [
-                            "x1",
-                            "y1",
-                            "x2",
-                            "y2",
-                            "confidence",
-                            "class",
-                            "class_name",
-                            "total_time",
-                        ]
-                    ]
-                )
+                # Header straight from the detection schema, so a column added
+                # there can never be written without a name to go with it.
+                self.rtesult_writer.writerows([list(DETECTION_COLUMNS)])
                 stream_flag = True
                 print("Start: Video-streaming")
 
@@ -267,20 +258,9 @@ class capture_streamMSS:
                     file_name_base + "_detect.csv", "a+", newline=""
                 )
                 self.rtesult_writer = csv.writer(self.detectionlogfile)
-                self.rtesult_writer.writerows(
-                    [
-                        [
-                            "x1",
-                            "y1",
-                            "x2",
-                            "y2",
-                            "confidence",
-                            "class",
-                            "class_name",
-                            "total_time",
-                        ]
-                    ]
-                )
+                # Header straight from the detection schema, so a column added
+                # there can never be written without a name to go with it.
+                self.rtesult_writer.writerows([list(DETECTION_COLUMNS)])
                 stream_flag = True
                 print("Start: Video-streaming")
             elif stream_flag and (not self.m_dict["stream"]):

@@ -8,6 +8,9 @@ import os
 import cv2
 from tqdm import tqdm
 
+from yoru.libs.detector_base import obb_of
+from yoru.libs.obb import obb_corners
+
 logger = logging.getLogger(__name__)
 
 
@@ -75,21 +78,29 @@ class yolo_analysis_image:
             for d in detections:
                 if d["conf"] < conf_thresh:
                     continue
-                # xywhn形式（中心x, 中心y, 幅, 高さ）に変換（正規化）
-                x_center = (d["x1"] + d["x2"]) / 2 / width
-                y_center = (d["y1"] + d["y2"]) / 2 / height
-                w = (d["x2"] - d["x1"]) / width
-                h = (d["y2"] - d["y1"]) / height
-                # 結果をリストに保存
-                result.append(
-                    [
-                        d["class_id"],
-                        x_center,
-                        y_center,
-                        w,
-                        h,
-                    ]
-                )
+                box = obb_of(d)
+                if d.get("angle") is not None:
+                    # An OBB model's predictions are written in the format
+                    # labelImg will reopen them in: class index plus four
+                    # corners, normalised.  Writing xywhn here instead would
+                    # throw the angle away before the user ever saw it.
+                    coords = []
+                    for x, y in obb_corners(box):
+                        coords.append(min(max(x / width, 0.0), 1.0))
+                        coords.append(min(max(y / height, 0.0), 1.0))
+                    result.append([d["class_id"], *coords])
+                else:
+                    # xywhn形式（中心x, 中心y, 幅, 高さ）に変換（正規化）
+                    cx, cy, w, h, _angle = box
+                    result.append(
+                        [
+                            d["class_id"],
+                            cx / width,
+                            cy / height,
+                            w / width,
+                            h / height,
+                        ]
+                    )
 
             with open(result_txt_path, "w") as file:
                 for sublist in result:

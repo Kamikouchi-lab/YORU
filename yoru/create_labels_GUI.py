@@ -12,6 +12,7 @@ import yaml
 
 from yoru.gui_base import process_frame as _process_frame
 from yoru.libs.create_labels import yolo_analysis_image
+from yoru.libs.create_yaml_train import is_obb_project
 from yoru.libs.file_operation_create_label import file_dialog_tk
 from yoru.libs.init_create_label import init_create_label
 
@@ -163,6 +164,9 @@ class model_eval_gui:
         with open(file_path, "r") as yf:
             data = yaml.safe_load(yf)
             self.m_dict["project_dir"] = data["project_dir"]
+            # The project decides the annotation format, the same as in the
+            # training GUI; labelImg is told explicitly below.
+            self.m_dict["obb"] = is_obb_project(data)
             if data.get("evaluation_info_date"):
                 self.m_dict["datas_dir"] = data["evaluate_datas_dir"]
                 self.m_dict["result_dir"] = data["evaluate_result_dir"]
@@ -203,10 +207,36 @@ class model_eval_gui:
             print(f"load complete")
 
     def labelImg_bt(self):
+        """Open the bundled labelImg on the evaluation images.
+
+        The argv is built here rather than passed straight through from
+        ``sys.argv``: this GUI's own arguments have nothing to do with
+        labelImg's, and one of them arriving as a positional would open the
+        wrong directory.  ``--obb`` / ``--no-obb`` is always passed, so the
+        format follows the loaded project instead of whatever labelImg
+        remembered from last time.
+        """
+        import subprocess
         import sys
-        from yoru.labelimg.labelimg import get_main_app
-        app, win = get_main_app(sys.argv)
-        app.exec_()
+
+        cmd = [sys.executable, "-m", "yoru.labelimg.labelimg"]
+        datas_dir = self.m_dict.get("datas_dir") or ""
+        if datas_dir and os.path.isdir(datas_dir):
+            classes_txt = os.path.join(datas_dir, "classes.txt")
+            cmd += [
+                datas_dir,
+                classes_txt if os.path.isfile(classes_txt) else "",
+                datas_dir,
+            ]
+        cmd.append("--obb" if self.m_dict.get("obb") else "--no-obb")
+
+        try:
+            # Popen, not an in-process QApplication: Qt's event loop and
+            # DearPyGui's cannot both own this process.
+            subprocess.Popen(cmd, cwd=os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))))
+        except OSError as e:
+            print(f"Failed to launch labelImg: {e}")
 
     def yolo_detection(self):
         yolo_det = yolo_analysis_image(self.m_dict)

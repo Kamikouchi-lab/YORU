@@ -24,7 +24,10 @@
 
       iii. Grab Current Frame or Alt key to save frame.
 
-   > Images that are not used for creating a model are better.
+   > Images that are not used for creating a model are better. The Grab GUI's
+   > **Automatic Extraction** can pick them for you -- set the *Video range*
+   > to a part of the video the training frames did not come from. See
+   > [Automatic Extraction](training.md#automatic-extraction).
 
 5. Run LabelImg and label the frames.
 

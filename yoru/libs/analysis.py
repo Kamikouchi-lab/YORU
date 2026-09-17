@@ -13,8 +13,16 @@ import pandas as pd
 import torch
 from munkres import Munkres
 
-from yoru.libs.drawing import get_colormap
+from yoru.libs.detector_base import obb_of
+from yoru.libs.drawing import draw_box, get_colormap
 from yoru.libs.plugins import DEFAULT_CONF_THRESH, get_detector
+
+#: Columns every analysis table carries for the box's own shape, inserted
+#: between the centre and the confidence.  ``angle`` is in radians and is 0 for
+#: a model that does not predict rotation, so an ordinary detection run's table
+#: gains three columns and loses none, and one reader handles both kinds of
+#: output.
+OBB_COLUMNS = ["w", "h", "angle"]
 
 logger = logging.getLogger(__name__)
 
@@ -71,55 +79,28 @@ class yolo_analysis:
         return ret_match_mat
 
     def drawing(self, result, img):
-        for res_frame_no, *res_box, res_x_center, res_y_center, res_conf, res_cls , res_class_name in result:
-        
-            # print(results)
+        for (res_frame_no, *res_box, res_x_center, res_y_center,
+             res_w, res_h, res_angle, res_conf, res_cls, res_class_name) in result:
             label = f"{res_class_name} {res_conf:.2f}"
-
-            cv2.rectangle(
+            draw_box(
                 img,
-                pt1=(int(res_box[0]), int(res_box[1])),
-                pt2=(int(res_box[2]), int(res_box[3])),
-                color=self.colormap[int(res_cls)],
-                thickness=4,
-                lineType=cv2.LINE_4,
-                shift=0,
-            )
-            cv2.putText(
-                img,
-                text=label,
-                org=(int(res_box[0]), int(res_box[1]) - 10),
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                fontScale=1.5,
-                color=self.colormap[int(res_cls)],
-                thickness=5,
-                lineType=cv2.LINE_4,
+                (res_x_center, res_y_center, res_w, res_h, res_angle),
+                self.colormap[int(res_cls)],
+                label=label,
             )
         return img
 
     def tracking_drawing(self, result, img):
-        for res_frame_no, *res_box, res_x_center, res_y_center, res_conf, res_cls, res_class_name, tracking_id in result:
+        for (res_frame_no, *res_box, res_x_center, res_y_center,
+             res_w, res_h, res_angle, res_conf, res_cls, res_class_name,
+             tracking_id) in result:
             label = f"{res_class_name} {res_conf:.2f}"
             label += f" id:{tracking_id}"
-
-            cv2.rectangle(
+            draw_box(
                 img,
-                pt1=(int(res_box[0]), int(res_box[1])),
-                pt2=(int(res_box[2]), int(res_box[3])),
-                color=self.colormap[int(res_cls)],
-                thickness=4,
-                lineType=cv2.LINE_4,
-                shift=0,
-            )
-            cv2.putText(
-                img,
-                text=label,
-                org=(int(res_box[0]), int(res_box[1]) - 10),
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                fontScale=1.5,
-                color=self.colormap[int(res_cls)],
-                thickness=5,
-                lineType=cv2.LINE_4,
+                (res_x_center, res_y_center, res_w, res_h, res_angle),
+                self.colormap[int(res_cls)],
+                label=label,
             )
         return img
 
@@ -212,8 +193,11 @@ class yolo_analysis:
                     for d in detections:
                         if d["conf"] < self.m_dict["threshold"]:
                             continue
-                        x_center = (d["x1"] + d["x2"]) / 2
-                        y_center = (d["y1"] + d["y2"]) / 2
+                        # The centre comes from the oriented box, which for a
+                        # rectangle is its centroid either way -- the same
+                        # number as before for an upright detection, and the
+                        # right one for a rotated detection.
+                        x_center, y_center, box_w, box_h, box_angle = obb_of(d)
 
                         entry = [
                             frame_count,
@@ -223,6 +207,9 @@ class yolo_analysis:
                             d["y2"],
                             x_center,
                             y_center,
+                            box_w,
+                            box_h,
+                            box_angle,
                             d["conf"],
                             d["class_id"],
                             d["class_name"],
@@ -295,6 +282,7 @@ class yolo_analysis:
                             "y2",
                             "x_center",
                             "y_center",
+                            *OBB_COLUMNS,
                             "confidence",
                             "class",
                             "class_name",
@@ -312,6 +300,7 @@ class yolo_analysis:
                             "y2",
                             "x_center",
                             "y_center",
+                            *OBB_COLUMNS,
                             "confidence",
                             "class",
                             "class_name",
@@ -398,12 +387,12 @@ class yolo_analysis:
                 for d in detections:
                     if d["conf"] < conf_thresh:
                         continue
-                    x_center = (d["x1"] + d["x2"]) / 2
-                    y_center = (d["y1"] + d["y2"]) / 2
+                    x_center, y_center, box_w, box_h, box_angle = obb_of(d)
                     result.append([
                         frame_count,
                         d["x1"], d["y1"], d["x2"], d["y2"],
                         x_center, y_center,
+                        box_w, box_h, box_angle,
                         d["conf"], d["class_id"], d["class_name"],
                     ])
                 result_frame = self.drawing(result, frame)
@@ -437,30 +426,14 @@ class yolo_analysis_image:
         logger.debug("yolo_analysis_image initialized")
 
     def drawing(self, img, box, conf, cls):
-        # print(results)
-        label = f"{self.class_names[int(cls)]} {conf:.2f}"
-        # label = f"{name} {conf:.2f}
+        """Draw one detection.
 
-        cv2.rectangle(
-            img,
-            pt1=(int(box[0]), int(box[1])),
-            pt2=(int(box[2]), int(box[3])),
-            color=self.colormap[int(cls)],
-            thickness=4,
-            lineType=cv2.LINE_4,
-            shift=0,
-        )
-        cv2.putText(
-            img,
-            text=label,
-            org=(int(box[0]), int(box[1]) - 10),
-            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=1.5,
-            color=self.colormap[int(cls)],
-            thickness=5,
-            lineType=cv2.LINE_4,
-        )
-        return img
+        *box* is ``(cx, cy, w, h, angle)`` -- the same five numbers every other
+        part of YORU passes a box around as, so a rotated detection draws as a
+        rotated box here too.
+        """
+        label = f"{self.class_names[int(cls)]} {conf:.2f}"
+        return draw_box(img, box, self.colormap[int(cls)], label=label)
 
     def analyze_image(self):
         """Detect on every configured image and write one combined CSV.
@@ -508,8 +481,7 @@ class yolo_analysis_image:
             for d in detections:
                 if d["conf"] < conf_thresh:
                     continue
-                x_center = (d["x1"] + d["x2"]) / 2
-                y_center = (d["y1"] + d["y2"]) / 2
+                x_center, y_center, box_w, box_h, box_angle = obb_of(d)
 
                 # 結果をリストに保存
                 result_list.append(
@@ -521,6 +493,9 @@ class yolo_analysis_image:
                         d["y2"],
                         x_center,
                         y_center,
+                        box_w,
+                        box_h,
+                        box_angle,
                         d["conf"],
                         d["class_id"],
                         d["class_name"],
@@ -529,7 +504,7 @@ class yolo_analysis_image:
 
                 result_frame = self.drawing(
                     frame,
-                    [d["x1"], d["y1"], d["x2"], d["y2"]],
+                    (x_center, y_center, box_w, box_h, box_angle),
                     d["conf"],
                     d["class_id"],
                 )
@@ -555,6 +530,7 @@ class yolo_analysis_image:
                 "y2",
                 "x_center",
                 "y_center",
+                *OBB_COLUMNS,
                 "confidence",
                 "class",
                 "class_name",

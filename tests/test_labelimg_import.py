@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 import types
 import importlib
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -24,8 +25,24 @@ ROOT = Path(__file__).resolve().parents[1]
 # Qt stub – prevent import errors when PyQt5/PySide2 is absent
 # ---------------------------------------------------------------------------
 
+def _real_qt_available() -> bool:
+    """Is a usable PyQt5 installed?
+
+    Checked before stubbing, because the stub goes into ``sys.modules`` for the
+    whole pytest session: installing it on a machine that *has* PyQt5 would
+    break every later test module that imports Qt for real (the stub has no
+    ``QtCore.qVersion``, which labelImg's compiled resources call at import).
+    """
+    try:
+        return importlib.util.find_spec("PyQt5.QtCore") is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def _stub_qt():
     """Insert a minimal PyQt5 stub so yolo_io.py can be imported without Qt."""
+    if _real_qt_available():
+        return
     qt_mods = [
         "PyQt5", "PyQt5.QtGui", "PyQt5.QtCore", "PyQt5.QtWidgets",
         "PyQt5.QtPrintSupport",

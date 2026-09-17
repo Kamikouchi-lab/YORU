@@ -12,7 +12,7 @@ from multiprocessing import Manager, Process
 import dearpygui.dearpygui as dpg
 import yaml
 
-from yoru.libs.create_yaml_train import create_project
+from yoru.libs.create_yaml_train import create_project, is_obb_project
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.init_train import init_train
 from yoru.libs.train_progress import ProgressPrinter
@@ -27,6 +27,19 @@ from yoru.libs.vram_estimate import (
     get_gpu_info,
     read_dataset_stats,
 )
+
+
+
+def _repo_root():
+    """Directory that has ``yoru`` on it, so ``-m yoru...`` resolves.
+
+    The training GUI is normally started from the checkout, but not always --
+    launching a child with an inherited working directory it cannot import from
+    fails with an opaque "No module named yoru".
+    """
+    from pathlib import Path
+
+    return Path(__file__).resolve().parents[1]
 
 
 class yoru_train:
@@ -177,6 +190,19 @@ class yoru_train:
                     label="Create YORU project", tag="cre_btn",
                     width=160, height=30, callback=lambda: self.create_pr_dir(), enabled=True,
                 )
+            with dpg.group(horizontal=True, indent=20):
+                dpg.add_checkbox(
+                    label="Oriented Bounding Box (OBB)", tag="obb_chk",
+                    default_value=self.m_dict.get("obb", False),
+                    callback=lambda: self.select_obb(),
+                )
+                dpg.add_text(
+                    "  tilted boxes; labelImg saves YOLO-OBB and training uses a -obb weight",
+                    color=(160, 160, 160),
+                )
+            dpg.add_text(
+                tag="obb_note", default_value="", color=(230, 180, 60), indent=20, wrap=700,
+            )
             dpg.add_spacer(height=4)
             dpg.add_separator()
             dpg.add_spacer(height=4)
@@ -690,6 +716,12 @@ class yoru_train:
 
     def create_pr_dir(self):
         print("create project")
+        # Read the checkbox before anything is written: the OBB flag goes into
+        # config.yaml at creation and every later step -- labelImg's format,
+        # the weight, the detector -- reads it back from there.
+        self.m_dict["obb"] = bool(dpg.get_value("obb_chk"))
+        self.m_dict["weight"] = self._build_weight()
+        dpg.set_value("weight_display_text", self.m_dict["weight"])
         self.m_dict["project_name"] = dpg.get_value("pro_name")
         self.m_dict["project_dir"] = (
             self.m_dict["project_path"] + "/" + self.m_dict["project_name"]
@@ -720,10 +752,18 @@ class yoru_train:
         else:
             print("The project already exists.")
             dpg.enable_item("move_label_images")
+        # An existing project keeps the task it was created with; re-reading it
+        # here is what stops a stale checkbox from mislabelling the next step.
+        self._sync_obb_ui()
 
     def _restore_model_ui(self, weight: str) -> None:
         """ウェイトファイル名からモデルファミリー/バージョン/サイズのUIを復元する。"""
         w = weight.lower()
+        # A "-obb" weight identifies the task as surely as config.yaml does;
+        # strip it here so the version/size parsing below sees a plain name.
+        if "-obb" in w:
+            self.m_dict["obb"] = True
+            w = w.replace("-obb", "")
         if w.startswith("yolov5"):
             # v1 projects: YOLOv5 training is no longer bundled, so restore the
             # same size on YOLO11 instead of showing an unusable selection.
@@ -783,6 +823,12 @@ class yoru_train:
 
         self.m_dict["yaml_path"] = data["yaml_path"]
         self.m_dict["all_label_dir"] = self.m_dict["project_dir"] + "/all_label_images"
+
+        # The project decides, not the checkbox: opening an OBB project must
+        # put the GUI into OBB mode even if the last project was not one.
+        self.m_dict["obb"] = is_obb_project(data)
+        dpg.set_value("obb_chk", self.m_dict["obb"])
+        self._sync_obb_ui()
 
         # --- Step1: プロジェクト読み込み完了 ---
         dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
@@ -858,10 +904,38 @@ class yoru_train:
         # dpg.destroy_context()  # <-- moved from __del__
 
     def labelImg_bt(self):
-        # Popen, not call: subprocess.call would freeze the training GUI for as
-        # long as labelImg stays open.
+        """Open the bundled labelImg on this project's images.
+
+        The bundled copy (``-m yoru.labelimg.labelimg``), not the ``labelImg``
+        on PATH: it is the one with Click to Box, and the only one that can be
+        told which annotation format this project uses.  ``--obb`` / ``--no-obb``
+        is passed explicitly rather than left to labelImg's remembered setting,
+        so opening a detection project right after an OBB one cannot start
+        writing the wrong kind of label file.
+
+        Popen, not call: subprocess.call would freeze the training GUI for as
+        long as labelImg stays open.
+        """
+        cmd = [sys.executable, "-m", "yoru.labelimg.labelimg"]
+
+        image_dir = self.m_dict.get("all_label_dir") or ""
+        if image_dir and os.path.isdir(image_dir):
+            classes_txt = os.path.join(image_dir, "classes.txt")
+            cmd += [
+                image_dir,
+                # An empty string falls back to the bundled predefined classes;
+                # a project that has not been labelled yet has no classes.txt.
+                classes_txt if os.path.isfile(classes_txt) else "",
+                # YORU keeps each label beside its image.
+                image_dir,
+            ]
+        else:
+            print("[yoru] No project images directory yet; opening labelImg empty.")
+
+        cmd.append("--obb" if self.m_dict.get("obb") else "--no-obb")
+
         try:
-            subprocess.Popen(["labelImg"])
+            subprocess.Popen(cmd, cwd=str(_repo_root()))
         except OSError as e:
             print(f"Failed to launch labelImg: {e}")
             self._set_step_state("step3_state", "Error")
@@ -896,13 +970,20 @@ class yoru_train:
         self._set_step_state("step5_state", "Complete!!")
 
     def _build_weight(self) -> str:
-        """選択中のモデルファミリー・バージョン・サイズからウェイトファイル名を生成する。"""
+        """選択中のモデルファミリー・バージョン・サイズからウェイトファイル名を生成する。
+
+        OBB プロジェクトでは ``-obb`` サフィックスを付ける。ultralytics は
+        ウェイト名からタスクを決めるので、``yolo11s-obb.pt`` を渡すだけで
+        回転矩形の学習になり、明示的な ``task=`` 指定は要らない。
+        """
         family = self.m_dict.get("model_family", "YOLO")
+        obb = bool(self.m_dict.get("obb"))
         if family == "YOLO":
             prefix_map = {"YOLOv8": "yolov8", "YOLO11": "yolo11"}
             prefix = prefix_map.get(self.m_dict.get("yolo_version", "YOLO11"), "yolo11")
             size = self.m_dict.get("yolo_size", "s")
-            return f"{prefix}{size}.pt"
+            suffix = "-obb" if obb else ""
+            return f"{prefix}{size}{suffix}.pt"
         elif family == "RT-DETR":
             size = self.m_dict.get("rtdetr_size", "l")
             return f"rtdetr-{size}.pt"
@@ -914,8 +995,44 @@ class yoru_train:
             return "ssd_vgg16_best.pt"
         return "yolo11s.pt"
 
+    def select_obb(self):
+        """The OBB checkbox changed before the project exists."""
+        self.m_dict["obb"] = bool(dpg.get_value("obb_chk"))
+        self._sync_obb_ui()
+
+    def _sync_obb_ui(self):
+        """Make the rest of the form agree with the OBB flag.
+
+        Only ultralytics' YOLO has a rotated-box head, so an OBB project forces
+        the family back to YOLO and says why, rather than letting the user pick
+        RT-DETR and discover at training time that it cannot read the labels.
+        """
+        obb = bool(self.m_dict.get("obb"))
+        if obb and self.m_dict.get("model_family") != "YOLO":
+            self.m_dict["model_family"] = "YOLO"
+            dpg.set_value("model_family_combo", "YOLO")
+            dpg.configure_item("yolo_options_group",   show=True)
+            dpg.configure_item("rtdetr_options_group", show=False)
+            dpg.configure_item("tv_options_group",     show=False)
+        dpg.set_value(
+            "obb_note",
+            "OBB project: only YOLOv8 / YOLO11 have a rotated-box head, so the "
+            "model family is fixed to YOLO. labelImg will read and write "
+            "YOLO-OBB labels (8 coordinates per line)." if obb else "",
+        )
+        self.m_dict["weight"] = self._build_weight()
+        dpg.set_value("weight_display_text", self.m_dict["weight"])
+
     def select_family(self):
         family = dpg.get_value("model_family_combo")
+        if self.m_dict.get("obb") and family != "YOLO":
+            # Refusing, and saying so, beats accepting a choice that would fail
+            # only once training had started.
+            dpg.set_value("model_family_combo", "YOLO")
+            self._sync_obb_ui()
+            print("[yoru] This is an OBB project; only YOLO can be trained on "
+                  "oriented boxes.")
+            return
         self.m_dict["model_family"] = family
 
         # Show/hide family-specific option groups

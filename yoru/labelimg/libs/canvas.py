@@ -11,6 +11,9 @@ except ImportError:
 
 from .shape import Shape
 from .utils import distance
+# The rotated-box geometry lives in YORU core, not in the widget: the canvas
+# converts between QPointF and tuples and nothing more.
+from yoru.libs.obb import box_axes, resize_corner
 
 CURSOR_DEFAULT = Qt.ArrowCursor
 CURSOR_POINT = Qt.PointingHandCursor
@@ -28,8 +31,16 @@ class Canvas(QWidget):
     selectionChanged = pyqtSignal(bool)
     shapeMoved = pyqtSignal()
     drawingPolygon = pyqtSignal(bool)
+    #: A click in CLICK mode, in image pixels.  The canvas does not run the
+    #: segmentation itself: it has no access to the image as an array, and
+    #: keeping the engine out of the widget is what lets it be tested headless.
+    clickToBox = pyqtSignal(QPointF)
+    #: Emitted whenever the Click-to-Box tool arms or disarms, from wherever.
+    #: One signal for every path — the toolbar, Escape, a box landing — is what
+    #: keeps the button's state and the canvas's mode from drifting apart.
+    clickModeChanged = pyqtSignal(bool)
 
-    CREATE, EDIT = list(range(2))
+    CREATE, EDIT, CLICK = list(range(3))
 
     epsilon = 11.0
 
@@ -63,6 +74,10 @@ class Canvas(QWidget):
         self.setFocusPolicy(Qt.WheelFocus)
         self.verified = False
         self.draw_square = False
+        #: When True, boxes are oriented: corner drags keep the box a rectangle
+        #: in its own rotated frame, and the rotate keys are live.  Set from the
+        #: project's OBB flag, so the annotator matches the model being trained.
+        self.obb_mode = False
 
         # initialisation for panning
         self.pan_initial_pos = QPoint()
@@ -89,12 +104,44 @@ class Canvas(QWidget):
     def editing(self):
         return self.mode == self.EDIT
 
+    def clicking(self):
+        return self.mode == self.CLICK
+
     def set_editing(self, value=True):
+        # Leaving CLICK mode this way happens on the path a finished box takes
+        # (new_shape switches the canvas back to editing), so the announcement
+        # belongs here too -- otherwise the toolbar button would stay lit while
+        # the tool was no longer armed.
+        was_clicking = self.mode == self.CLICK
         self.mode = self.EDIT if value else self.CREATE
         if not value:  # Create
             self.un_highlight()
             self.de_select_shape()
         self.prev_point = QPointF()
+        if was_clicking:
+            self.clickModeChanged.emit(False)
+        self.repaint()
+
+    def set_click_mode(self, value=True):
+        """Arm (or disarm) the Click-to-Box tool.
+
+        Leaving it armed after a box lands would make the next click — almost
+        always a grab at a handle to adjust that box — drop a second box on top
+        of the first, so labelimg.py disarms it as soon as a box is created.
+        """
+        was = self.mode == self.CLICK
+        self.mode = self.CLICK if value else self.EDIT
+        if value:
+            self.un_highlight()
+            self.de_select_shape()
+        self.prev_point = QPointF()
+        self.override_cursor(CURSOR_POINT if value else CURSOR_DEFAULT)
+        if was != bool(value):
+            self.clickModeChanged.emit(bool(value))
+        self.repaint()
+
+    def set_obb_mode(self, value=True):
+        self.obb_mode = bool(value)
         self.repaint()
 
     def un_highlight(self):
@@ -114,6 +161,12 @@ class Canvas(QWidget):
         if window.file_path is not None:
             self.parent().window().label_coordinates.setText(
                 'X: %d; Y: %d' % (pos.x(), pos.y()))
+
+        # Click to Box: nothing to preview, just say the click is live.
+        if self.clicking():
+            self.override_cursor(CURSOR_POINT)
+            self.repaint()
+            return
 
         # Polygon drawing.
         if self.drawing():
@@ -180,12 +233,7 @@ class Canvas(QWidget):
                 self.repaint()
 
                 # Display annotation width and height while moving vertex
-                point1 = self.h_shape[1]
-                point3 = self.h_shape[3]
-                current_width = abs(point1.x() - point3.x())
-                current_height = abs(point1.y() - point3.y())
-                self.parent().window().label_coordinates.setText(
-                        'Width: %d, Height: %d / X: %d; Y: %d' % (current_width, current_height, pos.x(), pos.y()))
+                self.report_shape_size(self.h_shape, pos)
             elif self.selected_shape and self.prev_point:
                 self.override_cursor(CURSOR_MOVE)
                 self.bounded_move_shape(self.selected_shape, pos)
@@ -193,12 +241,7 @@ class Canvas(QWidget):
                 self.repaint()
 
                 # Display annotation width and height while moving shape
-                point1 = self.selected_shape[1]
-                point3 = self.selected_shape[3]
-                current_width = abs(point1.x() - point3.x())
-                current_height = abs(point1.y() - point3.y())
-                self.parent().window().label_coordinates.setText(
-                        'Width: %d, Height: %d / X: %d; Y: %d' % (current_width, current_height, pos.x(), pos.y()))
+                self.report_shape_size(self.selected_shape, pos)
             else:
                 # pan
                 delta_x = pos.x() - self.pan_initial_pos.x()
@@ -238,12 +281,7 @@ class Canvas(QWidget):
                 self.update()
 
                 # Display annotation width and height while hovering inside
-                point1 = self.h_shape[1]
-                point3 = self.h_shape[3]
-                current_width = abs(point1.x() - point3.x())
-                current_height = abs(point1.y() - point3.y())
-                self.parent().window().label_coordinates.setText(
-                        'Width: %d, Height: %d / X: %d; Y: %d' % (current_width, current_height, pos.x(), pos.y()))
+                self.report_shape_size(self.h_shape, pos)
                 break
         else:  # Nothing found, clear highlights, reset state.
             if self.h_shape:
@@ -256,7 +294,10 @@ class Canvas(QWidget):
         pos = self.transform_pos(ev.pos())
 
         if ev.button() == Qt.LeftButton:
-            if self.drawing():
+            if self.clicking():
+                if not self.out_of_pixmap(pos):
+                    self.clickToBox.emit(pos)
+            elif self.drawing():
                 self.handle_drawing(pos)
             else:
                 selection = self.select_shape_point(pos)
@@ -288,7 +329,11 @@ class Canvas(QWidget):
                 self.override_cursor(CURSOR_GRAB)
         elif ev.button() == Qt.LeftButton:
             pos = self.transform_pos(ev.pos())
-            if self.drawing():
+            if self.clicking():
+                # The press already emitted the request; the release does
+                # nothing, or the tool would fire twice per click.
+                pass
+            elif self.drawing():
                 self.handle_drawing(pos)
             else:
                 # pan
@@ -392,41 +437,70 @@ class Canvas(QWidget):
 
         return x, y, False
 
+    def report_shape_size(self, shape, pos):
+        """Put this shape's own width, height and tilt in the status bar.
+
+        For a rotated box the corner-to-corner span is the *bounding* box, not
+        the box, and reading 80 x 60 for a 70 x 20 fly lying diagonally is
+        worse than useless.  The angle is only shown when there is one.
+        """
+        import math
+
+        if shape is None or len(shape.points) != 4:
+            return
+        w = distance(shape[1] - shape[0])
+        h = distance(shape[3] - shape[0])
+        text = 'Width: %d, Height: %d' % (w, h)
+        if shape.is_rotated():
+            _cx, _cy, _w, _h, theta = shape.obb()
+            text += ', Angle: %.1f' % math.degrees(theta)
+        self.parent().window().label_coordinates.setText(
+            text + ' / X: %d; Y: %d' % (pos.x(), pos.y()))
+
+    def rotate_selected_shape(self, degrees):
+        """Turn the selected box by *degrees* about its own centre.
+
+        Returns True when something was rotated, so the caller knows whether to
+        mark the file dirty.
+        """
+        import math
+
+        shape = self.selected_shape
+        if shape is None or len(shape.points) != 4:
+            return False
+        shape.rotate(math.radians(float(degrees)))
+        self.shapeMoved.emit()
+        self.repaint()
+        return True
+
+    def shape_axes(self, shape):
+        """Unit vectors along the shape's own width and height."""
+        return box_axes([(p.x(), p.y()) for p in shape.points])
+
     def bounded_move_vertex(self, pos):
+        """Drag one corner, keeping the shape a rectangle in its own frame.
+
+        The geometry lives in ``yoru.libs.obb.resize_corner`` -- a pure
+        function with no Qt in it, so the case that actually needs testing
+        (a tilted box whose corner must stay square to its neighbours) is
+        tested without a display.
+        """
         index, shape = self.h_vertex, self.h_shape
-        point = shape[index]
+        if index is None or shape is None or len(shape.points) != 4:
+            return
         if self.out_of_pixmap(pos):
             size = self.pixmap.size()
             clipped_x = min(max(0, pos.x()), size.width())
             clipped_y = min(max(0, pos.y()), size.height())
             pos = QPointF(clipped_x, clipped_y)
 
-        if self.draw_square:
-            opposite_point_index = (index + 2) % 4
-            opposite_point = shape[opposite_point_index]
-
-            min_size = min(abs(pos.x() - opposite_point.x()), abs(pos.y() - opposite_point.y()))
-            direction_x = -1 if pos.x() - opposite_point.x() < 0 else 1
-            direction_y = -1 if pos.y() - opposite_point.y() < 0 else 1
-            shift_pos = QPointF(opposite_point.x() + direction_x * min_size - point.x(),
-                                opposite_point.y() + direction_y * min_size - point.y())
-        else:
-            shift_pos = pos - point
-
-        shape.move_vertex_by(index, shift_pos)
-
-        left_index = (index + 1) % 4
-        right_index = (index + 3) % 4
-        left_shift = None
-        right_shift = None
-        if index % 2 == 0:
-            right_shift = QPointF(shift_pos.x(), 0)
-            left_shift = QPointF(0, shift_pos.y())
-        else:
-            left_shift = QPointF(shift_pos.x(), 0)
-            right_shift = QPointF(0, shift_pos.y())
-        shape.move_vertex_by(right_index, right_shift)
-        shape.move_vertex_by(left_index, left_shift)
+        moved = resize_corner(
+            [(p.x(), p.y()) for p in shape.points],
+            index,
+            (pos.x(), pos.y()),
+            square=self.draw_square,
+        )
+        shape.points = [QPointF(x, y) for x, y in moved]
 
     def bounded_move_shape(self, shape, pos):
         if self.out_of_pixmap(pos):
@@ -567,6 +641,26 @@ class Canvas(QWidget):
         self.newShape.emit()
         self.update()
 
+    def add_shape_from_points(self, points):
+        """Append a finished shape and announce it as if it had been drawn.
+
+        Click to Box produces a complete box in one step, with no drag to
+        finalise, so it joins the normal pipeline here instead: emitting
+        ``newShape`` means the label dialog, the label list, the dirty flag and
+        the undo-on-cancel path all behave exactly as they do for a hand-drawn
+        box, with no second code path to keep in step.
+        """
+        shape = Shape()
+        for p in points:
+            shape.add_point(p)
+        shape.close()
+        self.shapes.append(shape)
+        self.current = None
+        self.set_hiding(False)
+        self.newShape.emit()
+        self.update()
+        return shape
+
     def close_enough(self, p1, p2):
         return distance(p1 - p2) < self.epsilon
 
@@ -604,7 +698,11 @@ class Canvas(QWidget):
 
     def keyPressEvent(self, ev):
         key = ev.key()
-        if key == Qt.Key_Escape and self.current:
+        if key == Qt.Key_Escape and self.clicking():
+            # Same gesture as cancelling a half-drawn box: Escape puts the
+            # canvas back in edit mode whichever tool was armed.
+            self.set_click_mode(False)
+        elif key == Qt.Key_Escape and self.current:
             print('ESC press')
             self.current = None
             self.drawingPolygon.emit(False)

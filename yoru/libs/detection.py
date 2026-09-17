@@ -7,6 +7,7 @@ import time
 import cv2
 import numpy as np
 
+from yoru.libs.detector_base import DETECTION_COLUMNS, detection_row
 from yoru.libs.plugins import get_detector
 
 logger = logging.getLogger(__name__)
@@ -54,19 +55,12 @@ class yolo_detection:
                         detections = self.detector.detect(image)
 
                         n = len(detections)
-                        yolo_results = np.empty((n, 8), dtype=object)
+                        yolo_results = np.empty((n, len(DETECTION_COLUMNS)), dtype=object)
                         yoru_names_list = []
                         for i, d in enumerate(detections):
-                            yolo_results[i] = [
-                                d["x1"],
-                                d["y1"],
-                                d["x2"],
-                                d["y2"],
-                                d["conf"],
-                                d["class_id"],
-                                d["class_name"],
-                                self.m_dict["total_time"],
-                            ]
+                            yolo_results[i] = detection_row(
+                                d, self.m_dict["total_time"]
+                            )
                             yoru_names_list.append(d["class_name"])
 
                         self.m_dict["yolo_class_names"] = yoru_names_list

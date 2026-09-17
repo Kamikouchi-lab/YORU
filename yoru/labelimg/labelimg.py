@@ -47,16 +47,25 @@ from .libs.canvas import Canvas
 from .libs.zoomWidget import ZoomWidget
 from .libs.labelDialog import LabelDialog
 from .libs.colorDialog import ColorDialog
-from .libs.labelFile import LabelFile, LabelFileError, LabelFileFormat
+from .libs.labelFile import (LabelFile, LabelFileError, LabelFileFormat,
+                            coerce_label_file_format)
 from .libs.toolBar import ToolBar
 from .libs.pascal_voc_io import PascalVocReader
 from .libs.pascal_voc_io import XML_EXT
 from .libs.yolo_io import YoloReader
 from .libs.yolo_io import TXT_EXT
+from .libs.yolo_obb_io import YoloOBBReader
+from .libs.yolo_obb_io import sniff_obb
 from .libs.create_ml_io import CreateMLReader
 from .libs.create_ml_io import JSON_EXT
 from .libs.ustr import ustr
 from .libs.hashableQListWidgetItem import HashableQListWidgetItem
+
+# YORU additions.  Click to Box turns one click into a fitted box; the OBB
+# helpers are shared with the detector and the real-time drawing so that a
+# rotated box means the same thing everywhere in YORU.
+from yoru.libs.click_segment import ClickRequest, segment_local
+from yoru.libs.obb import obb_corners
 
 __appname__ = 'labelImg'
 
@@ -83,7 +92,8 @@ class WindowMixin(object):
 class MainWindow(QMainWindow, WindowMixin):
     FIT_WINDOW, FIT_WIDTH, MANUAL_ZOOM = list(range(3))
 
-    def __init__(self, default_filename=None, default_prefdef_class_file=None, default_save_dir=None):
+    def __init__(self, default_filename=None, default_prefdef_class_file=None,
+                 default_save_dir=None, obb_mode=None):
         super(MainWindow, self).__init__()
         self.setWindowTitle(__appname__)
 
@@ -100,8 +110,32 @@ class MainWindow(QMainWindow, WindowMixin):
 
         # Save as Pascal voc xml
         self.default_save_dir = default_save_dir
-        # Default format is YOLO (modified from original PascalVOC default)
-        self.label_file_format = settings.get(SETTING_LABEL_FILE_FORMAT, LabelFileFormat.YOLO)
+        # Default format is YOLO (modified from original PascalVOC default).
+        # Coerced, because the remembered value may come from another labelImg
+        # build's enum -- see coerce_label_file_format.
+        self.label_file_format = coerce_label_file_format(
+            settings.get(SETTING_LABEL_FILE_FORMAT, LabelFileFormat.YOLO))
+
+        # Oriented bounding boxes.  *obb_mode* is None for a standalone launch,
+        # which keeps whatever was used last; YORU's training GUI passes the
+        # project's own flag, and then the project decides.  The flag drives the
+        # format and never the other way round: saving an OBB project as plain
+        # YOLO would silently discard every angle in it.
+        if obb_mode is None:
+            self.obb_mode = bool(settings.get(SETTING_OBB_MODE, False))
+        else:
+            self.obb_mode = bool(obb_mode)
+        if self.obb_mode:
+            self.label_file_format = LabelFileFormat.YOLO_OBB
+        elif self.label_file_format == LabelFileFormat.YOLO_OBB:
+            self.label_file_format = LabelFileFormat.YOLO
+
+        # BGR copy of the open image, decoded once per file for Click to Box.
+        self._cv_image = None
+        self._cv_image_path = None
+        # Half-side of the last search window that worked, so a second click on
+        # a similar animal starts at the right scale instead of hunting again.
+        self._click_radius_hint = None
 
         # For loading all image under a directory
         self.m_img_list = []
@@ -191,6 +225,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.canvas = Canvas(parent=self)
         self.canvas.zoomRequest.connect(self.zoom_request)
         self.canvas.set_drawing_shape_to_square(settings.get(SETTING_DRAW_SQUARE, False))
+        self.canvas.set_obb_mode(self.obb_mode)
 
         scroll = QScrollArea()
         scroll.setWidget(self.canvas)
@@ -206,6 +241,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.canvas.shapeMoved.connect(self.set_dirty)
         self.canvas.selectionChanged.connect(self.shape_selection_changed)
         self.canvas.drawingPolygon.connect(self.toggle_drawing_sensitive)
+        self.canvas.clickToBox.connect(self.click_to_box_at)
+        self.canvas.clickModeChanged.connect(self.on_click_mode_changed)
 
         self.setCentralWidget(scroll)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
@@ -253,8 +290,15 @@ class MainWindow(QMainWindow, WindowMixin):
                 return '&PascalVOC', 'format_voc'
             elif format == LabelFileFormat.YOLO:
                 return '&YOLO', 'format_yolo'
+            elif format == LabelFileFormat.YOLO_OBB:
+                # Same icon as YOLO: it is the same file extension, and the
+                # button's text is what distinguishes them.
+                return '&YOLO-OBB', 'format_yolo'
             elif format == LabelFileFormat.CREATE_ML:
                 return '&CreateML', 'format_createml'
+            # Unreachable for a coerced format, and a safe answer if a new one
+            # is ever added without a case here.
+            return '&YOLO', 'format_yolo'
 
         save_format = action(get_format_meta(self.label_file_format)[0],
                              self.change_format, 'Ctrl+',
@@ -280,6 +324,33 @@ class MainWindow(QMainWindow, WindowMixin):
 
         create = action(get_str('crtBox'), self.create_shape,
                         'w', 'new', get_str('crtBoxDetail'), enabled=False)
+
+        # Click to Box: one click on the animal, one box.  Deliberately
+        # single-shot -- it disarms itself as soon as a box lands, because the
+        # next thing a hand does is grab a handle to adjust that box, and an
+        # armed tool would read that grab as a request for a second box.
+        click_to_box = action('Click to &Box', self.toggle_click_to_box,
+                              'c', 'new',
+                              'Click one animal to get a box fitted to it (C)',
+                              checkable=True, enabled=False)
+
+        # Rotation.  Only meaningful for an OBB project, so the actions are
+        # created either way but only enabled when a box is selected and the
+        # project is oriented.
+        rotate_left = action('Rotate Left', partial(self.rotate_selected, -1.0),
+                             'z', 'edit', 'Turn the selected box 1 degree left (Z)',
+                             enabled=False)
+        rotate_right = action('Rotate Right', partial(self.rotate_selected, 1.0),
+                              'x', 'edit', 'Turn the selected box 1 degree right (X)',
+                              enabled=False)
+        rotate_left_step = action('Rotate Left x15', partial(self.rotate_selected, -15.0),
+                                  'Shift+Z', 'edit',
+                                  'Turn the selected box 15 degrees left (Shift+Z)',
+                                  enabled=False)
+        rotate_right_step = action('Rotate Right x15', partial(self.rotate_selected, 15.0),
+                                   'Shift+X', 'edit',
+                                   'Turn the selected box 15 degrees right (Shift+X)',
+                                   enabled=False)
         delete = action(get_str('delBox'), self.delete_selected_shape,
                         'Delete', 'delete', get_str('delBoxDetail'), enabled=False)
         copy = action(get_str('dupBox'), self.copy_selected_shape,
@@ -366,6 +437,11 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions = Struct(save=save, save_format=save_format, saveAs=save_as, open=open, close=close, resetAll=reset_all, deleteImg=delete_image,
                               lineColor=color1, create=create, delete=delete, edit=edit, copy=copy,
                               createMode=create_mode, editMode=edit_mode, advancedMode=advanced_mode,
+                              clickToBox=click_to_box,
+                              rotateLeft=rotate_left, rotateRight=rotate_right,
+                              rotateLeftStep=rotate_left_step, rotateRightStep=rotate_right_step,
+                              rotateActions=(rotate_left, rotate_right,
+                                             rotate_left_step, rotate_right_step),
                               shapeLineColor=shape_line_color, shapeFillColor=shape_fill_color,
                               zoom=zoom, zoomIn=zoom_in, zoomOut=zoom_out, zoomOrg=zoom_org,
                               fitWindow=fit_window, fitWidth=fit_width,
@@ -374,12 +450,14 @@ class MainWindow(QMainWindow, WindowMixin):
                                   open, open_dir, save, save_as, close, reset_all, quit),
                               beginner=(), advanced=(),
                               editMenu=(edit, copy, delete,
+                                        None, rotate_left, rotate_right,
+                                        rotate_left_step, rotate_right_step,
                                         None, color1, self.draw_squares_option),
-                              beginnerContext=(create, edit, copy, delete),
-                              advancedContext=(create_mode, edit_mode, edit, copy,
+                              beginnerContext=(create, click_to_box, edit, copy, delete),
+                              advancedContext=(create_mode, edit_mode, click_to_box, edit, copy,
                                                delete, shape_line_color, shape_fill_color),
                               onLoadActive=(
-                                  close, create, create_mode, edit_mode),
+                                  close, create, create_mode, edit_mode, click_to_box),
                               onShapesPresent=(save_as, hide_all, show_all))
 
         self.menus = Struct(
@@ -429,12 +507,13 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.tools = self.toolbar('Tools')
         self.actions.beginner = (
-            open, open_dir, change_save_dir, open_next_image, open_prev_image, verify, save, save_format, None, create, copy, delete, None,
+            open, open_dir, change_save_dir, open_next_image, open_prev_image, verify, save, save_format, None,
+            create, click_to_box, copy, delete, None,
             zoom_in, zoom, zoom_out, fit_window, fit_width)
 
         self.actions.advanced = (
             open, open_dir, change_save_dir, open_next_image, open_prev_image, save, save_format, None,
-            create_mode, edit_mode, None,
+            create_mode, edit_mode, click_to_box, None,
             hide_all, show_all)
 
         self.statusBar().showMessage('%s started.' % __appname__)
@@ -540,16 +619,36 @@ class MainWindow(QMainWindow, WindowMixin):
             self.label_file_format = LabelFileFormat.YOLO
             LabelFile.suffix = TXT_EXT
 
+        elif save_format == FORMAT_YOLO_OBB:
+            self.actions.save_format.setText(FORMAT_YOLO_OBB)
+            self.actions.save_format.setIcon(new_icon("format_yolo"))
+            self.label_file_format = LabelFileFormat.YOLO_OBB
+            LabelFile.suffix = TXT_EXT
+
         elif save_format == FORMAT_CREATEML:
             self.actions.save_format.setText(FORMAT_CREATEML)
             self.actions.save_format.setIcon(new_icon("format_createml"))
             self.label_file_format = LabelFileFormat.CREATE_ML
             LabelFile.suffix = JSON_EXT
 
+        # The canvas edits boxes the way the format stores them, so the two can
+        # never drift apart: rotating a box in a format with nowhere to put the
+        # angle would lose it silently on the next save.
+        self.obb_mode = (self.label_file_format == LabelFileFormat.YOLO_OBB)
+        self.canvas.set_obb_mode(self.obb_mode)
+        self.update_rotate_actions()
+
     def change_format(self):
         if self.label_file_format == LabelFileFormat.PASCAL_VOC:
             self.set_format(FORMAT_YOLO)
         elif self.label_file_format == LabelFileFormat.YOLO:
+            self.set_format(FORMAT_YOLO_OBB)
+        elif self.label_file_format == LabelFileFormat.YOLO_OBB:
+            if any(shape.is_rotated() for shape in self.canvas.shapes):
+                # Naming what is about to be lost, rather than refusing: the
+                # user may well mean it, but not by accident.
+                self.status('Leaving YOLO-OBB: rotated boxes on this image will '
+                            'be saved as their upright bounding boxes.')
             self.set_format(FORMAT_CREATEML)
         elif self.label_file_format == LabelFileFormat.CREATE_ML:
             self.set_format(FORMAT_PASCALVOC)
@@ -584,6 +683,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.menus.edit.clear()
         actions = (self.actions.create,) if self.beginner()\
             else (self.actions.createMode, self.actions.editMode)
+        # Click to Box sits with the other ways of making a box, in both modes.
+        actions = actions + (self.actions.clickToBox,)
         add_actions(self.menus.edit, actions + self.actions.editMenu)
 
     def set_beginner(self):
@@ -602,6 +703,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.dirty = False
         self.actions.save.setEnabled(False)
         self.actions.create.setEnabled(True)
+        self.actions.clickToBox.setEnabled(True)
 
     def toggle_actions(self, value=True):
         """Enable/Disable widgets which depend on an opened image."""
@@ -679,8 +781,124 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def create_shape(self):
         assert self.beginner()
+        self.canvas.set_click_mode(False)
         self.canvas.set_editing(False)
         self.actions.create.setEnabled(False)
+
+    # ------------------------------------------------------------------
+    # Click to Box
+    # ------------------------------------------------------------------
+
+    def toggle_click_to_box(self, value=True):
+        """Arm or disarm the tool: while armed, the next left click is a box.
+
+        It stays armed only until a box lands (see :meth:`click_to_box_at`).
+        Sticky was tried and made things worse -- the click after a box is
+        almost always a grab at a handle to correct it, and an armed tool reads
+        that as a request for a second box on top of the first.
+        """
+        if value and self.image.isNull():
+            self.actions.clickToBox.setChecked(False)
+            self.status('Open an image before using Click to Box.')
+            return
+        self.canvas.set_click_mode(bool(value))
+        if value:
+            self.status('Click to Box: click one animal. '
+                        'Escape to cancel, W to draw by hand instead.')
+
+    def on_click_mode_changed(self, armed):
+        """Keep the toolbar button showing what the canvas is actually doing.
+
+        Every path that arms or disarms the tool -- the button, Escape, a box
+        landing, switching to Create -- comes through here, so the two cannot
+        drift apart.
+        """
+        if self.actions.clickToBox.isChecked() != bool(armed):
+            self.actions.clickToBox.setChecked(bool(armed))
+
+    def current_bgr_image(self):
+        """The open image as a BGR array, decoded once and cached.
+
+        Read from disk rather than converted out of the ``QImage``: it keeps
+        the exact pixels the file holds (no premultiplied alpha, no format
+        conversion) and it is the path OpenCV is fastest on.  ``np.fromfile``
+        rather than ``cv2.imread`` because ``imread`` cannot open a path with
+        non-ASCII characters on Windows, which is where YORU runs.
+        """
+        if self.file_path is None:
+            return None
+        if self._cv_image is not None and self._cv_image_path == self.file_path:
+            return self._cv_image
+        try:
+            import cv2
+            import numpy as np
+            buf = np.fromfile(self.file_path, dtype=np.uint8)
+            image = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+        except (OSError, ValueError, ImportError) as e:
+            print('Click to Box could not read %s: %s' % (self.file_path, e))
+            image = None
+        self._cv_image = image
+        self._cv_image_path = self.file_path
+        return image
+
+    def click_to_box_at(self, position):
+        """Turn one click into a box, then hand it to the normal new-box path."""
+        frame = self.current_bgr_image()
+        if frame is None:
+            self.canvas.set_click_mode(False)
+            self.status('Click to Box could not read this image; draw the box by hand with W.')
+            return
+
+        result = segment_local(frame, ClickRequest(
+            x=float(position.x()), y=float(position.y()),
+            radius_hint=self._click_radius_hint))
+        if not result.ok:
+            # Stay armed on a miss: the fix is another click a little over, and
+            # having to re-arm the tool for each attempt would be its own chore.
+            self.status(result.detail)
+            return
+
+        if self.obb_mode:
+            corners = obb_corners(result.obb)
+        else:
+            # An axis-aligned project gets the upright box around the same fit,
+            # so the tool is useful before a project commits to OBB.
+            x1, y1, x2, y2 = result.bbox
+            corners = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+        points = [QPointF(x, y) for x, y in corners]
+
+        before = len(self.canvas.shapes)
+        # Emits newShape, so the label dialog, the label list and the dirty
+        # flag all behave exactly as they do for a hand-drawn box -- including
+        # cancelling the dialog, which removes the box again.
+        self.canvas.add_shape_from_points(points)
+        self.canvas.set_click_mode(False)
+
+        if len(self.canvas.shapes) > before:
+            # Start the next search at the scale that just worked.
+            self._click_radius_hint = max(result.obb[2], result.obb[3])
+            self.canvas.select_shape(self.canvas.shapes[-1])
+            self.status(result.detail)
+
+    # ------------------------------------------------------------------
+    # Rotation (oriented boxes)
+    # ------------------------------------------------------------------
+
+    def update_rotate_actions(self, selected=None):
+        """Rotation is live only for a selected box in an oriented project."""
+        if selected is None:
+            selected = self.canvas.selected_shape is not None
+        enabled = bool(selected) and self.obb_mode
+        for act in self.actions.rotateActions:
+            act.setEnabled(enabled)
+
+    def rotate_selected(self, degrees):
+        if not self.obb_mode:
+            self.status('Rotation needs a YOLO-OBB project. Switch the format '
+                        'with the save-format button.')
+            return
+        if self.canvas.rotate_selected_shape(degrees):
+            self.set_dirty()
 
     def toggle_drawing_sensitive(self, drawing=True):
         """In the middle of drawing, toggling between modes should be disabled."""
@@ -693,6 +911,7 @@ class MainWindow(QMainWindow, WindowMixin):
             self.actions.create.setEnabled(True)
 
     def toggle_draw_mode(self, edit=True):
+        self.canvas.set_click_mode(False)
         self.canvas.set_editing(edit)
         self.actions.createMode.setEnabled(edit)
         self.actions.editMode.setEnabled(not edit)
@@ -787,6 +1006,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions.edit.setEnabled(selected)
         self.actions.shapeLineColor.setEnabled(selected)
         self.actions.shapeFillColor.setEnabled(selected)
+        self.update_rotate_actions(selected)
 
     def add_label(self, shape):
         shape.paint_label = self.display_label_option.isChecked()
@@ -879,6 +1099,12 @@ class MainWindow(QMainWindow, WindowMixin):
                     annotation_file_path += TXT_EXT
                 self.label_file.save_yolo_format(annotation_file_path, shapes, self.file_path, self.image_data, self.label_hist,
                                                  self.line_color.getRgb(), self.fill_color.getRgb())
+            elif self.label_file_format == LabelFileFormat.YOLO_OBB:
+                if annotation_file_path[-4:].lower() != ".txt":
+                    annotation_file_path += TXT_EXT
+                self.label_file.save_yolo_obb_format(annotation_file_path, shapes, self.file_path,
+                                                     self.image_data, self.label_hist,
+                                                     self.line_color.getRgb(), self.fill_color.getRgb())
             elif self.label_file_format == LabelFileFormat.CREATE_ML:
                 if annotation_file_path[-5:].lower() != ".json":
                     annotation_file_path += JSON_EXT
@@ -1227,6 +1453,7 @@ class MainWindow(QMainWindow, WindowMixin):
         settings[SETTING_PAINT_LABEL] = self.display_label_option.isChecked()
         settings[SETTING_DRAW_SQUARE] = self.draw_squares_option.isChecked()
         settings[SETTING_LABEL_FILE_FORMAT] = self.label_file_format
+        settings[SETTING_OBB_MODE] = self.obb_mode
         settings.save()
 
     def load_recent(self, filename):
@@ -1556,15 +1783,29 @@ class MainWindow(QMainWindow, WindowMixin):
         self.canvas.verified = t_voc_parse_reader.verified
 
     def load_yolo_txt_by_filename(self, txt_path):
+        """Load a YOLO .txt, oriented or not.
+
+        Both formats use the same extension, so the file itself has to say
+        which it is -- nine fields per line for OBB, five for axis-aligned.
+        A file that says nothing (empty: an image with no objects on it) leaves
+        the current format alone, because flipping to axis-aligned there would
+        start writing upright boxes over the rest of an OBB dataset.
+        """
         if self.file_path is None:
             return
         if os.path.isfile(txt_path) is False:
             return
 
-        self.set_format(FORMAT_YOLO)
-        t_yolo_parse_reader = YoloReader(txt_path, self.image)
+        is_obb = sniff_obb(txt_path)
+        if is_obb is None:
+            is_obb = self.obb_mode
+        if is_obb:
+            self.set_format(FORMAT_YOLO_OBB)
+            t_yolo_parse_reader = YoloOBBReader(txt_path, self.image)
+        else:
+            self.set_format(FORMAT_YOLO)
+            t_yolo_parse_reader = YoloReader(txt_path, self.image)
         shapes = t_yolo_parse_reader.get_shapes()
-        print(shapes)
         self.load_labels(shapes)
         self.canvas.verified = t_yolo_parse_reader.verified
 
@@ -1619,18 +1860,50 @@ def read(filename, default=None):
         return default
 
 
-def get_main_app(argv=[]):
+def build_arg_parser():
+    """Command line of the bundled labelImg.
+
+    Everything is optional, so ``labelimg`` with no arguments behaves exactly
+    as it always did.  YORU's training GUI fills all four in, which is what
+    lets it open labelImg already pointed at the project's images, its
+    classes.txt and -- via ``--obb`` -- the right annotation format.
+    """
+    parser = argparse.ArgumentParser(prog='labelImg', description=__doc__)
+    parser.add_argument('image_dir', nargs='?', default=None,
+                        help='image file, or a directory of images to open')
+    parser.add_argument('class_file', nargs='?', default=None,
+                        help='predefined classes file (default: the bundled one)')
+    parser.add_argument('save_dir', nargs='?', default=None,
+                        help='directory the annotations are written to')
+    obb = parser.add_mutually_exclusive_group()
+    obb.add_argument('--obb', dest='obb', action='store_true', default=None,
+                     help='oriented boxes: edit and save in YOLO-OBB format')
+    obb.add_argument('--no-obb', dest='obb', action='store_false',
+                     help='axis-aligned boxes: edit and save in YOLO format')
+    return parser
+
+
+def get_main_app(argv=None):
     """
     Standard boilerplate Qt application code.
     Do everything but app.exec_() -- so that we can test the application in one thread
     """
+    argv = list(sys.argv if argv is None else argv)
+    # parse_known_args, not parse_args: Qt's own switches (-style, -platform)
+    # arrive in the same argv and must not make labelImg exit with a usage
+    # error on something that was never meant for it.
+    args, _qt_args = build_arg_parser().parse_known_args(argv[1:])
+
     app = QApplication.instance() or QApplication(argv)
     app.setApplicationName(__appname__)
     app.setWindowIcon(new_icon("app"))
 
     default_class_file = os.path.join(os.path.dirname(__file__), "data", "predefined_classes.txt")
 
-    win = MainWindow(None, default_class_file, None)
+    win = MainWindow(args.image_dir,
+                     args.class_file or default_class_file,
+                     args.save_dir,
+                     obb_mode=args.obb)
     win.show()
     return app, win
 

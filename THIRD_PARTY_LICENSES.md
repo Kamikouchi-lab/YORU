@@ -85,6 +85,36 @@ Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency
 - **Modifications:**
   - Default label format changed from PascalVOC to YOLO
   - Fixed classes.txt overwrite bug when loading YOLO annotations
+  - Added a YOLO-OBB (oriented bounding box) read/write format
+    (`libs/yolo_obb_io.py`) and rotated-box editing on the canvas
+  - Added the Click to Box tool, a command line (`--obb` / image directory /
+    classes file / save directory), and a fix for a settings file written by a
+    different labelImg build
+
+### Click to Box engine
+
+- **Location:** `yoru/libs/click_segment.py`
+- **License:** MIT
+- **Copyright:** (c) 2026 Hayato M Yamanouchi
+- **Upstream:** YOAKE, `src/htrtdetr/gui/click_segment.py`
+- **Modifications:**
+  - Only the `local` (OpenCV) backend was ported; the SAM sidecar and the
+    model-candidate backends were not
+  - The geometry helpers now come from `yoru/libs/obb.py`, so YORU has one
+    definition of a rotated box
+
+## Algorithm Attribution
+
+### Automatic frame extraction
+
+- **Location:** `yoru/libs/frame_extraction.py`
+- **After:** DeepLabCut's `extract_frames` (LGPL-3.0,
+  https://github.com/DeepLabCut/DeepLabCut) — the `uniform` and `kmeans`
+  frame-selection strategies, and the start/stop fractions that bound them
+- **Note:** no DeepLabCut code is used or bundled. The implementation is
+  original: clustering is done with SciPy rather than scikit-learn, and the
+  selection and saving halves are separate functions so that neither needs a
+  video file to be tested.
 
 ## License Compatibility Notes
 

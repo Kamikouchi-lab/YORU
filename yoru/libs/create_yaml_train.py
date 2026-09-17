@@ -6,6 +6,30 @@ import os
 
 import yaml
 
+#: The value written to, and read from, a project config's ``task`` key.
+TASK_DETECT = "detect"
+TASK_OBB = "obb"
+
+
+def task_of(m_dict):
+    """``"obb"`` or ``"detect"`` for this GUI state."""
+    return TASK_OBB if m_dict.get("obb") else TASK_DETECT
+
+
+def is_obb_project(config_data):
+    """True when a loaded config.yaml describes an oriented-box project.
+
+    Accepts a missing key -- every project created before OBB support is an
+    ordinary detection project -- and also a bare ``obb: true``, which is what
+    a user editing the file by hand is most likely to write.
+    """
+    if not config_data:
+        return False
+    task = str(config_data.get("task", "") or "").strip().lower()
+    if task:
+        return task == TASK_OBB
+    return bool(config_data.get("obb", False))
+
 
 class create_project:
     def __init__(self, m_dict={}):
@@ -21,6 +45,13 @@ class create_project:
                     "val": self.m_dict["project_dir"] + "/val/",
                     "yaml_path": file_path,
                     "Model": self.m_dict.get("weight", "yolo11s.pt"),
+                    # Ultralytics' own word for it, and the one thing in this
+                    # file the whole project hangs on: it decides the label
+                    # format labelImg writes, the weight the trainer loads and
+                    # how the detector reads its results back.  Projects made
+                    # before OBB support have no "task" key, and read as
+                    # "detect" everywhere it is looked up.
+                    "task": task_of(self.m_dict),
                     "system_ver": "0.1.0",
                     "create_date": datetime.date.today(),
                 },

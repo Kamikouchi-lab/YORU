@@ -41,8 +41,16 @@ class _UltralyticsDetectorBase(DetectorBase):
             iou=self._iou_thresh,
             verbose=False,
         )
-        boxes = results[0].boxes
+        result = results[0]
 
+        # An OBB model puts its predictions in .obb and leaves .boxes empty, so
+        # which attribute is populated is itself the reliable test for the
+        # task -- more so than the weight's file name, which a user can rename.
+        obb = getattr(result, "obb", None)
+        if obb is not None and len(obb) > 0:
+            return self._obb_detections(obb)
+
+        boxes = result.boxes
         if boxes is None or len(boxes) == 0:
             return []
 
@@ -53,12 +61,50 @@ class _UltralyticsDetectorBase(DetectorBase):
         detections = []
         for i in range(len(boxes)):
             cid = int(cls[i])
+            # No oriented keys here on purpose: an upright box's are derivable
+            # from x1..y2, and yoru.libs.detector_base.obb_of derives them in
+            # one place rather than in each of the four detector plugins.
             detections.append(
                 {
                     "x1": float(xyxy[i, 0]),
                     "y1": float(xyxy[i, 1]),
                     "x2": float(xyxy[i, 2]),
                     "y2": float(xyxy[i, 3]),
+                    "conf": float(conf[i]),
+                    "class_id": cid,
+                    "class_name": self._names.get(cid, str(cid)),
+                }
+            )
+        return detections
+
+    def _obb_detections(self, obb) -> list:
+        """Rotated predictions, carrying both parameterisations.
+
+        ``x1..y2`` is the upright box around the rotated one, so everything
+        written before OBB support -- the trigger plugins, the evaluation IoU --
+        keeps working unchanged; ``cx, cy, w, h, angle`` is the box itself, for
+        everything that wants the real thing.
+        """
+        xywhr = obb.xywhr.cpu()
+        xyxy = obb.xyxy.cpu()
+        conf = obb.conf.cpu()
+        cls = obb.cls.cpu()
+
+        detections = []
+        for i in range(len(obb)):
+            cid = int(cls[i])
+            detections.append(
+                {
+                    "x1": float(xyxy[i, 0]),
+                    "y1": float(xyxy[i, 1]),
+                    "x2": float(xyxy[i, 2]),
+                    "y2": float(xyxy[i, 3]),
+                    "cx": float(xywhr[i, 0]),
+                    "cy": float(xywhr[i, 1]),
+                    "w": float(xywhr[i, 2]),
+                    "h": float(xywhr[i, 3]),
+                    # Radians, the same convention as yoru.libs.obb.
+                    "angle": float(xywhr[i, 4]),
                     "conf": float(conf[i]),
                     "class_id": cid,
                     "class_name": self._names.get(cid, str(cid)),

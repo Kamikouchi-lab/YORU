@@ -11,6 +11,11 @@ class loadingParam:
         print("Training GUI initiation")
 
 
+#: Families that can be trained on oriented boxes.  Only ultralytics' YOLO
+#: detect models have an OBB variant; RT-DETR and the torchvision detectors
+#: have no rotated-box head at all, so an OBB project cannot offer them.
+OBB_CAPABLE_FAMILIES = ("YOLO",)
+
 # Per-family option definitions
 MODEL_FAMILY_CONFIG = {
     "YOLO": {
@@ -45,10 +50,24 @@ class init_train:
             "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
             # YOLO11
             "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt",
+            # YOLOv8 / YOLO11, oriented boxes
+            "yolov8n-obb.pt", "yolov8s-obb.pt", "yolov8m-obb.pt",
+            "yolov8l-obb.pt", "yolov8x-obb.pt",
+            "yolo11n-obb.pt", "yolo11s-obb.pt", "yolo11m-obb.pt",
+            "yolo11l-obb.pt", "yolo11x-obb.pt",
             # RT-DETR
             "rtdetr-l.pt", "rtdetr-x.pt",
         ]
         self.m_dict["weight"] = "yolo11s.pt"
+
+        # Oriented bounding boxes.  Set when the project is created and stored
+        # in its config.yaml as ``task: obb``; from there it decides the weight
+        # (``yolo11s-obb.pt``), the label format labelImg writes, and how the
+        # detector reads its results back.  A project cannot change its mind
+        # later without relabelling, which is why this lives with the project
+        # rather than with the training run.
+        self.m_dict["obb"] = False
+        self.m_dict["obb_capable_families"] = list(OBB_CAPABLE_FAMILIES)
 
         # Model family
         self.m_dict["model_family_list"] = list(MODEL_FAMILY_CONFIG.keys())

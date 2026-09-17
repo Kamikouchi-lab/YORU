@@ -106,7 +106,26 @@ class ModelValidation:
         return iou
 
     def convert_to_corners(self, box):
-        x_center, y_center, width, height = box
+        """``(x1, y1, x2, y2)`` from a label file's coordinate fields.
+
+        Accepts both label formats: four numbers are ``x_center y_center w h``,
+        and eight are the four corners of an oriented box, which are reduced
+        here to the upright box around them.
+
+        **The IoU below is therefore the upright-box IoU, for OBB datasets as
+        well.**  Two boxes that overlap perfectly as rectangles but differ in
+        angle score lower than they should, so an OBB model's mAP from this
+        tool is a conservative figure, not the rotated mAP ultralytics reports
+        at the end of training.  Rotated IoU is a separate piece of work; what
+        matters here is that an OBB dataset evaluates at all rather than
+        failing on an unpackable line.
+        """
+        values = [float(v) for v in box]
+        if len(values) == 8:
+            xs = values[0::2]
+            ys = values[1::2]
+            return [min(xs), min(ys), max(xs), max(ys)]
+        x_center, y_center, width, height = values
         x1 = x_center - width / 2
         y1 = y_center - height / 2
         x2 = x_center + width / 2
