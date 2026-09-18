@@ -176,7 +176,9 @@ cython_debug/
 
 logs/
 
-# DearPyGui window-layout state now lives under logs/ (already ignored above).
+# Window state lives under logs/ (already ignored above): yoru_windows.ini for
+# the viewport sizes and text scales, custom_layout_<screen>.ini for the panel
+# arrangement of the multi-window screens.  Per machine, never shared.
 desktop.ini
 
 others/

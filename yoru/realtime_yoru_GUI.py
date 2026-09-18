@@ -17,6 +17,8 @@ import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 
+from yoru.gui_base import apply_default_theme, frame_to_data_rgba
+from yoru.gui_layout import GuiSession
 from yoru.libs.detection import yolo_detection
 from yoru.libs.drawing import yolo_drawing
 from yoru.libs.file_operation_realtime import file_dialog_tk
@@ -53,50 +55,46 @@ class camGUI:
         self.texture_data = np.true_divide(self.m_dict["current_camera_frame"], 255.0)
 
     def startDPG(self):
-        dpg.create_context()
-        dpg.configure_app(
-            init_file="./logs/custom_layout_camGUI_.ini",
-            docking=True,
-            docking_space=True,
+        # The live camera and the detection view are meant to be watched at the
+        # same time, so they open side by side rather than stacked on top of
+        # each other, and the arrangement is saved.
+        self.session = GuiSession(
+            "realtime", "YORU - Real-time Process",
+            width=1280, height=880, docking=True,
         )
-        dpg.create_viewport(title="YORU - Real-time Process", width=1000, height=800, max_width=1000, max_height=800)
-
-        imager_window = dpg.generate_uuid()
-        imager_window2 = dpg.generate_uuid()
+        self.session.begin()
+        apply_default_theme()
+        self.session.add_layout_menu()
 
         frame = self.m_dict["current_camera_frame"]
         self.frameSize = np.shape(frame)
-        print(self.frameSize)
+        frame_h, frame_w = self.frameSize[0], self.frameSize[1]
 
         # imager-window
         with dpg.texture_registry(show=False):
-            imgwhite = np.ones((self.frameSize[1], self.frameSize[0], 3), np.uint8)
+            # A dynamic texture holds four floats per pixel.  The seed value
+            # used to be ``np.ones((width, height, 3), np.uint8)`` -- three
+            # channels, and with the two axes the wrong way round -- so
+            # DearPyGui read a quarter past the end of the buffer the first
+            # time it uploaded the texture and the process died on frame one,
+            # before the window ever appeared.  Both textures are seeded with
+            # a black frame in exactly the form plot_callback goes on to feed
+            # them, so what starts on screen and what replaces it agree.
+            blank = frame_to_data_rgba(np.zeros((frame_h, frame_w, 3), np.uint8))
             dpg.add_dynamic_texture(
-                width=self.frameSize[1],
-                height=self.frameSize[0],
-                default_value=imgwhite,
+                width=frame_w,
+                height=frame_h,
+                default_value=blank,
                 tag="imwin_tag0",
-            )  # , format=dpg.mvFormat_Float_rgb)
-            # dpg.add_raw_texture(width=self.m_dict["camera_width"]*self.m_dict["camera_scale"],
-            #                     height=self.m_dict["camera_height"]*self.m_dict["camera_scale"],
-            #                     default_value=self.texture_data,
-            #                     tag="imwin_tag0", format=dpg.mvFormat_Float_rgb)
-
+            )
             dpg.add_dynamic_texture(
-                width=self.frameSize[1],
-                height=self.frameSize[0],
-                default_value=imgwhite,
+                width=frame_w,
+                height=frame_h,
+                default_value=blank,
                 tag="imwin_tag1",
             )
-            # dpg.add_raw_texture(
-            #     width=self.m_dict["camera_width"] * self.m_dict["camera_scale"],
-            #     height=self.m_dict["camera_height"] * self.m_dict["camera_scale"],
-            #     default_value=self.texture_data,
-            #     tag="imwin_tag1",
-            #     format=dpg.mvFormat_Float_rgb,
-            # )
 
-        with dpg.window(label="Image window1", id=imager_window):
+        with dpg.window(**self.session.window_kwargs("Camera", "realtime_camera")):
             dpg.add_image("imwin_tag0", width=480, height=360)
             dpg.add_slider_float(
                 label=" [FPS]",
@@ -134,20 +132,31 @@ class camGUI:
                 callback=lambda: self.logging(),
             )
             dpg.add_separator()
-            dpg.add_button(
-                label="Quit",
-                tag="quit_btn",
-                callback=lambda: self.quit_cb(),
-                enabled=True,
-            )
-            dpg.add_button(
-                label="Back to Home",
-                tag="home_btn",
-                callback=lambda: self.home_cb(),
-                enabled=True,
-            )
+            # Same shape and order as every other screen: leaving is on the
+            # left, quitting is on the right, and neither is a bare unsized
+            # button sitting under the one above it.
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Back to Home",
+                    tag="home_btn",
+                    width=150,
+                    height=30,
+                    callback=lambda: self.home_cb(),
+                    enabled=True,
+                )
+                dpg.add_spacer(width=8)
+                dpg.add_button(
+                    label="Quit",
+                    tag="quit_btn",
+                    width=100,
+                    height=30,
+                    callback=lambda: self.quit_cb(),
+                    enabled=True,
+                )
         # YOLO window
-        with dpg.window(label="Processed Image", id=imager_window2):
+        with dpg.window(
+            **self.session.window_kwargs("Detection & Trigger", "realtime_detection")
+        ):
             dpg.add_image("imwin_tag1", width=480, height=360)
             dpg.add_text(default_value="YOLO")
             with dpg.group(horizontal=True):
@@ -234,8 +243,10 @@ class camGUI:
                 callback=lambda: self.trigger_condition(),
             )
 
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
+        self.session.finish(default_layout={
+            "realtime_camera": (0.0, 0.0, 0.5, 1.0),
+            "realtime_detection": (0.5, 0.0, 0.5, 1.0),
+        })
 
     def plot_callback(self) -> None:
         now = datetime.datetime.now()

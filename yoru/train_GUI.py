@@ -12,6 +12,7 @@ from multiprocessing import Manager, Process
 import dearpygui.dearpygui as dpg
 import yaml
 
+from yoru.gui_layout import GuiSession
 from yoru.libs.create_yaml_train import create_project, is_obb_project
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.init_train import init_train
@@ -71,14 +72,12 @@ class yoru_train:
         self._stop_ui_state = None
 
     def startDPG(self):
-        dpg.create_context()
-        dpg.configure_app(
-            init_file="./logs/custom_layout_train_gui.ini",
-            docking=True,
-            docking_space=True,
+        # One long form plus two modals: the form takes the window and the
+        # modals float over it, so there is no arrangement worth saving.
+        self.session = GuiSession(
+            "train", "YORU - Training", width=1240, height=920
         )
-        dpg.create_viewport(title="YORU - Training", width=1000, height=800)
-        imager_window = dpg.generate_uuid()
+        self.session.begin()
 
         # ── Global theme ──────────────────────────────────────────────────────
         with dpg.theme() as global_theme:
@@ -120,6 +119,7 @@ class yoru_train:
                 dpg.add_theme_style(dpg.mvStyleVar_WindowPadding,  12, 10,  category=dpg.mvThemeCat_Core)
 
         dpg.bind_theme(global_theme)
+        self.session.add_layout_menu()
 
         # ── Per-widget themes ─────────────────────────────────────────────────
         with dpg.theme() as _complete_theme:
@@ -169,7 +169,7 @@ class yoru_train:
         self._home_btn_theme = _home_btn_theme
 
         # ── Main window ───────────────────────────────────────────────────────
-        with dpg.window(label="YORU - Train", id=imager_window):
+        with dpg.window(**self.session.window_kwargs("Training", "train_main")):
             # Step 1
             with dpg.group(horizontal=True):
                 dpg.add_text(default_value="Step 1: Creating project")
@@ -182,13 +182,13 @@ class yoru_train:
             with dpg.group(horizontal=True):
                 dpg.add_button(
                     label="Load YORU project", tag="load_btn",
-                    width=150, height=30, callback=lambda: self.load_pr_dir(), enabled=True,
+                    width=160, height=30, callback=lambda: self.load_pr_dir(), enabled=True,
                 )
                 dpg.add_text(default_value="  or  ")
                 dpg.add_input_text(tag="pro_name", default_value="", width=200, hint="YORU project name")
                 dpg.add_button(
                     label="Create YORU project", tag="cre_btn",
-                    width=160, height=30, callback=lambda: self.create_pr_dir(), enabled=True,
+                    width=175, height=30, callback=lambda: self.create_pr_dir(), enabled=True,
                 )
             with dpg.group(horizontal=True, indent=20):
                 dpg.add_checkbox(
@@ -214,7 +214,7 @@ class yoru_train:
                 dpg.add_text(tag="step2_state", default_value="Yet")
             dpg.add_button(
                 label="Run YORU Frame Capture", tag="grab_btn",
-                width=180, height=30, callback=lambda: self.grab_bt(), enabled=True,
+                width=200, height=30, callback=lambda: self.grab_bt(), enabled=True,
             )
             dpg.add_spacer(height=4)
             dpg.add_separator()
@@ -268,7 +268,7 @@ class yoru_train:
                 dpg.add_button(label="Select Path", callback=lambda: self.fd_tk.class_txt_open(), enabled=True)
             dpg.add_button(
                 label="Add class info in YAML file", tag="cre_yaml_btn",
-                width=220, height=30, callback=lambda: self.add_class_file(), enabled=True,
+                width=240, height=30, callback=lambda: self.add_class_file(), enabled=True,
             )
             dpg.add_spacer(height=4)
             dpg.add_separator()
@@ -431,15 +431,18 @@ class yoru_train:
         # the run will not fit, starting it anyway costs the user the minutes
         # it takes CUDA to reach the allocation that fails.
         with dpg.window(
-            label="GPU memory warning", tag="vram_modal", modal=True, show=False,
-            no_resize=True, no_collapse=True, width=560, height=230, pos=(180, 200),
+            **self.session.window_kwargs(
+                "GPU memory warning", "vram_modal",
+                modal=True, show=False, no_resize=True, no_collapse=True,
+                width=560, height=230, pos=(180, 200),
+            )
         ):
             dpg.add_text(tag="vram_modal_text", default_value="", wrap=520)
             dpg.add_spacer(height=10)
             with dpg.group(horizontal=True):
                 dpg.add_button(
                     label="Use suggested batch", tag="vram_modal_fix",
-                    width=180, height=30, callback=lambda: self.vram_modal_use_batch(),
+                    width=190, height=30, callback=lambda: self.vram_modal_use_batch(),
                 )
                 dpg.add_button(
                     label="Train anyway", tag="vram_modal_force",
@@ -455,9 +458,11 @@ class yoru_train:
         # it the validation and best-weights pass that only runs once the epoch
         # loop ends by itself.  The button that does it therefore asks first.
         with dpg.window(
-            label="Force stop training", tag="force_stop_modal", modal=True,
-            show=False, no_resize=True, no_collapse=True,
-            width=520, height=210, pos=(200, 220),
+            **self.session.window_kwargs(
+                "Force stop training", "force_stop_modal",
+                modal=True, show=False, no_resize=True, no_collapse=True,
+                width=520, height=210, pos=(200, 220),
+            )
         ):
             dpg.add_text(tag="force_stop_modal_text", default_value="", wrap=480)
             dpg.add_spacer(height=10)
@@ -483,8 +488,7 @@ class yoru_train:
                      "step4_state", "step5_state", "step6_state"]:
             dpg.bind_item_theme(_tag, self._yet_theme)
 
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
+        self.session.finish(fill_window="train_main")
         self._start_gpu_poller()
 
     def _set_step_state(self, tag: str, state: str) -> None:

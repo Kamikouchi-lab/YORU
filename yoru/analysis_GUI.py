@@ -11,6 +11,7 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 
 from yoru.gui_base import apply_default_theme, frame_to_data_rgb, process_frame as _process_frame
+from yoru.gui_layout import GuiSession
 from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
 from yoru.libs.file_operation_analysis import file_dialog_tk
 from yoru.libs.init_analysis import init_analysis
@@ -51,17 +52,18 @@ class analyze_GUI:
         )
 
     def startDPG(self):
-        dpg.create_context()
-        dpg.configure_app(
-            init_file="./logs/custom_layout_analysis.ini",
-            docking=True,
-            docking_space=True,
+        # Two windows to arrange, so this screen is the one that really needs
+        # docking and a saved layout.  Wide enough for both panes side by side;
+        # GuiSession shrinks it to fit a smaller screen.
+        self.session = GuiSession(
+            "analysis", "YORU - Video Analysis",
+            width=1320, height=900, docking=True,
         )
-
-        dpg.create_viewport(title="YORU - Video Analysis", width=1000, height=800, max_width=1000, max_height=800)
+        self.session.begin()
 
         # Theme
         apply_default_theme()
+        self.session.add_layout_menu()
 
         # Section header theme (accent-colored text)
         with dpg.theme() as _sec_hdr_theme:
@@ -85,11 +87,8 @@ class analyze_GUI:
                 format=dpg.mvFormat_Float_rgb,
             )
 
-        imager_window1 = dpg.generate_uuid()
-        imager_window2 = dpg.generate_uuid()
-
         # --- Analyzing Images window ---
-        with dpg.window(label="Analyzing Images", id=imager_window2):
+        with dpg.window(**self.session.window_kwargs("Analyzing Images", "analysis_images")):
             # Setup
             dpg.bind_item_theme(dpg.add_text(default_value="Setup"), _sec_hdr_theme)
             dpg.add_separator()
@@ -183,7 +182,7 @@ class analyze_GUI:
                 )
 
         # --- Analyzing Movies window ---
-        with dpg.window(label="Analyzing Movies", id=imager_window1):
+        with dpg.window(**self.session.window_kwargs("Analyzing Movies", "analysis_movies")):
             # Setup
             dpg.bind_item_theme(dpg.add_text(default_value="Setup"), _sec_hdr_theme)
             dpg.add_separator()
@@ -340,8 +339,10 @@ class analyze_GUI:
                     callback=lambda: self.quit_cb(),
                 )
 
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
+        self.session.finish(default_layout={
+            "analysis_movies": (0.0, 0.0, 0.5, 1.0),
+            "analysis_images": (0.5, 0.0, 0.5, 1.0),
+        })
 
     def run(self):
         self.startDPG()

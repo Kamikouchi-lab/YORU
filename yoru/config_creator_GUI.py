@@ -18,6 +18,7 @@ import dearpygui.dearpygui as dpg
 import serial.tools.list_ports
 import yaml
 
+from yoru.gui_layout import GuiSession
 from yoru.libs.paths import list_trigger_plugins
 
 
@@ -52,13 +53,12 @@ class ConfigCreatorGUI:
     # GUI construction
     # ------------------------------------------------------------------
     def startDPG(self):
-        dpg.create_context()
-        dpg.configure_app(
-            init_file="./logs/custom_layout_config_creator.ini",
-            docking=True,
-            docking_space=True,
+        # One window, so there is no arrangement to save: the session gives it
+        # the whole viewport and remembers the viewport's own size instead.
+        self.session = GuiSession(
+            "config_creator", "YORU - Config Creator", width=1060, height=860
         )
-        dpg.create_viewport(title="YORU - Config Creator", width=1000, height=800, max_width=1000, max_height=800)
+        self.session.begin()
 
         # ── Theme (same palette as train_GUI) ──────────────────────────
         with dpg.theme() as global_theme:
@@ -82,8 +82,10 @@ class ConfigCreatorGUI:
                 )
         dpg.bind_theme(global_theme)
 
+        self.session.add_layout_menu()
+
         # ── Main window ────────────────────────────────────────────────
-        with dpg.window(label="YORU - Config Creator", tag="main_window"):
+        with dpg.window(**self.session.window_kwargs("Config Creator", "main_window")):
 
             # ── General ───────────────────────────────────────────────
             dpg.add_text("General")
@@ -298,8 +300,7 @@ class ConfigCreatorGUI:
                     callback=lambda: self.quit_cb(),
                 )
 
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
+        self.session.finish(fill_window="main_window")
 
     # ------------------------------------------------------------------
     # Callbacks

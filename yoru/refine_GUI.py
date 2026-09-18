@@ -11,6 +11,8 @@ import cv2
 import dearpygui.dearpygui as dpg
 import numpy as np
 
+from yoru.gui_base import apply_default_theme
+from yoru.gui_layout import GuiSession
 from yoru.libs.file_operation_grab import file_dialog_tk
 
 
@@ -58,13 +60,14 @@ class grab_gui:
         self.frame_re = base_frame
 
     def gui_configure(self):
-        dpg.create_context()
-        dpg.configure_app(
-            init_file="./logs/custom_layout_refine.ini",
-            docking=True,
-            docking_space=True,
+        # The window used to be captioned "ASoVi-GUI beta 0.5" -- the name of
+        # the project this screen was lifted from.
+        self.session = GuiSession(
+            "refine", "YORU - Refine", width=960, height=900
         )
-        dpg.create_viewport(title="ASoVi-GUI beta 0.5", width=1000, height=800, max_width=1000, max_height=800)
+        self.session.begin()
+        apply_default_theme()
+        self.session.add_layout_menu()
 
         # GUI-settings
         with dpg.texture_registry(show=False):
@@ -82,8 +85,7 @@ class grab_gui:
             #     tag="imwin_tag0",
             #     format=dpg.mvFormat_Float_rgb,
             # )
-        imager_window = dpg.generate_uuid()
-        with dpg.window(label="Image window", id=imager_window):
+        with dpg.window(**self.session.window_kwargs("Refine", "refine_main")):
             dpg.add_text(label="space1", default_value="    ")
             with dpg.group(horizontal=True):
                 dpg.add_text(label="video_dir", default_value="Video file path")
@@ -185,8 +187,7 @@ class grab_gui:
             )
 
         # setup
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
+        self.session.finish(fill_window="refine_main")
 
     def run(self):
         self.gui_configure()

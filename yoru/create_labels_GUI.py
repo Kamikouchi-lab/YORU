@@ -10,7 +10,8 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 import yaml
 
-from yoru.gui_base import process_frame as _process_frame
+from yoru.gui_base import apply_default_theme, process_frame as _process_frame
+from yoru.gui_layout import GuiSession
 from yoru.libs.create_labels import yolo_analysis_image
 from yoru.libs.create_yaml_train import is_obb_project
 from yoru.libs.file_operation_create_label import file_dialog_tk
@@ -43,52 +44,56 @@ class model_eval_gui:
         self.frame_re = _process_frame(self.frame, 400)
 
     def gui_configure(self):
-        dpg.create_context()
-        dpg.configure_app(
-            init_file="./logs/custom_layout_create_labels.ini",
-            docking=True,
-            docking_space=True,
+        # The title said "YORU - Evaluation": this screen was cloned from the
+        # evaluation GUI and the window caption came along with it.
+        self.session = GuiSession(
+            "create_labels", "YORU - Create Labels", width=1000, height=780
         )
-        dpg.create_viewport(title="YORU - Evaluation", width=1000, height=800, max_width=1000, max_height=800)
+        self.session.begin()
+        apply_default_theme()
+        self.session.add_layout_menu()
 
         # GUI-settings
-
-        imager_window = dpg.generate_uuid()
-        with dpg.window(label="Evaluater window", id=imager_window):
-            dpg.add_text(default_value="Step1: Load project and model file")
+        with dpg.window(
+            **self.session.window_kwargs("Create Labels", "create_labels_main")
+        ):
+            dpg.add_text(default_value="Step 1: Load project and model file")
             with dpg.group(horizontal=True):
-                dpg.add_text(
-                    label="Select Project Config file",
-                    default_value="Select Project Config file",
-                )
+                dpg.add_text(default_value="Project Config file")
                 dpg.add_input_text(
-                    tag="config_path", readonly=True, hint="Path/to/config.yaml"
+                    tag="config_path", readonly=True, hint="Path/to/config.yaml",
+                    width=-124,
                 )
                 dpg.add_button(
                     label="Select File",
+                    width=116,
                     callback=lambda: self.fd_tk.config_file_open(),
                     enabled=True,
                 )
             with dpg.group(horizontal=True):
-                dpg.add_text(label="Model path", default_value="Model Path")
+                # Padded to the width of the label above so the two path fields
+                # start at the same place.
+                dpg.add_text(default_value="Model Path         ")
                 dpg.add_input_text(
-                    tag="Model_path", readonly=True, hint="Path/to/model"
+                    tag="Model_path", readonly=True, hint="Path/to/model",
+                    width=-124,
                 )
                 dpg.add_button(
                     label="Select File",
+                    width=116,
                     callback=lambda: self.fd_tk.model_file_open(),
                     enabled=True,
                 )
             dpg.add_button(
                 label="Load project config",
                 tag="load_btn",
-                width=150,
+                width=175,
                 height=30,
                 callback=lambda: self.load_pr_dir(),
                 enabled=True,
             )
             dpg.add_separator()
-            dpg.add_text(default_value="Step3: Labeling")
+            dpg.add_text(default_value="Step 2: Labeling")
             dpg.add_button(
                 label="Run LabelImg",
                 tag="labelimg_btn",
@@ -98,7 +103,7 @@ class model_eval_gui:
                 enabled=True,
             )
             dpg.add_separator()
-            dpg.add_text(default_value="Step4: Create YOLO data")
+            dpg.add_text(default_value="Step 3: Create YOLO data")
             dpg.add_button(
                 label="Prediction",
                 tag="yolo_detection_bt",
@@ -109,23 +114,27 @@ class model_eval_gui:
             )
             dpg.add_separator()
 
-            with dpg.group(horizontal=False):
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Back to Home",
+                    tag="home_btn",
+                    width=150,
+                    height=30,
+                    callback=lambda: self.home_cb(),
+                    enabled=True,
+                )
+                dpg.add_spacer(width=8)
                 dpg.add_button(
                     label="Quit",
                     tag="quit_btn",
+                    width=100,
+                    height=30,
                     callback=lambda: self.quit_cb(),
-                    enabled=True,
-                )
-                dpg.add_button(
-                    label="Back to home",
-                    tag="home_btn",
-                    callback=lambda: self.home_cb(),
                     enabled=True,
                 )
 
         # setup
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
+        self.session.finish(fill_window="create_labels_main")
         # listener = keyboard.Listener(on_press=self.on_key_press)
         # listener.start()
 

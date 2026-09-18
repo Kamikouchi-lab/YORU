@@ -11,7 +11,8 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 import yaml
 
-from yoru.gui_base import process_frame as _process_frame
+from yoru.gui_base import apply_default_theme, process_frame as _process_frame
+from yoru.gui_layout import GuiSession
 from yoru.libs.evaluation_calculation import Evaluator, EvaluationImageAnalyzer
 from yoru.libs.file_operation_create_label import file_dialog_tk
 from yoru.libs.init_evaluation import init_evaluater
@@ -43,71 +44,54 @@ class model_eval_gui:
         self.frame_re = _process_frame(self.frame, 400)
 
     def gui_configure(self):
-        dpg.create_context()
-        dpg.configure_app(
-            init_file="./logs/custom_layout_evaluater_gui.ini",
-            docking=True,
-            docking_space=True,
+        self.session = GuiSession(
+            "evaluation", "YORU - Evaluation", width=1060, height=820
         )
-        dpg.create_viewport(title="YORU - Evaluation", width=1000, height=800, max_width=1000, max_height=800)
+        self.session.begin()
 
-        # theme
-        with dpg.theme() as global_theme:
-            with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_Tab, (55, 140, 23), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_TabHovered,
-                    (100, 140, 23),
-                    category=dpg.mvThemeCat_Core,
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_TitleBg, (200, 140, 23), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_color(
-                    dpg.mvThemeCol_Text, (230, 230, 230), category=dpg.mvThemeCat_Core
-                )
-                dpg.add_theme_style(
-                    dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core
-                )
-
-        dpg.bind_theme(global_theme)
+        # The screen used to carry a three-colour theme of its own -- an orange
+        # title bar and green tabs, on a window that has neither -- so the only
+        # thing it actually changed was the text colour.  The shared theme is
+        # what the rest of YORU looks like.
+        apply_default_theme()
+        self.session.add_layout_menu()
 
         # GUI-settings
-
-        imager_window = dpg.generate_uuid()
-        with dpg.window(label="Evaluater window", id=imager_window):
+        with dpg.window(**self.session.window_kwargs("Evaluation", "evaluation_main")):
             with dpg.group(horizontal=True):
                 dpg.add_text(default_value="Step1: Load project and model file     ")
                 dpg.add_text(tag="step1_state", default_value="Yet")
             with dpg.group(horizontal=True):
-                dpg.add_text(
-                    label="Select Project Config file",
-                    default_value="Select Project Config file",
-                )
+                dpg.add_text(default_value="Project Config file")
                 dpg.add_input_text(
-                    tag="config_path", readonly=True, hint="Path/to/config.yaml"
+                    tag="config_path", readonly=True, hint="Path/to/config.yaml",
+                    width=-124,
                 )
                 dpg.add_button(
                     label="Select File",
+                    width=116,
                     callback=lambda: self.fd_tk.config_file_open(),
                     enabled=True,
                 )
             with dpg.group(horizontal=True):
-                dpg.add_text(label="Model path", default_value="Model Path")
+                # Padded to the same width as the row above: the labels are
+                # what the two path fields start after, so they have to match
+                # or the fields step.
+                dpg.add_text(default_value="Model Path         ")
                 dpg.add_input_text(
-                    tag="Model_path", readonly=True, hint="Path/to/model"
+                    tag="Model_path", readonly=True, hint="Path/to/model",
+                    width=-124,
                 )
                 dpg.add_button(
                     label="Select File",
+                    width=116,
                     callback=lambda: self.fd_tk.model_file_open(),
                     enabled=True,
                 )
             dpg.add_button(
                 label="Load project config",
                 tag="load_btn",
-                width=150,
+                width=175,
                 height=30,
                 callback=lambda: self.load_pr_dir(),
                 enabled=True,
@@ -119,7 +103,7 @@ class model_eval_gui:
             dpg.add_button(
                 label="Run YORU Frame Capture",
                 tag="grab_btn",
-                width=150,
+                width=200,
                 height=30,
                 callback=lambda: self.grab_bt(),
                 enabled=True,
@@ -162,23 +146,27 @@ class model_eval_gui:
             )
 
             dpg.add_separator()
-            with dpg.group(horizontal=False):
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Back to Home",
+                    tag="home_btn",
+                    width=150,
+                    height=30,
+                    callback=lambda: self.home_cb(),
+                    enabled=True,
+                )
+                dpg.add_spacer(width=8)
                 dpg.add_button(
                     label="Quit",
                     tag="quit_btn",
+                    width=100,
+                    height=30,
                     callback=lambda: self.quit_cb(),
-                    enabled=True,
-                )
-                dpg.add_button(
-                    label="Back to home",
-                    tag="home_btn",
-                    callback=lambda: self.home_cb(),
                     enabled=True,
                 )
 
         # setup
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
+        self.session.finish(fill_window="evaluation_main")
         # listener = keyboard.Listener(on_press=self.on_key_press)
         # listener.start()
 

@@ -12,10 +12,10 @@ Two things about this window are load-bearing and easy to undo by accident:
   hid the lower half of the controls behind a scrollbar -- the saved layout was
   shorter than the content and the viewport could not be grown to make room --
   and dragging the window edge fought DearPyGui, which kept forcing the size
-  back inside its own limits, so the window appeared to freeze.  The window is
-  now the primary window, there is no init file and no size clamp, and
-  :meth:`grab_gui._relayout` recomputes the preview and the two panes from the
-  current viewport on every resize.
+  back inside its own limits, so the window appeared to freeze.  The window now
+  fills the viewport (``GuiSession.finish(fill_window=...)``), there is no init
+  file and no size clamp, and :meth:`grab_gui._relayout` recomputes the preview
+  and the two panes from the current viewport on every resize.
 * **Extraction runs on a worker thread and talks back through a dict.**  The
   thread never calls DearPyGui; it writes its progress into ``_extract_state``
   and the render loop copies that into the widgets.  Only the render loop
@@ -29,6 +29,7 @@ import cv2
 import dearpygui.dearpygui as dpg
 
 from yoru.gui_base import apply_default_theme, frame_to_data_rgba, process_frame as _process_frame
+from yoru.gui_layout import GuiSession
 from yoru.libs import frame_extraction
 from yoru.libs.file_operation_grab import file_dialog_tk
 
@@ -103,21 +104,21 @@ class grab_gui:
     # ------------------------------------------------------------------
 
     def gui_configure(self):
-        dpg.create_context()
-        # No init file and no docking: this GUI is one window, and restoring a
-        # saved layout for it only ever reintroduced the stale-size scrollbar.
-        dpg.create_viewport(
-            title="YORU - Frame Capture",
-            width=1240,
-            height=800,
+        # No ImGui layout file: this GUI is one window whose panes are sized
+        # from the viewport on every resize, and restoring a saved arrangement
+        # for it only ever reintroduced the stale-size scrollbar.  The
+        # viewport's own size is still remembered.
+        self.session = GuiSession(
+            "grab", "YORU - Frame Capture", width=1240, height=860,
             # Small enough for a laptop, wide enough that both panes still get
             # their contents in rather than clipping them.
-            min_width=960,
-            min_height=720,
+            min_width=960, min_height=720,
         )
+        self.session.begin()
 
         # Theme
         apply_default_theme()
+        self.session.add_layout_menu()
 
         # GUI-settings
         with dpg.texture_registry(show=False):
@@ -128,22 +129,12 @@ class grab_gui:
                 tag="imwin_tag0",
             )
 
-        with dpg.window(
-            label="Frame Capture",
-            tag="main_window",
-            no_title_bar=True,
-            no_resize=True,
-            no_move=True,
-            no_collapse=True,
-        ):
+        with dpg.window(**self.session.window_kwargs("Frame Capture", "main_window")):
             self._build_source_row()
             with dpg.group(horizontal=True):
                 self._build_preview_pane()
                 self._build_control_pane()
             self._build_footer()
-
-        dpg.set_primary_window("main_window", True)
-        dpg.set_viewport_resize_callback(lambda: self._relayout())
 
         # Shortcuts through DearPyGui's own handlers rather than a pynput
         # listener: a pynput listener is a global OS hook, so Left/Right/Alt
@@ -162,8 +153,7 @@ class grab_gui:
             )
 
         # setup
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
+        self.session.finish(fill_window="main_window", on_resize=self._relayout)
         self._relayout()
 
     def _build_source_row(self):
@@ -384,7 +374,9 @@ class grab_gui:
         paid dozens of times per second while the mouse moves.
         """
         vw = max(1, dpg.get_viewport_client_width())
-        vh = max(1, dpg.get_viewport_client_height())
+        # The Window menu sits above the main window, so it is not room the
+        # panes can spend.
+        vh = max(1, dpg.get_viewport_client_height() - self.session.menu_bar_height())
 
         body_h = max(self.MIN_PREVIEW + self.LEFT_CHROME, vh - self.HEADER_H - self.FOOTER_H)
         side = min(body_h - self.LEFT_CHROME, vw - self.SIDE_PANE_WIDTH - 56)
