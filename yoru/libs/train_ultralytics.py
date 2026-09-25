@@ -11,7 +11,8 @@ Called by train_GUI.py via subprocess:
         --imgsz   640 \
         --batch   16 \
         --project path/to/project_dir \
-        --name    exp_yolov8s
+        --name    exp_yolov8s \
+        --device  auto
 
 --stop-file names a file that ends training cleanly after the epoch in
 progress as soon as it appears; the training GUI's "Stop after this epoch"
@@ -29,6 +30,7 @@ from pathlib import Path
 # the package itself unimportable; put the repository root back on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from yoru.libs.device import describe, resolve_device  # noqa: E402
 from yoru.libs.train_stop import clear_stop, stop_requested  # noqa: E402
 
 warnings.filterwarnings("ignore", message=".*does not have a deterministic implementation.*")
@@ -93,10 +95,14 @@ def main():
                         help="Path of the stop-request file: training ends "
                              "cleanly after the epoch during which this file "
                              "appears (default: no cooperative stop)")
-    parser.add_argument("--device",  default=None,
-                        help="Training device, e.g. '0', '0,1' or 'cpu' "
-                             "(default: chosen by ultralytics)")
+    parser.add_argument("--device",  default="auto",
+                        help="Device: auto, cuda, mps, cpu, or a CUDA index "
+                             "such as '0' / '0,1'")
     args = parser.parse_args()
+
+    # ultralytics never auto-selects MPS, so the device has to be named here.
+    device = resolve_device(args.device)
+    print(f"Device: {describe(device)}")
 
     try:
         if "rtdetr" in args.weights.lower():
@@ -113,9 +119,8 @@ def main():
             batch=args.batch,
             project=args.project,
             name=args.name or run_name(args.weights),
+            device=device,
         )
-        if args.device is not None:
-            train_kwargs["device"] = args.device
         model.train(**train_kwargs)
     except FileNotFoundError as e:
         print(f"[yoru] Model weights not found: {e}")

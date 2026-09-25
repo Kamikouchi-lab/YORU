@@ -46,7 +46,7 @@ class yolo_analysis_image:
             "auto", self.yolo_model_path, conf_thresh=conf_thresh
         )
 
-        # クラス名の取得
+        # Get the class names
         class_names = detector.names
 
         # labelImg needs classes.txt beside the labels to open the folder and to
@@ -70,7 +70,7 @@ class yolo_analysis_image:
 
             detections = detector.detect(frame)
 
-            # 出力パスの作成
+            # Build the output path
             result_txt_path = os.path.join(
                 self.datas_path, file_name_without_ext + ".txt"
             )
@@ -90,7 +90,8 @@ class yolo_analysis_image:
                         coords.append(min(max(y / height, 0.0), 1.0))
                     result.append([d["class_id"], *coords])
                 else:
-                    # xywhn形式（中心x, 中心y, 幅, 高さ）に変換（正規化）
+                    # Convert to xywhn format (center x, center y, width,
+                    # height), normalised.
                     cx, cy, w, h, _angle = box
                     result.append(
                         [

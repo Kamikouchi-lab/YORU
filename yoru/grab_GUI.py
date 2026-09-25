@@ -32,9 +32,10 @@ from yoru.gui_base import apply_default_theme, frame_to_data_rgba, process_frame
 from yoru.gui_layout import GuiSession
 from yoru.libs import frame_extraction
 from yoru.libs.file_operation_grab import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 
 
-class grab_gui:
+class grab_gui(GuiErrorMixin):
     # The preview texture is allocated once and the image item is scaled to
     # whatever the window currently affords; a texture cannot be resized in
     # place, and reallocating it mid-drag is exactly the kind of work that
@@ -450,8 +451,11 @@ class grab_gui:
         vid = cv2.VideoCapture(file_path)
         if not vid.isOpened():
             vid.release()
-            print("Failed to open video: " + file_path)
             self._set_status(f"Could not open the video: {file_path}")
+            self._report_error(
+                "Failed to open video file",
+                IOError(f"Could not open movie file: {file_path}"),
+            )
             return
 
         if isinstance(self.vid, cv2.VideoCapture):
@@ -581,8 +585,14 @@ class grab_gui:
             self._update_grab_count()
             self._set_status(f"Saved {os.path.basename(self.grab_path)}")
         else:
-            print("Failed to read frame for grab")
             self._set_status("Could not save that frame.")
+            self._report_error(
+                "Failed to grab frame",
+                IOError(
+                    f"Could not read or write frame {self.current_frame_num} "
+                    f"from {self.file_path}"
+                ),
+            )
 
     def count_reset_bt(self):
         self.grab_count = 0

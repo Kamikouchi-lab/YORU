@@ -117,35 +117,37 @@ class yolo_analysis:
             "auto", self.yolo_model_path, conf_thresh=_conf_thresh(self.m_dict)
         )
 
-        # クラス名の取得
+        # Get class names
         self.class_names = detector.names
 
         self.colormap = get_colormap(self.class_names, "gist_rainbow")
 
         movie_count = len(self.mov_path_list)
+        total_movies = movie_count
         self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
+        print(f"=== Start movie analysis: {total_movies} movie(s) ===", flush=True)
 
-        for self.mov_path in self.mov_path_list:
+        for movie_index, self.mov_path in enumerate(self.mov_path_list, start=1):
             df_results = pd.DataFrame()
             result_list = []
             video = cv2.VideoCapture(self.mov_path)
             out = None
             frame_count = 0
 
-            # トラッキング用
+            # For tracking
             pre_ids = []
-            pre_center_pos = []  # 以前の位置情報を入力する
+            pre_center_pos = []  # Stores the previous position information
             global_counter = 0
 
-            # ファイル名の取得（拡張子なし）
+            # Get the file name (without extension)
             base_name = os.path.basename(self.mov_path)
             file_name_without_ext = os.path.splitext(base_name)[0]
 
-            # 指定の出力ディレクトリに新しいファイル名を結合
+            # Join the new file name with the specified output directory
             file_path = os.path.join(self.out_path, file_name_without_ext + ".csv")
 
             try:
-                # 出力動画の設定
+                # Output video settings
                 if self.m_dict["create_video"]:
                     out_movie_path = os.path.join(
                         self.out_path, file_name_without_ext + "_render_" + ".mp4"
@@ -160,13 +162,20 @@ class yolo_analysis:
                         ),
                     )
 
-                # ビデオのフレーム数を取得
+                # Get the number of frames in the video
                 total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
                 process_times = []
 
                 result_list = []
                 pre_ids = []
                 self.m_dict["movie_progress"] = 0.0
+
+                print(
+                    f"[{movie_index}/{total_movies}] Analyzing '{base_name}' "
+                    f"({total_frames} frames)...",
+                    flush=True,
+                )
+                last_logged_pct = -10  # stdout progress, logged in 10% steps
 
                 while video.isOpened():
                     ret, frame = video.read()
@@ -243,7 +252,7 @@ class yolo_analysis:
                         pre_ids = cur_ids
                         pre_center_pos = cur_center_pos
 
-                        # 除外クラスはtracking_id=-1として追加
+                        # Add excluded classes with tracking_id=-1
                         result = result + [x + [-1] for x in result_excluded]
 
                     if self.m_dict["create_video"]:
@@ -259,6 +268,15 @@ class yolo_analysis:
                     progress = frame_count / total_frames if total_frames > 0 else 0.0
                     self.m_dict["movie_progress"] = progress
 
+                    pct = int(progress * 100)
+                    if pct // 10 > last_logged_pct // 10:
+                        last_logged_pct = pct
+                        print(
+                            f"[{movie_index}/{total_movies}] {base_name}: "
+                            f"{pct}% ({frame_count}/{total_frames} frames)",
+                            flush=True,
+                        )
+
                     end_time = time.time()
                     process_time = end_time - start_time
                     process_times.append(process_time)
@@ -270,7 +288,7 @@ class yolo_analysis:
                         f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
                     )
 
-                # リストをデータフレームに変換
+                # Convert the list to a dataframe
                 if self.m_dict["tracking_state"]:
                     df_results = pd.DataFrame(
                         result_list,
@@ -318,6 +336,7 @@ class yolo_analysis:
         self.m_dict["estimate_time"] = "Estimated remaining time: none"
         self.m_dict["no_movies"] = "Leaving movies: none"
         self.m_dict["movie_progress"] = 1.0
+        print("=== Movie analysis complete ===", flush=True)
 
     def create_video(self, mov_path=None):
         """Render an annotated copy of *mov_path*.
@@ -449,16 +468,18 @@ class yolo_analysis_image:
             "auto", self.yolo_model_path, conf_thresh=conf_thresh
         )
 
-        # クラス名の取得
+        # Get class names
         self.class_names = detector.names
 
         self.colormap = get_colormap(self.class_names, "gist_rainbow")
 
         image_count = len(self.img_path_list)
+        print(f"=== Start image analysis: {image_count} image(s) ===", flush=True)
+        last_logged_pct = -10  # For progress logging to stdout (output in 10% steps)
 
         df_results = pd.DataFrame()
         result_list = []
-        # 指定の出力ディレクトリに新しいファイル名を結合
+        # Join the new file name with the specified output directory
         file_path = os.path.join(self.out_path, "image_analysis_results" + ".csv")
 
         for image_index, self.img_path in enumerate(self.img_path_list):
@@ -483,7 +504,7 @@ class yolo_analysis_image:
                     continue
                 x_center, y_center, box_w, box_h, box_angle = obb_of(d)
 
-                # 結果をリストに保存
+                # Save the results to the list
                 result_list.append(
                     [
                         file_name_without_ext,
@@ -509,7 +530,7 @@ class yolo_analysis_image:
                     d["class_id"],
                 )
 
-            # フレームを出力動画に書き込む
+            # Write the frame to the output video
             result_file_path = os.path.join(
                 self.out_path, file_name_without_ext + "_render.png"
             )
@@ -519,7 +540,16 @@ class yolo_analysis_image:
             self.m_dict["image_progress"] = progress
             self.m_dict["image_progress_label"] = f"{image_index + 1}/{image_count}"
 
-        # リストをデータフレームに変換
+            # Emit progress to stdout in 10% steps
+            pct = int(progress * 100)
+            if pct // 10 > last_logged_pct // 10:
+                last_logged_pct = pct
+                print(
+                    f"    {pct}% ({image_index + 1}/{image_count}) {base_name}",
+                    flush=True,
+                )
+
+        # Convert the list to a DataFrame
         df_results = pd.DataFrame(
             result_list,
             columns=[
@@ -536,8 +566,9 @@ class yolo_analysis_image:
                 "class_name",
             ],
         )
-        # csvとして出力
+        # Output as CSV
         df_results.to_csv(file_path, index=False)
+        print(f"=== Image analysis complete -> {file_path} ===", flush=True)
 
         self.m_dict["analy_state"] = "Done!"
         self.m_dict["image_progress"] = 1.0
@@ -550,24 +581,24 @@ class file_open:
 
     def get_file_path(self):
         root = tk.Tk()
-        root.withdraw()  # Tkのルートウィンドウを表示しない
+        root.withdraw()  # Do not display the Tk root window
 
-        # ファイル選択ダイアログを表示
+        # Show the file selection dialog
         file_path = filedialog.askopenfilename()
 
         return file_path
 
     def get_directory_path(self):
         root = tk.Tk()
-        root.withdraw()  # Tkのルートウィンドウを表示しない
+        root.withdraw()  # Do not display the Tk root window
 
-        # フォルダ選択ダイアログを表示
+        # Show the folder selection dialog
         directory_path = filedialog.askdirectory()
 
         return directory_path
 
 
-# 使用例
+# Usage example
 if __name__ == "__main__":
     fileopen = file_open()
     model_path = fileopen.get_file_path()

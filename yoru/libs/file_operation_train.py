@@ -2,6 +2,7 @@
 # Copyright (C) YORU contributors — see LICENSE for details.
 
 import glob
+import logging
 import os
 import random
 import shutil
@@ -11,6 +12,8 @@ from collections import Counter
 from multiprocessing import Manager, Process
 
 import dearpygui.dearpygui as dpg
+
+from yoru.libs.user_paths import log_exception, log_message
 
 
 class file_move_random:
@@ -39,7 +42,7 @@ class file_move_random:
         for self.txt_file in sorted(glob.glob(self.directory_path + "/*.txt")):
             # Get the filename only from the initial file variable
             filename = os.path.basename(self.txt_file)
-            # calssファイルを読み込まないようにする
+            # avoid reading the class file
             if filename == "classes.txt":
                 continue
 
@@ -108,13 +111,16 @@ class file_move_random:
                 try:
                     shutil.copy(source_file_label, label_dir)
                     shutil.copy(source_file_image, image_dir)
-                except FileNotFoundError:
+                except FileNotFoundError as e:
+                    log_exception(f"{split.capitalize()}-split copy failed for {i}", e)
                     skipped.append(i)
 
         if skipped:
             listed = ", ".join(skipped[:10])
             more = " ..." if len(skipped) > 10 else ""
-            print(f"Skipped {len(skipped)} item(s) with no matching image: {listed}{more}")
+            message = f"Skipped {len(skipped)} item(s) with no matching image: {listed}{more}"
+            log_message(message, logging.WARNING)
+            print(message)
         print("complete")
 
 
@@ -135,8 +141,8 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="select class file",
-            filetypes=[("Classes file", "classes.txt")],  # ファイルフィルタ
-            initialdir="./",  # 自分自身のディレクトリ
+            filetypes=[("Classes file", "classes.txt")],  # file filter
+            initialdir="./",  # the current directory
         )
         root.destroy()
         dpg.set_value("classes_path", file_path)
@@ -147,7 +153,7 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="select dataset",
-            filetypes=[("config file", "config.yml .yaml")],  # ファイルフィルタ
+            filetypes=[("config file", "config.yml .yaml")],  # file filter
         )
         root.destroy()
         dpg.set_value("yaml_file_path", file_path)
@@ -158,8 +164,8 @@ class file_dialog_tk:
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="select YOLO model",
-            filetypes=[("movie file", ".mp4 .wmv .avi")],  # ファイルフィルタ
-            initialdir="./",  # 自分自身のディレクトリ
+            filetypes=[("movie file", ".mp4 .wmv .avi")],  # file filter
+            initialdir="./",  # the current directory
         )
         root.destroy()
         dpg.set_value("Input file Path", file_path)

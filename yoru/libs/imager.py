@@ -3,6 +3,7 @@
 
 import csv
 import datetime
+import logging
 import time
 import tkinter as tk
 from threading import Thread
@@ -14,6 +15,7 @@ from PIL import Image, ImageTk
 from pynput import mouse
 
 from yoru.libs.detector_base import DETECTION_COLUMNS
+from yoru.libs.user_paths import log_message
 
 
 class capture_streamCV2:
@@ -126,6 +128,11 @@ class capture_streamCV2:
                 # Check the read succeeded *before* using the frame: a failed
                 # read yields None and cv2.resize would raise a cryptic error.
                 if not status or frame is None:
+                    log_message(
+                        "capture_streamCV2.run: camera read failed "
+                        "(status=False); stopping capture loop",
+                        logging.ERROR,
+                    )
                     print("Camera returned no frame; stopping capture.")
                     break
 

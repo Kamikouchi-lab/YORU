@@ -15,11 +15,12 @@ from yoru.gui_layout import GuiSession
 from yoru.libs.create_labels import yolo_analysis_image
 from yoru.libs.create_yaml_train import is_obb_project
 from yoru.libs.file_operation_create_label import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.init_create_label import init_create_label
 
 
 
-class model_eval_gui:
+class model_eval_gui(GuiErrorMixin):
     def __init__(self, m_dict={}):
         print("Evaluater-gui")
         self.m_dict = m_dict
@@ -166,54 +167,61 @@ class model_eval_gui:
 
     def load_pr_dir(self):
         print("load project")
-        file_path = self.m_dict["config_file_path"]
-        if not os.path.exists(file_path):
-            print("Don't find a project")
-            return None
-        with open(file_path, "r") as yf:
-            data = yaml.safe_load(yf)
-            self.m_dict["project_dir"] = data["project_dir"]
-            # The project decides the annotation format, the same as in the
-            # training GUI; labelImg is told explicitly below.
-            self.m_dict["obb"] = is_obb_project(data)
-            if data.get("evaluation_info_date"):
-                self.m_dict["datas_dir"] = data["evaluate_datas_dir"]
-                self.m_dict["result_dir"] = data["evaluate_result_dir"]
-                self.m_dict["pr_curve_dir"] = data["evaluate_pr_curve_dir"]
-
-            else:
-                base = os.path.join(self.m_dict["project_dir"], "model_evaluation")
-                folder_name = base
-                i = 1
-                while os.path.exists(folder_name):
-                    folder_name = f"{base}_{i}"
-                    i += 1
-                os.makedirs(folder_name, exist_ok=True)
-                print(folder_name)
-                self.m_dict["datas_dir"] = os.path.join(folder_name, "datas")
-                os.makedirs(self.m_dict["datas_dir"])
-
-                self.m_dict["result_dir"] = os.path.join(folder_name, "result")
-                os.makedirs(self.m_dict["result_dir"])
-
-                self.m_dict["pr_curve_dir"] = os.path.join(
-                    self.m_dict["result_dir"], "pr_curves"
+        try:
+            file_path = self.m_dict.get("config_file_path", "")
+            if not file_path or not os.path.exists(file_path):
+                raise FileNotFoundError(
+                    "Project config file is not selected or does not exist. "
+                    "Please select a valid config.yaml."
                 )
-                os.makedirs(self.m_dict["pr_curve_dir"])
+            with open(file_path, "r") as yf:
+                data = yaml.safe_load(yf)
+                self.m_dict["project_dir"] = data["project_dir"]
+                # The project decides the annotation format, the same as in the
+                # training GUI; labelImg is told explicitly below.
+                self.m_dict["obb"] = is_obb_project(data)
+                if data.get("evaluation_info_date"):
+                    self.m_dict["datas_dir"] = data["evaluate_datas_dir"]
+                    self.m_dict["result_dir"] = data["evaluate_result_dir"]
+                    self.m_dict["pr_curve_dir"] = data["evaluate_pr_curve_dir"]
 
-                with open(file_path, "a") as yf:
-                    yaml.dump(
-                        {
-                            "evaluate_result_dir": self.m_dict["result_dir"],
-                            "evaluate_datas_dir": self.m_dict["datas_dir"],
-                            "evaluate_pr_curve_dir": self.m_dict["pr_curve_dir"],
-                            "evaluation_info_date": datetime.date.today(),
-                        },
-                        yf,
+                else:
+                    base = os.path.join(
+                        self.m_dict["project_dir"], "model_evaluation"
                     )
-                print("add class info in yaml file")
+                    folder_name = base
+                    i = 1
+                    while os.path.exists(folder_name):
+                        folder_name = f"{base}_{i}"
+                        i += 1
+                    os.makedirs(folder_name, exist_ok=True)
+                    print(folder_name)
+                    self.m_dict["datas_dir"] = os.path.join(folder_name, "datas")
+                    os.makedirs(self.m_dict["datas_dir"])
 
-            print(f"load complete")
+                    self.m_dict["result_dir"] = os.path.join(folder_name, "result")
+                    os.makedirs(self.m_dict["result_dir"])
+
+                    self.m_dict["pr_curve_dir"] = os.path.join(
+                        self.m_dict["result_dir"], "pr_curves"
+                    )
+                    os.makedirs(self.m_dict["pr_curve_dir"])
+
+                    with open(file_path, "a") as yf:
+                        yaml.dump(
+                            {
+                                "evaluate_result_dir": self.m_dict["result_dir"],
+                                "evaluate_datas_dir": self.m_dict["datas_dir"],
+                                "evaluate_pr_curve_dir": self.m_dict["pr_curve_dir"],
+                                "evaluation_info_date": datetime.date.today(),
+                            },
+                            yf,
+                        )
+                    print("add class info in yaml file")
+
+                print(f"load complete")
+        except Exception as e:
+            self._report_error("Failed to load project config", e)
 
     def labelImg_bt(self):
         """Open the bundled labelImg on the evaluation images.
@@ -245,11 +253,14 @@ class model_eval_gui:
             subprocess.Popen(cmd, cwd=os.path.dirname(os.path.dirname(
                 os.path.abspath(__file__))))
         except OSError as e:
-            print(f"Failed to launch labelImg: {e}")
+            self._report_error("Failed to launch LabelImg", e)
 
     def yolo_detection(self):
-        yolo_det = yolo_analysis_image(self.m_dict)
-        yolo_det.analyze_image()
+        try:
+            yolo_det = yolo_analysis_image(self.m_dict)
+            yolo_det.analyze_image()
+        except Exception as e:
+            self._report_error("Label generation (prediction) failed", e)
 
     def quit_cb(self):
         print("quit_pushed")

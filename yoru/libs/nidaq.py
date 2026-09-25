@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) YORU contributors — see LICENSE for details.
 
+import logging
 import time
 
 import nidaqmx
 import numpy as np
 from nidaqmx.constants import AcquisitionType, Edge, LineGrouping
 from nidaqmx.errors import DaqError
+
+from yoru.libs.user_paths import log_message
 
 
 # Mainly for NI USB-6001 and similar type of DAQs
@@ -32,6 +35,7 @@ class dio:
             self.nCh = len(self.task.do_channels.channel_names)
             print("Configured: " + devID + "/" + port + "/" + lineCh + " (DO)")
         else:
+            log_message("Unknown NI-DAQ task type: " + taskType, logging.ERROR)
             print("Unknown Task type: " + taskType)
 
     def startAll(self):

@@ -9,6 +9,7 @@ import serial.tools.list_ports
 
 import yoru.libs.arduino as ard
 from yoru.libs.paths import ensure_importable, list_trigger_plugins
+from yoru.libs.user_paths import log_exception
 
 
 class yolo_trigger:
@@ -21,7 +22,7 @@ class yolo_trigger:
         while not self.m_dict.get("quit", False):
             # print("a")
             if not self.m_dict.get("Trigger", False):
-                time.sleep(1)  # 1秒間スリープしてCPUの使用率を下げる
+                time.sleep(1)  # Sleep for 1 second to reduce CPU usage
                 continue
 
             print("trigger loading...")
@@ -36,9 +37,10 @@ class yolo_trigger:
 
             #     time.sleep(1)
             # continue
-            except Exception as e:  # 具体的なエラーメッセージを出力
+            except Exception as e:  # Print a specific error message
+                log_exception("Trigger setup failed", e)
                 print(f"Error: {e}")
-                time.sleep(1)  # 失敗が続いてもCPUを占有しないようにする
+                time.sleep(1)  # back off to avoid tight-loop log spam
                 continue
 
             self.process_triggers()
@@ -50,8 +52,9 @@ class yolo_trigger:
             ):
                 try:
                     self.arduino_tri.trigger()
-                    # 　trigger処理
-                except serial.serialutil.SerialException:
+                    # trigger processing
+                except serial.serialutil.SerialException as e:
+                    log_exception("Arduino trigger serial failure", e)
                     print("Trigger failure ....")
                     time.sleep(1)
                     break
@@ -60,7 +63,9 @@ class yolo_trigger:
                     time.sleep(1)
                     break
                 except Exception as e:
-                    # 想定外の例外でトリガープロセスごと落ちないようにする
+                    # Keep an unexpected exception from taking the whole
+                    # trigger process down with it.
+                    log_exception("Arduino trigger failed", e)
                     print(f"Trigger error: {e}")
                     time.sleep(1)
                     break
@@ -80,16 +85,17 @@ class trigger_python:
         except (TypeError, ValueError):
             print(f"Invalid trigger pin {self.m_dict.get('pin')!r}; falling back to 13")
             self.pin = 13
-        self.myArduino = None  # 初期化
+        self.myArduino = None  # Initialize
         # self.ser_baudrate = int(self.m_dict.get("baudrate", 9600))
 
         if self.com and self.com != "None":
             try:
                 self.myArduino = ard.dio(comport=self.com, doCh_IDs=[self.pin])
             except PermissionError as e:
+                log_exception(f"Could not open Arduino port '{self.com}'", e)
                 print(f"Error: could not open port '{self.com}': {e}")
                 if self.myArduino:
-                    self.myArduino.close()        # ard.dio の close メソッド
+                    self.myArduino.close()        # close method of ard.dio
                 self.myArduino = None
             
         else:

@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) YORU contributors — see LICENSE for details.
 
+import logging
 import os
 import re
 import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from multiprocessing import Manager, Process
 
 import dearpygui.dearpygui as dpg
@@ -14,8 +16,11 @@ import yaml
 
 from yoru.gui_layout import GuiSession
 from yoru.libs.create_yaml_train import create_project, is_obb_project
+from yoru.libs.device import KNOWN_DEVICES, describe, resolve_device
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
+from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.init_train import init_train
+from yoru.libs.user_paths import log_message
 from yoru.libs.train_progress import ProgressPrinter
 from yoru.libs.train_stop import (
     clear_stop,
@@ -31,6 +36,10 @@ from yoru.libs.vram_estimate import (
 
 
 
+#: Lines of training output kept for the failure popup.
+TRAIN_OUTPUT_TAIL_LINES = 20
+
+
 def _repo_root():
     """Directory that has ``yoru`` on it, so ``-m yoru...`` resolves.
 
@@ -43,9 +52,11 @@ def _repo_root():
     return Path(__file__).resolve().parents[1]
 
 
-class yoru_train:
+class yoru_train(GuiErrorMixin):
     def __init__(self, m_dict=None):
         self.m_dict = m_dict if m_dict is not None else {}
+        # init_train may not define a device, so default it before the GUI reads it.
+        self.m_dict["device"] = self.m_dict.get("device", "auto")
         self.fd_tk = file_dialog_tk(self.m_dict)
 
         # VRAM estimate caches.  The estimate is recomputed every frame from
@@ -372,6 +383,19 @@ class yoru_train:
                             width=120,
                             callback=lambda: self.in_batch(),
                         )
+                    with dpg.group(horizontal=True):
+                        dpg.add_text(default_value="  Device        ")
+                        dpg.add_combo(
+                            items=list(KNOWN_DEVICES),
+                            tag="device_combo",
+                            default_value=self.m_dict.get("device", "auto"),
+                            width=120,
+                            callback=lambda: self.select_device(),
+                        )
+                        dpg.add_text(
+                            tag="device_display_text",
+                            default_value=describe(self.m_dict.get("device", "auto")),
+                        )
 
             dpg.add_spacer(height=8)
             with dpg.group(horizontal=True):
@@ -649,10 +673,25 @@ class yoru_train:
         # message written by _show_training_outcome().
 
     def _show_training_outcome(self) -> None:
-        """Report how the run that just ended finished: done, or stopped."""
+        """Report how the run that just ended finished: done, stopped or failed."""
         mode = self.m_dict.get("train_stop_mode", "")
         epoch = self.m_dict.get("train_epoch", 0)
         total = self.m_dict.get("train_total_epoch", 0)
+
+        returncode = self.m_dict.get("training_returncode", 0)
+        if returncode and not mode:
+            # The training subprocess exited with a non-zero code: surface it
+            # instead of reporting a false "Complete!!".
+            tail = self.m_dict.get("train_output_tail", "")
+            message = f"Training exited with code {returncode}"
+            if tail:
+                message += f"\n\nLast output:\n{tail}"
+            self._report_error("Training failed", RuntimeError(message))
+            self._set_step_state("step6_state", "Error")
+            dpg.set_value("train_progress_text", "Failed")
+            dpg.set_value("train_eta_text", "-")
+            dpg.set_value("train_stop_text", "")
+            return
         # A stop asked for during the last epoch changes nothing: the run
         # reached its end either way.
         if not mode or (total and epoch >= total):
@@ -719,49 +758,73 @@ class yoru_train:
                 break
 
     def create_pr_dir(self):
-        print("create project")
-        # Read the checkbox before anything is written: the OBB flag goes into
-        # config.yaml at creation and every later step -- labelImg's format,
-        # the weight, the detector -- reads it back from there.
-        self.m_dict["obb"] = bool(dpg.get_value("obb_chk"))
-        self.m_dict["weight"] = self._build_weight()
-        dpg.set_value("weight_display_text", self.m_dict["weight"])
-        self.m_dict["project_name"] = dpg.get_value("pro_name")
-        self.m_dict["project_dir"] = (
-            self.m_dict["project_path"] + "/" + self.m_dict["project_name"]
-        )
-        file_path = self.m_dict["project_dir"] + "/config.yaml"
-        if not os.path.exists(file_path):
-            for sub in (
-                "",
-                "/train",
-                "/train/images",
-                "/train/labels",
-                "/val",
-                "/val/images",
-                "/val/labels",
-                "/all_label_images",
-            ):
-                os.makedirs(self.m_dict["project_dir"] + sub, exist_ok=True)
-            self.m_dict["yaml_path"] = self.m_dict["project_dir"] + "/config.yaml"
-            self.m_dict["all_label_dir"] = (
-                self.m_dict["project_dir"] + "/all_label_images"
+        project_name = dpg.get_value("pro_name")
+        project_path = self.m_dict.get("project_path", "")
+        if not project_name:
+            self._report_error(
+                "Failed to create project",
+                ValueError("Please enter a project name."),
             )
-            cr_project = create_project(self.m_dict)
-            cr_project.create_yaml()
+            self._set_step_state("step1_state", "Error")
+            return
+        if not project_path or not os.path.isdir(project_path):
+            self._report_error(
+                "Failed to create project",
+                NotADirectoryError(
+                    "Project directory is not selected or does not exist. "
+                    "Please select a valid parent directory."
+                ),
+            )
+            self._set_step_state("step1_state", "Error")
+            return
 
-            dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
-            dpg.enable_item("move_label_images")
-            self._set_step_state("step1_state", "Complete!!")
-        else:
-            print("The project already exists.")
-            dpg.enable_item("move_label_images")
-        # An existing project keeps the task it was created with; re-reading it
-        # here is what stops a stale checkbox from mislabelling the next step.
-        self._sync_obb_ui()
+        try:
+            print("create project")
+            # Read the checkbox before anything is written: the OBB flag goes into
+            # config.yaml at creation and every later step -- labelImg's format,
+            # the weight, the detector -- reads it back from there.
+            self.m_dict["obb"] = bool(dpg.get_value("obb_chk"))
+            self.m_dict["weight"] = self._build_weight()
+            dpg.set_value("weight_display_text", self.m_dict["weight"])
+            self.m_dict["project_name"] = dpg.get_value("pro_name")
+            self.m_dict["project_dir"] = (
+                self.m_dict["project_path"] + "/" + self.m_dict["project_name"]
+            )
+            file_path = self.m_dict["project_dir"] + "/config.yaml"
+            if not os.path.exists(file_path):
+                for sub in (
+                    "",
+                    "/train",
+                    "/train/images",
+                    "/train/labels",
+                    "/val",
+                    "/val/images",
+                    "/val/labels",
+                    "/all_label_images",
+                ):
+                    os.makedirs(self.m_dict["project_dir"] + sub, exist_ok=True)
+                self.m_dict["yaml_path"] = self.m_dict["project_dir"] + "/config.yaml"
+                self.m_dict["all_label_dir"] = (
+                    self.m_dict["project_dir"] + "/all_label_images"
+                )
+                cr_project = create_project(self.m_dict)
+                cr_project.create_yaml()
+
+                dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
+                dpg.enable_item("move_label_images")
+                self._set_step_state("step1_state", "Complete!!")
+            else:
+                print("The project already exists.")
+                dpg.enable_item("move_label_images")
+            # An existing project keeps the task it was created with; re-reading it
+            # here is what stops a stale checkbox from mislabelling the next step.
+            self._sync_obb_ui()
+        except Exception as e:
+            self._report_error("Failed to create project", e)
+            self._set_step_state("step1_state", "Error")
 
     def _restore_model_ui(self, weight: str) -> None:
-        """ウェイトファイル名からモデルファミリー/バージョン/サイズのUIを復元する。"""
+        """Restore the model family/version/size UI from the weight file name."""
         w = weight.lower()
         # A "-obb" weight identifies the task as surely as config.yaml does;
         # strip it here so the version/size parsing below sees a plain name.
@@ -816,94 +879,116 @@ class yoru_train:
         dpg.set_value("weight_display_text", self.m_dict["weight"])
 
     def load_pr_dir(self):
-        print("load project")
-        self.m_dict["project_dir"] = self.m_dict["project_path"]
-        file_path = self.m_dict["project_dir"] + "/config.yaml"
-        if not os.path.exists(file_path):
-            print("please create a project")
+        project_path = self.m_dict.get("project_path", "")
+        if not project_path or not os.path.isdir(project_path):
+            self._report_error(
+                "Failed to load project",
+                NotADirectoryError(
+                    "Project directory is not selected or does not exist. "
+                    "Please select a valid project directory."
+                ),
+            )
+            self._set_step_state("step1_state", "Error")
             return None
-        with open(file_path, "r") as yf:
-            data = yaml.safe_load(yf)
 
-        self.m_dict["yaml_path"] = data["yaml_path"]
-        self.m_dict["all_label_dir"] = self.m_dict["project_dir"] + "/all_label_images"
+        try:
+            print("load project")
+            self.m_dict["project_dir"] = self.m_dict["project_path"]
+            file_path = self.m_dict["project_dir"] + "/config.yaml"
+            if not os.path.exists(file_path):
+                print("please create a project")
+                return None
+            with open(file_path, "r") as yf:
+                data = yaml.safe_load(yf)
 
-        # The project decides, not the checkbox: opening an OBB project must
-        # put the GUI into OBB mode even if the last project was not one.
-        self.m_dict["obb"] = is_obb_project(data)
-        dpg.set_value("obb_chk", self.m_dict["obb"])
-        self._sync_obb_ui()
+            self.m_dict["yaml_path"] = data["yaml_path"]
+            self.m_dict["all_label_dir"] = self.m_dict["project_dir"] + "/all_label_images"
 
-        # --- Step1: プロジェクト読み込み完了 ---
-        dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
-        dpg.enable_item("move_label_images")
-        self._set_step_state("step1_state", "Complete!!")
+            # The project decides, not the checkbox: opening an OBB project must
+            # put the GUI into OBB mode even if the last project was not one.
+            self.m_dict["obb"] = is_obb_project(data)
+            dpg.set_value("obb_chk", self.m_dict["obb"])
+            self._sync_obb_ui()
 
-        # --- モデル/ウェイトの復元 (training_date があれば weights キーを優先) ---
-        saved_model = data.get("weights") or data.get("Model") or data.get("YOLO_ver")
-        if saved_model:
-            if not saved_model.endswith(".pt"):
-                prefix_map = {"yolov5": "yolov5s", "yolov8": "yolov8s", "yolo11": "yolo11s"}
-                saved_model = prefix_map.get(saved_model, saved_model) + ".pt"
-            self.m_dict["weight"] = saved_model
-            dpg.set_value("weight_display_text", saved_model)
-            self._restore_model_ui(saved_model)
+            # --- Step1: project loading complete ---
+            dpg.set_value("yaml_file_path", self.m_dict["yaml_path"])
+            dpg.enable_item("move_label_images")
+            self._set_step_state("step1_state", "Complete!!")
 
-        # --- 学習条件の復元 ---
-        if data.get("epochs") is not None:
-            self.m_dict["epoch"] = data["epochs"]
-            dpg.set_value("epoc_num_in", str(data["epochs"]))
-        if data.get("image_size") is not None:
-            self.m_dict["img"] = data["image_size"]
-            dpg.set_value("img_num_in", str(data["image_size"]))
-        if data.get("batch-size") is not None:
-            self.m_dict["batch"] = data["batch-size"]
-            dpg.set_value("batch_num_in", str(data["batch-size"]))
+            # --- Restore model/weight (prefer the weights key if training_date exists) ---
+            saved_model = data.get("weights") or data.get("Model") or data.get("YOLO_ver")
+            if saved_model:
+                if not saved_model.endswith(".pt"):
+                    prefix_map = {"yolov5": "yolov5s", "yolov8": "yolov8s", "yolo11": "yolo11s"}
+                    saved_model = prefix_map.get(saved_model, saved_model) + ".pt"
+                self.m_dict["weight"] = saved_model
+                dpg.set_value("weight_display_text", saved_model)
+                self._restore_model_ui(saved_model)
 
-        # --- Step2: all_label_images に画像があれば完了扱い ---
-        all_label_dir = self.m_dict["all_label_dir"]
-        if os.path.exists(all_label_dir):
-            img_exts = {".png", ".jpg", ".jpeg", ".bmp"}
-            has_images = any(
-                os.path.splitext(f)[1].lower() in img_exts
-                for f in os.listdir(all_label_dir)
-            )
-            if has_images:
-                self._set_step_state("step2_state", "Complete!!")
+            # --- Restore training conditions ---
+            if data.get("epochs") is not None:
+                self.m_dict["epoch"] = data["epochs"]
+                dpg.set_value("epoc_num_in", str(data["epochs"]))
+            if data.get("image_size") is not None:
+                self.m_dict["img"] = data["image_size"]
+                dpg.set_value("img_num_in", str(data["image_size"]))
+            if data.get("batch-size") is not None:
+                self.m_dict["batch"] = data["batch-size"]
+                dpg.set_value("batch_num_in", str(data["batch-size"]))
 
-            # --- Step3: all_label_images に classes.txt 以外の .txt があればラベリング完了 ---
-            has_labels = any(
-                f.endswith(".txt") and f != "classes.txt"
-                for f in os.listdir(all_label_dir)
-            )
-            if has_labels:
-                self._set_step_state("step3_state", "Complete!!")
+            # --- Step2: treat as complete if all_label_images contains images ---
+            all_label_dir = self.m_dict["all_label_dir"]
+            if os.path.exists(all_label_dir):
+                img_exts = {".png", ".jpg", ".jpeg", ".bmp"}
+                has_images = any(
+                    os.path.splitext(f)[1].lower() in img_exts
+                    for f in os.listdir(all_label_dir)
+                )
+                if has_images:
+                    self._set_step_state("step2_state", "Complete!!")
 
-        # --- Step4: train/images にファイルがあれば移動済み ---
-        train_images_dir = self.m_dict["project_dir"] + "/train/images"
-        if os.path.exists(train_images_dir) and os.listdir(train_images_dir):
-            self._set_step_state("step4_state", "Complete!!")
-            dpg.disable_item("move_label_images")
+                # --- Step3: labelling is complete once all_label_images holds a
+                #     .txt other than classes.txt ---
+                has_labels = any(
+                    f.endswith(".txt") and f != "classes.txt"
+                    for f in os.listdir(all_label_dir)
+                )
+                if has_labels:
+                    self._set_step_state("step3_state", "Complete!!")
 
-        # --- Step5: クラス情報が登録済みなら classes_path を復元して完了表示 ---
-        if data.get("add_class_info_date"):
-            classes_txt = all_label_dir + "/classes.txt"
-            if os.path.exists(classes_txt):
-                self.m_dict["classes_path"] = classes_txt
-                dpg.set_value("classes_path", classes_txt)
-            self._set_step_state("step5_state", "Complete!!")
+            # --- Step4: the images have been moved if train/images has files ---
+            train_images_dir = self.m_dict["project_dir"] + "/train/images"
+            if os.path.exists(train_images_dir) and os.listdir(train_images_dir):
+                self._set_step_state("step4_state", "Complete!!")
+                dpg.disable_item("move_label_images")
 
-        # --- Step6: 学習済みなら完了表示 ---
-        if data.get("training_date"):
-            self._set_step_state("step6_state", "Complete!!")
+            # --- Step5: class info registered: restore classes_path and mark done ---
+            if data.get("add_class_info_date"):
+                classes_txt = all_label_dir + "/classes.txt"
+                if os.path.exists(classes_txt):
+                    self.m_dict["classes_path"] = classes_txt
+                    dpg.set_value("classes_path", classes_txt)
+                self._set_step_state("step5_state", "Complete!!")
 
-        self._invalidate_dataset_stats()
-        print("load complete")
+            # --- Step6: mark complete if the project has been trained ---
+            if data.get("training_date"):
+                self._set_step_state("step6_state", "Complete!!")
+
+            self._invalidate_dataset_stats()
+            print("load complete")
+        except Exception as e:
+            self._report_error("Failed to load project", e)
+            self._set_step_state("step1_state", "Error")
 
     def grab_bt(self):
         # print("quit_pushed")
         # self.m_dict["quit"] = True
-        subprocess.Popen([sys.executable, "-m", "yoru.grab_GUI"])
+        try:
+            subprocess.Popen([sys.executable, "-m", "yoru.grab_GUI"])
+        except OSError as e:
+            self._report_error("Failed to launch Frame Capture", e)
+            self._set_step_state("step2_state", "Error")
+            return
         self._set_step_state("step2_state", "Complete!!")
         # dpg.destroy_context()  # <-- moved from __del__
 
@@ -941,7 +1026,7 @@ class yoru_train:
         try:
             subprocess.Popen(cmd, cwd=str(_repo_root()))
         except OSError as e:
-            print(f"Failed to launch labelImg: {e}")
+            self._report_error("Failed to launch LabelImg", e)
             self._set_step_state("step3_state", "Error")
             return
         self._set_step_state("step3_state", "Complete!!")
@@ -962,23 +1047,29 @@ class yoru_train:
     def add_class_file(self):
         classes_path = self.m_dict.get("classes_path", "")
         if "classes.txt" not in classes_path or not os.path.exists(classes_path):
-            print(f"Select a valid classes.txt first (got {classes_path!r})")
+            self._report_error(
+                "Failed to add class info to YAML",
+                FileNotFoundError(
+                    "classes.txt is not selected or does not exist. "
+                    "Please select a valid classes.txt path."
+                ),
+            )
             self._set_step_state("step5_state", "Error")
             return
         try:
             create_project(self.m_dict).add_class_info()
         except Exception as e:
-            print(f"Failed to add class info: {e}")
+            self._report_error("Failed to add class info to YAML", e)
             self._set_step_state("step5_state", "Error")
             return
         self._set_step_state("step5_state", "Complete!!")
 
     def _build_weight(self) -> str:
-        """選択中のモデルファミリー・バージョン・サイズからウェイトファイル名を生成する。
+        """Build the weight file name from the selected family, version and size.
 
-        OBB プロジェクトでは ``-obb`` サフィックスを付ける。ultralytics は
-        ウェイト名からタスクを決めるので、``yolo11s-obb.pt`` を渡すだけで
-        回転矩形の学習になり、明示的な ``task=`` 指定は要らない。
+        An OBB project gets the ``-obb`` suffix. Ultralytics reads the task off
+        the weight name, so passing ``yolo11s-obb.pt`` is enough to train on
+        rotated boxes: no explicit ``task=`` is needed.
         """
         family = self.m_dict.get("model_family", "YOLO")
         obb = bool(self.m_dict.get("obb"))
@@ -1080,12 +1171,16 @@ class yoru_train:
         self.m_dict["epoch"] = tf
 
     def flie_move_bt(self):
-        self.fmrd = file_move_random(self.m_dict)
-        print(self.m_dict["all_label_dir"])
-        self.fmrd.move()
-        self._invalidate_dataset_stats()
-        dpg.disable_item("move_label_images")
-        self._set_step_state("step4_state", "Complete!!")
+        try:
+            self.fmrd = file_move_random(self.m_dict)
+            print(self.m_dict["all_label_dir"])
+            self.fmrd.move()
+            self._invalidate_dataset_stats()
+            dpg.disable_item("move_label_images")
+            self._set_step_state("step4_state", "Complete!!")
+        except Exception as e:
+            self._report_error("Failed to move label images", e)
+            self._set_step_state("step4_state", "Error")
 
     def in_img(self):
         tf = dpg.get_value("img_num_in")
@@ -1094,6 +1189,10 @@ class yoru_train:
     def in_batch(self):
         tf = dpg.get_value("batch_num_in")
         self.m_dict["batch"] = tf
+
+    def select_device(self):
+        self.m_dict["device"] = dpg.get_value("device_combo")
+        dpg.set_value("device_display_text", describe(self.m_dict["device"]))
 
     def stop_after_epoch(self):
         """Ask the trainer to end the run once this epoch is finished."""
@@ -1151,11 +1250,15 @@ class yoru_train:
 
         start_time = None
         start_epoch = 0
+        # Kept so a failed run can show why in the error popup, not just a code.
+        tail_lines = deque(maxlen=TRAIN_OUTPUT_TAIL_LINES)
 
         try:
             for raw_line in proc.stdout:
                 line = printer.clean(raw_line)
                 printer.write(line)  # pass-through to console, one row per epoch
+                if line.strip():
+                    tail_lines.append(line.rstrip())
                 m = torchvision_re.search(line) or ultralytics_re.match(line)
                 if m:
                     current = int(m.group(1))
@@ -1175,7 +1278,14 @@ class yoru_train:
             # Whatever happened to the pipe, the GUI has to be told the run is
             # over: the Train button stays disabled until it is.
             printer.close()
-            proc.wait()
+            returncode = proc.wait()
+            if returncode:
+                log_message(
+                    f"Training subprocess exited with code {returncode}",
+                    level=logging.ERROR,
+                )
+            self.m_dict["training_returncode"] = returncode
+            self.m_dict["train_output_tail"] = "\n".join(tail_lines)
             if not self.m_dict.get("train_stop_mode", ""):
                 # Ran to its last epoch: fill the bar even if the closing line
                 # was never parsed.
@@ -1225,6 +1335,9 @@ class yoru_train:
             "project_dir": str(self.m_dict["project_dir"]),
             "model_family": self.m_dict.get("model_family", "YOLO"),
             "stop_file": str(self._stop_file),
+            # Resolved here rather than in the trainer so the GUI, the log and
+            # the subprocess all name the same device.
+            "device": resolve_device(self.m_dict.get("device", "auto")),
         }
 
         cr_project = create_project(self.m_dict)
@@ -1237,13 +1350,17 @@ class yoru_train:
             total = int(self.m_dict.get("epoch", 300))
             self._train_proc = proc
             self.m_dict["train_stop_mode"] = ""
+            # Clear the previous run's outcome, or a failure would be reported
+            # again the next time one finishes.
+            self.m_dict["training_returncode"] = 0
+            self.m_dict["train_output_tail"] = ""
             self.m_dict["training_active"] = True
             t = threading.Thread(
                 target=self._monitor_training, args=(proc, total), daemon=True,
             )
             t.start()
         except Exception as e:
-            print("error: ", e)
+            self._report_error("Failed to start training", e)
             self._train_proc = None
             self.m_dict["training_active"] = False
             self._set_step_state("step6_state", "Error")

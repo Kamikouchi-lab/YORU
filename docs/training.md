@@ -145,7 +145,7 @@
     > processes are already holding — so it drops if another training run or a
     > detection session is using the same card.
 
-9. Start training by push "Train Model".
+9. Start training by pushing "Train Model".
 
     >  In the terminal, you should check the initiation of training.
 
