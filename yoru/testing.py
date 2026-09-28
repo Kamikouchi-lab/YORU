@@ -61,14 +61,20 @@ def run_inference(images_dir: str, weights_path: str, out_dir: str) -> None:
 
 
 def run_training(
-    data_dir: str, out_dir: str, epochs: int = 1, device: str = "cpu"
+    data_dir: str,
+    out_dir: str,
+    epochs: int = 1,
+    device: str = "cpu",
+    weights: str = "yolo11n.pt",
 ) -> None:
     """Run a short training job into *out_dir*.
 
     *data_dir* may be the dataset YAML itself or a directory containing
-    ``config.yaml``.  Raises if the training subprocess fails.
+    ``config.yaml``.  *weights* picks the trainer the way the training GUI
+    does, so ``yolov5n.pt`` trains with the bundled YOLOv5.  Raises if the
+    training subprocess fails.
     """
-    from yoru.libs.plugins import get_trainer
+    from yoru.libs.plugins import detect_trainer_backend, get_trainer
     from yoru.libs.train_progress import ProgressPrinter
 
     data = Path(data_dir)
@@ -84,14 +90,16 @@ def run_training(
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    trainer = get_trainer("ultralytics")
+    trainer = get_trainer(
+        detect_trainer_backend({"model_family": "YOLO", "weight": str(weights)})
+    )
     proc = trainer.train(
         {
             "img_size": 320,
             "batch_size": 1,
             "epochs": int(epochs),
             "data_yaml": str(data_yaml),
-            "weights": "yolo11n.pt",
+            "weights": str(weights),
             "project_dir": str(out),
             "model_family": "YOLO",
             "device": device,

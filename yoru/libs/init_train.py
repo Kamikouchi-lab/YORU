@@ -16,12 +16,17 @@ class loadingParam:
 #: have no rotated-box head at all, so an OBB project cannot offer them.
 OBB_CAPABLE_FAMILIES = ("YOLO",)
 
+#: Within the YOLO family, the versions that have an OBB variant.  YOLOv5 has
+#: no rotated-box head either.
+OBB_CAPABLE_YOLO_VERSIONS = ("YOLOv8", "YOLO11")
+
 # Per-family option definitions
 MODEL_FAMILY_CONFIG = {
     "YOLO": {
-        # YOLOv5 is intentionally absent: the bundled yolov5 backend was removed
-        # in v2.0 and ultralytics cannot train a legacy yolov5 checkpoint.
-        "versions":  ["YOLOv8", "YOLO11"],
+        # YOLOv5 is trained with the bundled ultralytics/yolov5 code
+        # (yoru/libs/yolov5), as in YORU v1 -- not with ultralytics, whose
+        # yolov5*u models are a different network.
+        "versions":  ["YOLOv5", "YOLOv8", "YOLO11"],
         "sizes":     ["n", "s", "m", "l", "x"],
     },
     "RT-DETR": {
@@ -46,6 +51,8 @@ class init_train:
         self.m_dict["project_dir"] = "."
         self.m_dict["yaml_path"] = self.m_dict["project_dir"] + "/config.yaml"
         self.m_dict["weight_list"] = [
+            # YOLOv5 (bundled ultralytics/yolov5)
+            "yolov5n.pt", "yolov5s.pt", "yolov5m.pt", "yolov5l.pt", "yolov5x.pt",
             # YOLOv8
             "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
             # YOLO11

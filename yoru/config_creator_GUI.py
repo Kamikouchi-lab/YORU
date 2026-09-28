@@ -30,11 +30,10 @@ class ConfigCreatorGUI(GuiErrorMixin):
         self.class_list = ["None"]
         self.com_list = self._get_com_ports()
         self.plugin_list = self._get_plugins()
-        # "yolov5" is deliberately not offered for new configs: the bundled
-        # yolov5 backend was removed in v2.0.  Existing configs that still say
-        # "yolov5" keep working via the alias in yoru.libs.plugins.
+        # "yolov5" runs on the bundled ultralytics/yolov5 code, as in v1;
+        # "auto" recognises a YOLOv5 checkpoint by its contents as well.
         self.model_type_list = [
-            "auto", "yolov8", "yolo11", "rtdetr",
+            "auto", "yolov5", "yolov8", "yolo11", "rtdetr",
             "fasterrcnn", "maskrcnn", "ssd", "onnx",
         ]
 

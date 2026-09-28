@@ -37,6 +37,8 @@
 
 - Customizable: Allows you to customize various hardware manipulations in closed-loop system.
 
+- Models: YOLOv5, YOLOv8, YOLO11, RT-DETR, Faster R-CNN, Mask R-CNN and SSD. YOLOv5 runs on the bundled [ultralytics/yolov5](https://github.com/ultralytics/yolov5) code, exactly as in v1, so models trained with YORU v1 work unchanged in v2 and give the same detections.
+
 # Prerequisites
 
 Neither conda nor uv can install these for you.
@@ -225,7 +227,7 @@ To choose the device yourself, set the `YORU_DEVICE` environment variable before
 YORU_DEVICE=cpu uv run yoru
 ```
 
-On Windows, `set YORU_DEVICE=cpu` before the launch command. The variable applies to YOLOv8, YOLO11, RT-DETR and the torchvision detectors. If the requested device is unavailable, YORU falls back to the next best one and writes a warning to `~/.yoru/logs/yoru.log` (`%USERPROFILE%\.yoru\logs\yoru.log` on Windows).
+On Windows, `set YORU_DEVICE=cpu` before the launch command. The variable applies to YOLOv5, YOLOv8, YOLO11, RT-DETR and the torchvision detectors. If the requested device is unavailable, YORU falls back to the next best one and writes a warning to `~/.yoru/logs/yoru.log` (`%USERPROFILE%\.yoru\logs\yoru.log` on Windows).
 
 On Apple Silicon, MPS clearly helps training, but it is *not* faster than the CPU for single-frame realtime inference with the small YOLO models: we measured 60.8 FPS on MPS against 68.7 FPS on CPU for yolov8n at 640x480. For realtime detection on a Mac, `YORU_DEVICE=cpu` is worth trying.
 
@@ -282,6 +284,8 @@ AGPL-3.0 License: YORU is intended for research/academic/personal use only. See 
 This project includes code from the following repositories:
 
 - [LabelImg](https://github.com/HumanSignal/labelImg): Licensed under the MIT License
+
+- [yolov5](https://github.com/ultralytics/yolov5): Licensed under the AGPL-3.0 License
 
 For a complete list of all dependencies and their licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 

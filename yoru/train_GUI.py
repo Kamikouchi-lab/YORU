@@ -19,7 +19,7 @@ from yoru.libs.create_yaml_train import create_project, is_obb_project
 from yoru.libs.device import KNOWN_DEVICES, describe, resolve_device
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
 from yoru.libs.gui_error import GuiErrorMixin
-from yoru.libs.init_train import init_train
+from yoru.libs.init_train import OBB_CAPABLE_YOLO_VERSIONS, init_train
 from yoru.libs.user_paths import log_message
 from yoru.libs.train_progress import ProgressPrinter
 from yoru.libs.train_stop import (
@@ -832,14 +832,9 @@ class yoru_train(GuiErrorMixin):
             self.m_dict["obb"] = True
             w = w.replace("-obb", "")
         if w.startswith("yolov5"):
-            # v1 projects: YOLOv5 training is no longer bundled, so restore the
-            # same size on YOLO11 instead of showing an unusable selection.
-            size = w[6] if len(w) > 6 else "s"
-            print(
-                f"[yoru] This project was trained with '{weight}'. YOLOv5 training "
-                f"is no longer bundled; switching to yolo11{size}.pt."
-            )
-            family, version = "YOLO", "YOLO11"
+            # v1 projects come back as they were: YOLOv5 is trained with the
+            # bundled yolov5 code, as it was in v1.
+            family, version, size = "YOLO", "YOLOv5", w[6] if len(w) > 6 else "s"
         elif w.startswith("yolov8"):
             family, version, size = "YOLO", "YOLOv8", w[6] if len(w) > 6 else "s"
         elif w.startswith("yolo11"):
@@ -873,10 +868,9 @@ class yoru_train(GuiErrorMixin):
                 self.m_dict["rtdetr_size"] = size
                 dpg.set_value("rtdetr_size_combo", size)
 
-        # Keep the weight in step with the restored combos; this is what remaps
-        # a legacy yolov5 selection onto a weight that can actually be trained.
-        self.m_dict["weight"] = self._build_weight()
-        dpg.set_value("weight_display_text", self.m_dict["weight"])
+        # Keep the weight in step with the restored combos, and the combos in
+        # step with the project's task (an OBB project cannot use YOLOv5).
+        self._sync_obb_ui()
 
     def load_pr_dir(self):
         project_path = self.m_dict.get("project_path", "")
@@ -1074,10 +1068,12 @@ class yoru_train(GuiErrorMixin):
         family = self.m_dict.get("model_family", "YOLO")
         obb = bool(self.m_dict.get("obb"))
         if family == "YOLO":
-            prefix_map = {"YOLOv8": "yolov8", "YOLO11": "yolo11"}
-            prefix = prefix_map.get(self.m_dict.get("yolo_version", "YOLO11"), "yolo11")
+            version = self.m_dict.get("yolo_version", "YOLO11")
+            prefix_map = {"YOLOv5": "yolov5", "YOLOv8": "yolov8", "YOLO11": "yolo11"}
+            prefix = prefix_map.get(version, "yolo11")
             size = self.m_dict.get("yolo_size", "s")
-            suffix = "-obb" if obb else ""
+            # YOLOv5 has no -obb weight; _sync_obb_ui keeps it out of OBB projects.
+            suffix = "-obb" if obb and version in OBB_CAPABLE_YOLO_VERSIONS else ""
             return f"{prefix}{size}{suffix}.pt"
         elif family == "RT-DETR":
             size = self.m_dict.get("rtdetr_size", "l")
@@ -1109,11 +1105,15 @@ class yoru_train(GuiErrorMixin):
             dpg.configure_item("yolo_options_group",   show=True)
             dpg.configure_item("rtdetr_options_group", show=False)
             dpg.configure_item("tv_options_group",     show=False)
+        if obb and self.m_dict.get("yolo_version") not in OBB_CAPABLE_YOLO_VERSIONS:
+            self.m_dict["yolo_version"] = "YOLO11"
+            dpg.set_value("yolo_version_combo", "YOLO11")
         dpg.set_value(
             "obb_note",
             "OBB project: only YOLOv8 / YOLO11 have a rotated-box head, so the "
-            "model family is fixed to YOLO. labelImg will read and write "
-            "YOLO-OBB labels (8 coordinates per line)." if obb else "",
+            "model is fixed to one of them (not YOLOv5, RT-DETR or the "
+            "torchvision models). labelImg will read and write YOLO-OBB labels "
+            "(8 coordinates per line)." if obb else "",
         )
         self.m_dict["weight"] = self._build_weight()
         dpg.set_value("weight_display_text", self.m_dict["weight"])
@@ -1147,7 +1147,15 @@ class yoru_train(GuiErrorMixin):
         dpg.set_value("weight_display_text", self.m_dict["weight"])
 
     def select_version(self):
-        self.m_dict["yolo_version"] = dpg.get_value("yolo_version_combo")
+        version = dpg.get_value("yolo_version_combo")
+        if self.m_dict.get("obb") and version not in OBB_CAPABLE_YOLO_VERSIONS:
+            # As select_family: refuse now rather than fail at training time.
+            dpg.set_value("yolo_version_combo", self.m_dict.get("yolo_version", "YOLO11"))
+            self._sync_obb_ui()
+            print(f"[yoru] This is an OBB project; {version} has no oriented-box "
+                  "model. Use YOLOv8 or YOLO11.")
+            return
+        self.m_dict["yolo_version"] = version
         self.m_dict["weight"] = self._build_weight()
         dpg.set_value("weight_display_text", self.m_dict["weight"])
 
@@ -1233,11 +1241,17 @@ class yoru_train(GuiErrorMixin):
             target=terminate_process_tree, args=(proc,), daemon=True,
         ).start()
 
-    def _monitor_training(self, proc, total_epochs: int) -> None:
-        """Read subprocess stdout line by line, parse epoch progress, update m_dict."""
+    def _monitor_training(self, proc, total_epochs: int, epoch_base: int = 1) -> None:
+        """Read subprocess stdout line by line, parse epoch progress, update m_dict.
+
+        *epoch_base* is the number the trainer prints for its first epoch
+        (``TrainerBase.epoch_base``): yolov5 prints ``0/299`` where ultralytics
+        prints ``1/300``, and both are shown here as epoch 1 of 300.
+        """
         # Matches: "Epoch [1/50]" (torchvision) or "      1/100 " (ultralytics/yolov5)
         torchvision_re = re.compile(r"Epoch\s*\[\s*(\d+)/(\d+)\s*\]")
         ultralytics_re = re.compile(r"^\s+(\d+)/(\d+)\s")
+        offset = 1 - int(epoch_base)
 
         # Ultralytics redraws its progress bar with a carriage return, which
         # the pipe translates into a newline: echo through ProgressPrinter so
@@ -1261,8 +1275,8 @@ class yoru_train(GuiErrorMixin):
                     tail_lines.append(line.rstrip())
                 m = torchvision_re.search(line) or ultralytics_re.match(line)
                 if m:
-                    current = int(m.group(1))
-                    total   = int(m.group(2))
+                    current = int(m.group(1)) + offset
+                    total   = int(m.group(2)) + offset
                     if start_time is None:
                         start_time = time.monotonic()
                         start_epoch = current - 1
@@ -1356,7 +1370,9 @@ class yoru_train(GuiErrorMixin):
             self.m_dict["train_output_tail"] = ""
             self.m_dict["training_active"] = True
             t = threading.Thread(
-                target=self._monitor_training, args=(proc, total), daemon=True,
+                target=self._monitor_training,
+                args=(proc, total, getattr(trainer, "epoch_base", 1)),
+                daemon=True,
             )
             t.start()
         except Exception as e:

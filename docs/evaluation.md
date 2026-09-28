@@ -5,8 +5,13 @@
 2. Load a project config.yaml file and a model.
     
     > The model is in the "exp_<model name>" folder of the project, e.g.
-    > `exp_yolo11s/weights/best.pt` or `exp_fasterrcnn/fasterrcnn_best.pt`.
+    > `exp_yolov5s/weights/best.pt`, `exp_yolo11s/weights/best.pt` or
+    > `exp_fasterrcnn/fasterrcnn_best.pt`.
     > Training the same model again creates `exp_yolo11s2`, `exp_yolo11s3`, ...
+
+    > A model trained with YORU v1 (`exp/weights/best.pt`) can be loaded as
+    > it is: YORU recognises a YOLOv5 model by the file itself, whatever it
+    > is called, and runs it with the same YOLOv5 code v1 used.
 
 3. Extract frames for labeling using Grab GUI. 
 

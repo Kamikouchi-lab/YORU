@@ -33,6 +33,24 @@ full traceback even when the on-screen popup or console only shows a summary.
 It has **no** GUI/OpenCV dependency, so it is safe to import early and to
 unit-test headlessly.
 
+## Bundled YOLOv5 — do not remove
+
+`yoru/libs/yolov5/` is a vendored copy of ultralytics/yolov5 (the copy YORU
+v1.1.2 shipped, with v1's patches). It is the only code that can load a YOLOv5
+checkpoint — every model trained with YORU v1, and the models of the YORU
+paper — and it runs YOLOv5 training. The `ultralytics` package is **not** a
+substitute: it refuses these checkpoints, and its `yolov5*u` models are a
+different network. Never route YOLOv5 to ultralytics or offer `yolov5*u`.
+
+- Entry points: `yoru/libs/yolov5_support.py` (path handling),
+  `yoru/libs/plugins/yolov5_detector.py`, `yoru/libs/plugins/yolov5_trainer.py`,
+  `yoru/libs/train_yolov5.py` (runs the bundled `train.py`).
+- A YOLOv5 checkpoint is recognised by its pickle contents
+  (`plugins._sniff_checkpoint`), whatever the file is called.
+- Inference must stay identical to v1 (BGR frame passed straight to
+  `AutoShape`); `tests/test_yolov5_backend.py::test_detections_match_yoru_v1`
+  checks it against v1's `torch.hub.load` path.
+
 ## Environment
 
 The primary interpreter is the conda `yoru` env

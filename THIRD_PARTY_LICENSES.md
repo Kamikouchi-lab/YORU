@@ -91,6 +91,28 @@ Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency
     classes file / save directory), and a fix for a settings file written by a
     different labelImg build
 
+### YOLOv5
+
+- **Location:** `yoru/libs/yolov5/`
+- **License:** AGPL-3.0
+- **Copyright:** Ultralytics
+- **License file:** `yoru/libs/yolov5/LICENSE`
+- **Upstream:** https://github.com/ultralytics/yolov5
+- **Why bundled:** it is the only code that can load a YOLOv5 checkpoint
+  (every model trained with YORU v1) and the code YOLOv5 training runs; the
+  `ultralytics` package refuses these checkpoints. The copy is the one YORU
+  v1.1.2 shipped, unchanged.
+- **Modifications** (all made for YORU v1):
+  - `torch.load(..., weights_only=False)` wherever checkpoints are read, for
+    PyTorch 2.6+
+  - `torch.cuda.amp.autocast` replaced by `torch.amp.autocast("cuda", ...)`;
+    `models/common.py` (`AutoShape.forward`) runs inference under CUDA
+    autocast unconditionally
+  - `utils/general.py`: the `pkg_resources` deprecation warning is silenced,
+    and `check_font` copies a local system font instead of downloading one
+  - `utils/torch_utils.py`: MPS detected with `torch.backends.mps` instead
+    of the removed `torch.has_mps`
+
 ### Click to Box engine
 
 - **Location:** `yoru/libs/click_segment.py`
@@ -120,7 +142,7 @@ Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency
 
 ### Copyleft Licenses
 
-1. **AGPL-3.0** (ultralytics, ultralytics-thop)
+1. **AGPL-3.0** (ultralytics, ultralytics-thop, bundled yolov5)
    - YORU itself is licensed under AGPL-3.0, so these are compatible.
    - Source code disclosure is required when distributing or serving over a network.
 

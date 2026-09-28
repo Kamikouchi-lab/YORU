@@ -17,7 +17,28 @@ def test_config_template_exists(repo_root: Path):
     cfg = repo_root / "config" / "template.yaml"
     assert cfg.exists(), "config/template.yaml not found"
 
-def test_yolov5_local_copy_removed(repo_root: Path):
-    """YOLOv5 is now provided via the ultralytics pip package, not a local copy."""
+def test_bundled_yolov5_is_present(repo_root: Path):
+    """The bundled ultralytics/yolov5 code must stay.
+
+    It is the only code that can load a YOLOv5 checkpoint -- every model YORU
+    v1 trained -- and the code YOLOv5 training runs.  The ultralytics package
+    is no replacement: it refuses these checkpoints, and its yolov5*u models
+    are a different network.  v2.0 beta shipped without this copy and could
+    not use a single v1 model.
+    """
     yv5 = repo_root / "yoru" / "libs" / "yolov5"
-    assert not yv5.exists(), "yoru/libs/yolov5/ should be removed; use ultralytics package instead"
+    for rel in (
+        "train.py",
+        "val.py",
+        "hubconf.py",
+        "requirements.txt",
+        "LICENSE",
+        "models/common.py",
+        "models/yolo.py",
+        "models/experimental.py",
+        "utils/general.py",
+        "utils/dataloaders.py",
+        "data/hyps/hyp.scratch-low.yaml",
+        "models/yolov5s.yaml",
+    ):
+        assert (yv5 / rel).is_file(), f"yoru/libs/yolov5/{rel} missing (bundled YOLOv5)"

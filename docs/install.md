@@ -192,4 +192,4 @@ launching, or use the device selector in the training GUI. An unavailable
 device falls back to the next best one, with a warning in
 `~/.yoru/logs/yoru.log` (`%USERPROFILE%\.yoru\logs\yoru.log` on Windows).
 
-`YORU_DEVICE` covers YOLOv8, YOLO11, RT-DETR and the torchvision detectors.
+`YORU_DEVICE` covers YOLOv5, YOLOv8, YOLO11, RT-DETR and the torchvision detectors.

@@ -9,7 +9,7 @@ export_name: "copulation_innervation_task_01" # Base file name of the output vid
 model:
  yolo_detection: False # Start inference immediately after the real-time process opens
  yolo_model_path: "Path to YORU model" # Specify the YORU model (.pt / .onnx file)
- yolo_model_type: "auto" # Model type: "auto", "yolov8", "yolo11", "rtdetr", "fasterrcnn", "maskrcnn", "ssd", "onnx"
+ yolo_model_type: "auto" # Model type: "auto", "yolov5", "yolov8", "yolo11", "rtdetr", "fasterrcnn", "maskrcnn", "ssd", "onnx"
  Trigger: False
 
 capture_style:

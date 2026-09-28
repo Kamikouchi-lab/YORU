@@ -55,8 +55,9 @@ def test_unknown_backend_reports_what_is_available():
     [
         ("yolov8", "ultralytics"),
         ("yolo11", "ultralytics"),
-        # v1 configs still say yolov5; it must not become an unknown backend.
-        ("yolov5", "ultralytics"),
+        # v1 configs say yolov5; it is a backend of its own, never ultralytics,
+        # which cannot read a YOLOv5 checkpoint.
+        ("yolov5", "yolov5"),
         ("fasterrcnn", "torchvision"),
         ("maskrcnn", "torchvision"),
         ("ssd", "torchvision"),
@@ -77,6 +78,8 @@ def test_backend_aliases(config_value, expected):
         ("ssd_vgg16_best.pt", "torchvision"),
         ("yolo11s.pt", "ultralytics"),
         ("yolov8m.pt", "ultralytics"),
+        # Not on disk yet: the bundled YOLOv5 downloads the real release.
+        ("yolov5s.pt", "yolov5"),
     ],
 )
 def test_auto_detect_backend_from_filename(filename, expected):
@@ -99,6 +102,8 @@ def test_sniff_checkpoint_handles_a_missing_file():
     "m_dict,expected",
     [
         ({"model_family": "YOLO", "weight": "yolo11s.pt"}, "ultralytics"),
+        ({"model_family": "YOLO", "weight": "yolov5s.pt"}, "yolov5"),
+        ({"model_family": "YOLO", "weight": "yolov8n.pt"}, "ultralytics"),
         ({"model_family": "RT-DETR", "weight": "rtdetr-l.pt"}, "ultralytics"),
         ({"model_family": "Faster R-CNN"}, "torchvision"),
         ({"model_family": "Mask R-CNN"}, "torchvision"),
