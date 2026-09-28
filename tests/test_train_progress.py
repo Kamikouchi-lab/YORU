@@ -122,6 +122,113 @@ def test_byte_download_bar_completion_is_kept():
     assert ProgressPrinter.is_redraw(end) is False
 
 
+# -- YOLOv5 (tqdm) -----------------------------------------------------------
+
+V5_HEADER = ("%11s" * 7) % (
+    "Epoch", "GPU_mem", "box_loss", "obj_loss", "cls_loss", "Instances", "Size"
+)
+V5_VAL_HEADER = ("%22s" + "%11s" * 6) % (
+    "Class", "Images", "Instances", "P", "R", "mAP50", "mAP50-95"
+)
+V5_BAR_FORMAT = "{l_bar}{bar:10}{r_bar}"  # yolov5 utils.general.TQDM_BAR_FORMAT
+
+
+def _yolov5_epoch_writes(epoch: int, batches: int = 3, ascii=None) -> str:
+    """What yolov5's train.py and val.py write for one epoch, drawn by tqdm.
+
+    ``mininterval=0`` makes tqdm draw on every update, so the finished bar is
+    drawn twice -- by the last update and again by close() -- as it is
+    whenever the last batch comes more than 0.1 s after the previous draw.
+    """
+    from tqdm import tqdm
+
+    out = io.StringIO()
+    out.write("\n" + V5_HEADER + "\n")
+    pbar = tqdm(range(batches), total=batches, bar_format=V5_BAR_FORMAT,
+                file=out, mininterval=0, ascii=ascii)
+    for i in pbar:
+        pbar.set_description(("%11s" * 2 + "%11.4g" * 5) % (
+            f"{epoch}/299", "3.54G", 0.0677 - i / 100, 0.0185, 0.009944, 51 - i, 640,
+        ))
+    pbar.close()
+    for _ in tqdm(range(1), desc=V5_VAL_HEADER, bar_format=V5_BAR_FORMAT,
+                  file=out, mininterval=0, ascii=ascii):
+        pass
+    out.write(("%22s" + "%11i" * 2 + "%11.3g" * 4) % ("all", 3, 6, 0.47, 0.667, 0.537, 0.113) + "\n")
+    return out.getvalue()
+
+
+def test_yolov5_bar_detection():
+    ascii_bar = "     60/299      3.54G     0.0677     0.0185   0.009944         51        640:  50%|#####     | 1/2 [00:00<00:00,  9.69it/s]"
+    unicode_bar = "     60/299      3.54G     0.0677     0.0185   0.009944         51        640:  50%|█████     | 1/2 [00:00<00:00,  9.69it/s]"
+    done_bar = "     60/299      3.54G     0.0688    0.02932    0.01008          7        640: 100%|##########| 2/2 [00:00<00:00, 11.32it/s]"
+    assert ProgressPrinter.step_progress(ascii_bar) == (1, 2)
+    assert ProgressPrinter.step_progress(unicode_bar) == (1, 2)
+    assert ProgressPrinter.step_progress("  0%|          | 0/2 [00:00<?, ?it/s]") == (0, 2)
+    assert ProgressPrinter.is_redraw(ascii_bar) is True
+    assert ProgressPrinter.is_redraw(done_bar) is False
+    for line in (V5_HEADER, V5_VAL_HEADER,
+                 "                   all          3          6       0.47      0.667      0.537      0.113"):
+        assert ProgressPrinter.bar_state(line) is None
+
+
+def test_yolov5_byte_bar_uses_its_percentage():
+    """yolov5 fetching weights counts bytes: "14.1M/14.1M", no integer n/N."""
+    mid = "yolov5s.pt:  40%|####      | 5.62M/14.1M [00:00<00:00, 30.1MB/s]"
+    end = "yolov5s.pt: 100%|##########| 14.1M/14.1M [00:00<00:00, 30.1MB/s]"
+    assert ProgressPrinter.is_redraw(mid) is True
+    assert ProgressPrinter.is_redraw(end) is False
+
+
+def test_yolov5_one_row_per_bar_on_a_terminal():
+    for ascii in (True, False):  # "#" on a cp932 pipe, block glyphs on UTF-8
+        raw = _yolov5_epoch_writes(0, ascii=ascii) + _yolov5_epoch_writes(1, ascii=ascii)
+        rows = _render(_run(raw, in_place=True))
+        assert rows == [
+            "",
+            V5_HEADER,
+            rows[2],
+            rows[3],
+            rows[4],
+            "",
+            V5_HEADER,
+            rows[7],
+            rows[8],
+            rows[9],
+            "",
+        ], rows
+        for epoch, (train, val, metrics) in enumerate((rows[2:5], rows[7:10])):
+            assert train.split()[0] == f"{epoch}/299" and "| 3/3 [" in train
+            assert val.startswith(V5_VAL_HEADER) and "| 1/1 [" in val
+            assert metrics.lstrip().startswith("all")
+
+
+def test_yolov5_finished_bar_is_printed_once_when_redirected():
+    raw = _yolov5_epoch_writes(0) + _yolov5_epoch_writes(1)
+    # The premise: tqdm draws each finished bar twice.
+    assert sum("| 3/3 [" in line for line in _through_pipe(raw)) == 4
+    out = _run(raw, in_place=False)
+
+    assert "\r" not in out
+    rows = [r for r in out.split("\n") if r]
+    assert len(rows) == 8  # per epoch: header, train bar, val bar, metrics
+    assert sum("| 3/3 [" in r for r in rows) == 2
+    assert sum("| 1/1 [" in r for r in rows) == 2
+    assert "| 0/3 [" not in out and "| 2/3 [" not in out
+
+
+def test_the_next_epoch_is_not_mistaken_for_a_second_draw():
+    """Only a draw of the *same* bar replaces a finished one."""
+    first = "      0/299      3.54G     0.0677: 100%|##########| 2/2 [00:00<00:00, 9.1it/s]"
+    second = "      1/299      3.54G     0.0621: 100%|##########| 2/2 [00:00<00:00, 9.3it/s]"
+    out = io.StringIO()
+    printer = ProgressPrinter(stream=out, in_place=False)
+    for line in (first, second):
+        printer.write(line)
+    printer.close()
+    assert out.getvalue() == first + "\n" + second + "\n"
+
+
 def test_epoch_header_and_summaries_are_never_redraws():
     for line in (HEADER, "3 epochs completed in 0.001 hours.",
                  "Results saved to runs/detect/train", "Epoch [1/50] Avg Loss: 0.42"):

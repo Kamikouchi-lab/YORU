@@ -1255,9 +1255,10 @@ class yoru_train(GuiErrorMixin):
         ultralytics_re = re.compile(r"^\s+(\d+)/(\d+)\s")
         offset = 1 - int(epoch_base)
 
-        # Ultralytics redraws its progress bar with a carriage return, which
-        # the pipe translates into a newline: echo through ProgressPrinter so
-        # the console keeps one line per epoch instead of one per batch.
+        # Ultralytics and yolov5's tqdm redraw their progress bars with a
+        # carriage return, which the pipe translates into a newline: echo
+        # through ProgressPrinter so the console keeps one line per bar
+        # instead of one per batch.
         printer = ProgressPrinter()
 
         self.m_dict["train_epoch"] = 0
