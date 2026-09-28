@@ -317,23 +317,31 @@ def test_an_explicit_setting_outranks_the_environment(monkeypatch):
 
 
 class _Recorder:
-    """Stands in for AutoShape: records the frame it is given, detects nothing."""
+    """Stands in for AutoShape: records the frame it is given, returns *rows*."""
 
-    class _NoBoxes:
+    class _Rows:
+        def __init__(self, rows):
+            self.rows = rows
+
         def cpu(self):
             return self
 
         def tolist(self):
-            return []
+            return self.rows
+
+    def __init__(self, rows=()):
+        self.rows = [list(r) for r in rows]
+        self.names = {0: "fly", 1: "copulation"}
 
     def __call__(self, image):
         self.seen = image
-        return types.SimpleNamespace(xyxy=[self._NoBoxes()])
+        return types.SimpleNamespace(xyxy=[self._Rows(self.rows)])
 
 
-def _detector_with(rgb):
+def _detector_with(rgb=False, rows=(), conf_thresh=0.25):
     detector = v5det.YOLOv5Detector()
-    detector._model, detector._names, detector._rgb = _Recorder(), {}, rgb
+    detector._model, detector._names, detector._rgb = _Recorder(rows), {}, rgb
+    detector._conf_thresh = conf_thresh
     return detector
 
 
@@ -360,6 +368,40 @@ def test_a_grey_frame_is_left_alone_in_rgb_mode():
     detector = _detector_with(rgb=True)
     detector.detect(grey)
     assert detector._model.seen is grey
+
+
+# ---------------------------------------------------------------------------
+# Confidence threshold: after NMS above 0.25, as v1 applied it
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("requested,nms", [(0.5, 0.25), (0.25, 0.25), (0.1, 0.1)])
+def test_nms_runs_at_v1s_threshold_unless_asked_for_less(monkeypatch, requested, nms):
+    """v1's NMS always ran at 0.25; a higher threshold came after it.
+
+    Running NMS at the higher threshold changes the candidate set, and with
+    fp16 scores tied boxes then resolve differently: v1 fly-video analysis at
+    0.5 differed in 2 of 355 boxes until NMS stayed at 0.25.
+    """
+    pytest.importorskip("torch")
+    fake = _Recorder()
+    monkeypatch.setattr(v5det, "load_yolov5_model", lambda path, device: fake)
+    monkeypatch.delenv(v5det.RGB_ENV_VAR, raising=False)
+    v5det.YOLOv5Detector().load("best.pt", conf_thresh=requested, device="cpu")
+    assert fake.conf == nms
+    assert fake.iou == plugins.DEFAULT_IOU_THRESH
+
+
+def test_a_higher_threshold_is_applied_after_nms():
+    rows = [(0, 0, 10, 10, 0.30, 0), (5, 5, 20, 20, 0.50, 1), (1, 1, 9, 9, 0.80, 0)]
+    detector = _detector_with(rows=rows, conf_thresh=0.5)
+    # Kept at and above the threshold, as v1's "conf < threshold: skip".
+    assert [d["conf"] for d in detector.detect(_frame())] == [0.50, 0.80]
+
+
+def _frame():
+    np = pytest.importorskip("numpy")
+    return np.zeros((4, 6, 3), np.uint8)
 
 
 # ---------------------------------------------------------------------------

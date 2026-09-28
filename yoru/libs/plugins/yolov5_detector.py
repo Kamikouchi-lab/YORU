@@ -23,6 +23,14 @@ here that it gave there:
   most 1000 boxes, and CUDA autocast (fp16) around inference -- a YORU v1
   change to ``models/common.py`` that this copy keeps.  The conf / IoU
   thresholds are the shared 0.25 / 0.45, which are AutoShape's defaults too.
+* A higher confidence threshold (the analysis GUI's) is applied after NMS,
+  not inside it, because that is where v1 applied it: v1's NMS always ran at
+  0.25.  The difference is not academic.  Under autocast the scores are fp16,
+  so neighbouring anchors often tie exactly, and which of two tied boxes NMS
+  keeps depends on the whole candidate set.  Running NMS at the GUI threshold
+  instead kept, now and then, a neighbour a fraction of a pixel away (2 of
+  355 boxes in a v1 fly video at threshold 0.5).  A threshold below 0.25,
+  which v1 could not honour, goes into NMS as it does for the other backends.
 
 This is not ultralytics' ``yolov5*u`` family, which is a different network
 (anchor-free, YOLOv8 head) and cannot load these checkpoints.
@@ -51,6 +59,10 @@ from yoru.libs.yolov5_support import yolov5_importable
 #: that realtime detection, analysis, evaluation and auto-labelling all run a
 #: model the same way.
 RGB_ENV_VAR = "YORU_YOLOV5_RGB"
+
+#: The confidence threshold v1's NMS always ran at (AutoShape's default).
+#: A higher requested threshold is applied after NMS; see the module docstring.
+V1_NMS_CONF = 0.25
 
 _TRUE = ("1", "true", "yes", "on")
 _FALSE = ("", "0", "false", "no", "off")
@@ -123,7 +135,8 @@ class YOLOv5Detector(DetectorBase):
         # backends; "auto" is CUDA:0 when there is one, as v1 used.
         self._device = torch_device(kwargs.get("device", "auto"))
         self._model = load_yolov5_model(model_path, self._device)
-        self._model.conf = float(kwargs.get("conf_thresh", DEFAULT_CONF_THRESH))
+        self._conf_thresh = float(kwargs.get("conf_thresh", DEFAULT_CONF_THRESH))
+        self._model.conf = min(self._conf_thresh, V1_NMS_CONF)
         self._model.iou = float(kwargs.get("iou_thresh", DEFAULT_IOU_THRESH))
 
         names = self._model.names
@@ -152,6 +165,10 @@ class YOLOv5Detector(DetectorBase):
 
         detections = []
         for x1, y1, x2, y2, conf, cls in pred.tolist():
+            if conf < self._conf_thresh:
+                # Above V1_NMS_CONF, the threshold applies after NMS, as the
+                # v1 analysis applied it ("conf < threshold: skip").
+                continue
             cid = int(cls)
             # Upright boxes only: YOLOv5 has no rotated-box head, and
             # yoru.libs.detector_base.obb_of derives the oriented columns.
