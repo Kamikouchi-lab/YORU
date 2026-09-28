@@ -197,7 +197,9 @@ between `y_center` and `confidence`.
 
 **One limitation to know about.** The evaluation sub-module
 ([Evaluate models](evaluation.md)) reads OBB label files, but computes IoU on
-the *upright* box around each rotated one. Two boxes that overlap perfectly as
-rectangles but differ in angle therefore score lower than they should, which
-makes the mAP it reports for an OBB model conservative. The rotated mAP that
+the *upright* box around each rotated one, so the angle is not evaluated at
+all. The mAP it reports for an OBB model is not a bound in either direction,
+and for elongated, tilted animals it is usually *too high*: a 100×10 box at
++45° and the same box at −45° share one upright box and score an IoU of 1.0,
+although as rotated boxes they barely overlap. The rotated mAP that
 ultralytics prints at the end of training is the figure to quote.

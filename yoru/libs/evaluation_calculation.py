@@ -113,10 +113,11 @@ class ModelValidation:
         here to the upright box around them.
 
         **The IoU below is therefore the upright-box IoU, for OBB datasets as
-        well.**  Two boxes that overlap perfectly as rectangles but differ in
-        angle score lower than they should, so an OBB model's mAP from this
-        tool is a conservative figure, not the rotated mAP ultralytics reports
-        at the end of training.  Rotated IoU is a separate piece of work; what
+well.**  The angle is not evaluated, so an OBB model's mAP from this tool
+        is not a bound either way and is usually too high for elongated, tilted
+        boxes (the same box at +45 and -45 degrees shares one upright box and
+        scores IoU 1.0); it is not the rotated mAP ultralytics reports at the
+        end of training.  Rotated IoU is a separate piece of work; what
         matters here is that an OBB dataset evaluates at all rather than
         failing on an unpackable line.
         """
