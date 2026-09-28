@@ -102,7 +102,9 @@ def test_a_pre_zip_yolov5_checkpoint_is_recognised(tmp_path, monkeypatch):
 
 
 def test_yolov5_weights_train_with_the_bundled_yolov5():
-    for weight in ("yolov5s.pt", "yolov5x.pt", r"C:\models\yolov5m.pt"):
+    # Built for the running platform: os.path.basename does not split on a
+    # backslash off Windows.
+    for weight in ("yolov5s.pt", "yolov5x.pt", os.path.join("models", "yolov5m.pt")):
         assert plugins.detect_trainer_backend(
             {"model_family": "YOLO", "weight": weight}
         ) == "yolov5"
@@ -151,7 +153,9 @@ def test_a_foreign_utils_module_is_reported_not_used(monkeypatch, tmp_path):
 
 def test_the_run_is_named_after_the_model():
     assert tv5.run_name("yolov5s.pt") == "exp_yolov5s"
-    assert tv5.run_name(r"C:\w\yolov5m.pt") == "exp_yolov5m"
+    # Built for the running platform: Path does not split on a backslash off
+    # Windows.
+    assert tv5.run_name(os.path.join("w", "yolov5m.pt")) == "exp_yolov5m"
 
 
 @pytest.mark.parametrize(

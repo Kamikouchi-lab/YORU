@@ -66,6 +66,12 @@ print("NATIVE_QUIT_OK")
 
 
 @pytest.mark.gui
+# Off Windows and macOS, DearPyGui's GLFW opens its window on an X server; a
+# headless Linux runner has none, and GLFW aborts the process without one.
+@pytest.mark.skipif(
+    sys.platform not in ("win32", "darwin") and not os.environ.get("DISPLAY"),
+    reason="no X display (DISPLAY is unset)",
+)
 @pytest.mark.parametrize("module_name,class_name,setup", GUIS)
 def test_native_quit_button_exits_process(repo_root, tmp_path, module_name, class_name, setup):
     env = dict(os.environ, YORU_HOME=str(tmp_path / "home"))
