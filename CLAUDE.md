@@ -47,9 +47,10 @@ different network. Never route YOLOv5 to ultralytics or offer `yolov5*u`.
   `yoru/libs/train_yolov5.py` (runs the bundled `train.py`).
 - A YOLOv5 checkpoint is recognised by its pickle contents
   (`plugins._sniff_checkpoint`), whatever the file is called.
-- Inference must stay identical to v1 (BGR frame passed straight to
-  `AutoShape`); `tests/test_yolov5_backend.py::test_detections_match_yoru_v1`
-  checks it against v1's `torch.hub.load` path.
+- Inference must stay identical to v1 by default (BGR frame passed straight
+  to `AutoShape`; RGB only when `YORU_YOLOV5_RGB=1` or `rgb_input=True`);
+  `tests/test_yolov5_backend.py::test_detections_match_yoru_v1` checks both
+  against v1's `torch.hub.load` path.
 
 ## Environment
 

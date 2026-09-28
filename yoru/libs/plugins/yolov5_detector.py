@@ -15,8 +15,10 @@ here that it gave there:
   starts -- as soon as a device is named.
 * The frame is handed over unchanged.  v1 gave AutoShape the BGR frames OpenCV
   delivers, and AutoShape takes a numpy array as it is, so v1's models have
-  always been run on BGR frames.  Converting to RGB here would change their
-  detections.
+  always been run on BGR frames -- although yolov5 trains on RGB.  Converting
+  to RGB would change their detections, so it is opt-in: set
+  ``YORU_YOLOV5_RGB=1`` (or pass ``rgb_input=True`` to ``get_detector``).
+  Which order a model was run with is written to the YORU log.
 * Everything else is the bundled AutoShape's, as in v1: 640 px letterbox, at
   most 1000 boxes, and CUDA autocast (fp16) around inference -- a YORU v1
   change to ``models/common.py`` that this copy keeps.  The conf / IoU
@@ -29,6 +31,8 @@ Requires the bundled ``yoru/libs/yolov5`` and the packages in its
 requirements.txt, all of which are YORU dependencies already.
 """
 
+import logging
+import os
 from pathlib import Path
 
 from yoru.libs.detector_base import DetectorBase
@@ -39,7 +43,40 @@ from yoru.libs.plugins import (
     _sniff_checkpoint,
     register_detector,
 )
+from yoru.libs.user_paths import log_message
 from yoru.libs.yolov5_support import yolov5_importable
+
+#: Environment variable that switches YOLOv5 models to RGB frames.  An
+#: environment variable rather than a per-GUI setting, like YORU_DEVICE, so
+#: that realtime detection, analysis, evaluation and auto-labelling all run a
+#: model the same way.
+RGB_ENV_VAR = "YORU_YOLOV5_RGB"
+
+_TRUE = ("1", "true", "yes", "on")
+_FALSE = ("", "0", "false", "no", "off")
+
+
+def rgb_input_requested(value=None) -> bool:
+    """Whether YOLOv5 models get RGB frames rather than v1's BGR ones.
+
+    *value* (``get_detector(..., rgb_input=...)``) wins when given; otherwise
+    ``$YORU_YOLOV5_RGB`` decides.  Anything unrecognised keeps v1's BGR, with
+    a warning, since a typo must not silently change every detection.
+    """
+    if value is None:
+        value = os.environ.get(RGB_ENV_VAR, "")
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in _TRUE:
+        return True
+    if text not in _FALSE:
+        log_message(
+            f"{RGB_ENV_VAR}={value!r} is not understood (use 1 or 0); "
+            "YOLOv5 models get BGR frames, as in YORU v1",
+            logging.WARNING,
+        )
+    return False
 
 
 def load_yolov5_model(model_path, device):
@@ -95,12 +132,21 @@ class YOLOv5Detector(DetectorBase):
             names = dict(enumerate(names))
         self._names: dict = {int(k): str(v) for k, v in names.items()}
 
+        self._rgb = rgb_input_requested(kwargs.get("rgb_input"))
+        order = "RGB frames" if self._rgb else "BGR frames, as in YORU v1"
+        # Recorded, so that results can be traced back to how they were made.
+        print(f"[yoru] YOLOv5 model {Path(model_path).name}: {order}")
+        log_message(f"YOLOv5 model {model_path}: {order}")
+
     @property
     def names(self) -> dict:
         return self._names
 
     def detect(self, image) -> list:
-        # Unchanged BGR, as v1 passed it (see the module docstring).
+        # Unchanged BGR, as v1 passed it, unless RGB was asked for (see the
+        # module docstring).  A grey frame has no order to change.
+        if self._rgb and image.ndim == 3 and image.shape[2] >= 3:
+            image = image[..., 2::-1]  # BGR(A) -> RGB; AutoShape makes it contiguous
         results = self._model(image)
         pred = results.xyxy[0].cpu()
 

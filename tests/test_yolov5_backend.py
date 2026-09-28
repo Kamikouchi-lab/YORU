@@ -19,6 +19,7 @@ import pytest
 
 from yoru.libs import plugins, yolov5_support
 from yoru.libs import train_yolov5 as tv5
+from yoru.libs.plugins import yolov5_detector as v5det
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +286,79 @@ def test_yolov5_is_offered_for_training_but_not_for_obb():
 
 
 # ---------------------------------------------------------------------------
+# Channel order: BGR as in v1, RGB on request
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "env,expected",
+    [(None, False), ("", False), ("0", False), ("off", False),
+     ("1", True), ("true", True), ("Yes", True), ("ON", True),
+     # A typo keeps v1's behaviour rather than changing every detection.
+     ("rbg", False)],
+)
+def test_the_environment_variable_decides_the_channel_order(monkeypatch, env, expected):
+    if env is None:
+        monkeypatch.delenv(v5det.RGB_ENV_VAR, raising=False)
+    else:
+        monkeypatch.setenv(v5det.RGB_ENV_VAR, env)
+    assert v5det.rgb_input_requested() is expected
+
+
+def test_an_explicit_setting_outranks_the_environment(monkeypatch):
+    monkeypatch.setenv(v5det.RGB_ENV_VAR, "1")
+    assert v5det.rgb_input_requested(False) is False
+    monkeypatch.setenv(v5det.RGB_ENV_VAR, "0")
+    assert v5det.rgb_input_requested(True) is True
+
+
+class _Recorder:
+    """Stands in for AutoShape: records the frame it is given, detects nothing."""
+
+    class _NoBoxes:
+        def cpu(self):
+            return self
+
+        def tolist(self):
+            return []
+
+    def __call__(self, image):
+        self.seen = image
+        return types.SimpleNamespace(xyxy=[self._NoBoxes()])
+
+
+def _detector_with(rgb):
+    detector = v5det.YOLOv5Detector()
+    detector._model, detector._names, detector._rgb = _Recorder(), {}, rgb
+    return detector
+
+
+def test_frames_go_in_as_bgr_by_default():
+    np = pytest.importorskip("numpy")
+    frame = np.dstack([np.full((4, 6), c, np.uint8) for c in (10, 20, 30)])  # B, G, R
+    detector = _detector_with(rgb=False)
+    detector.detect(frame)
+    assert detector._model.seen is frame
+
+
+def test_frames_go_in_as_rgb_when_asked():
+    np = pytest.importorskip("numpy")
+    bgra = np.dstack([np.full((4, 6), c, np.uint8) for c in (10, 20, 30, 255)])
+    detector = _detector_with(rgb=True)
+    detector.detect(bgra)
+    assert detector._model.seen.shape == (4, 6, 3)
+    assert detector._model.seen[0, 0].tolist() == [30, 20, 10]  # R, G, B; alpha dropped
+
+
+def test_a_grey_frame_is_left_alone_in_rgb_mode():
+    np = pytest.importorskip("numpy")
+    grey = np.zeros((4, 6), np.uint8)
+    detector = _detector_with(rgb=True)
+    detector.detect(grey)
+    assert detector._model.seen is grey
+
+
+# ---------------------------------------------------------------------------
 # A real YOLOv5 model: the same detections as YORU v1
 # ---------------------------------------------------------------------------
 
@@ -299,7 +373,7 @@ def _yolov5_weights(repo_root: Path):
 
 
 @pytest.mark.slow
-def test_detections_match_yoru_v1(repo_root, tmp_path):
+def test_detections_match_yoru_v1(repo_root, tmp_path, monkeypatch):
     """The plugin must give exactly what v1's ``torch.hub.load`` path gave."""
     torch = pytest.importorskip("torch")
     cv2 = pytest.importorskip("cv2")
@@ -317,14 +391,20 @@ def test_detections_match_yoru_v1(repo_root, tmp_path):
     ckpt = tmp_path / "best.pt"
     ckpt.write_bytes(weights.read_bytes())
     cuda_env = os.environ.get("CUDA_VISIBLE_DEVICES")
+    # The default must be v1's BGR whatever the machine has set.
+    monkeypatch.delenv(v5det.RGB_ENV_VAR, raising=False)
     image = cv2.imread(str(yolov5_support.YOLOV5_DIR / "data" / "images" / "zidane.jpg"))
+
+    def boxes(detector, frame):
+        return [
+            [d["x1"], d["y1"], d["x2"], d["y2"], d["conf"], d["class_id"]]
+            for d in detector.detect(frame)
+        ]
 
     detector = plugins.get_detector("auto", str(ckpt))
     assert type(detector).__name__ == "YOLOv5Detector"
-    got = [
-        [d["x1"], d["y1"], d["x2"], d["y2"], d["conf"], d["class_id"]]
-        for d in detector.detect(image)
-    ]
+    got = boxes(detector, image)
+    got_rgb = boxes(plugins.get_detector("auto", str(ckpt), rgb_input=True), image)
     # Loading must not have pinned the process to a device, nor left the
     # yolov5 directory on the import path.
     assert os.environ.get("CUDA_VISIBLE_DEVICES") == cuda_env
@@ -344,8 +424,13 @@ def test_detections_match_yoru_v1(repo_root, tmp_path):
         else:
             os.environ["CUDA_VISIBLE_DEVICES"] = cuda_env
     expected = v1(image).xyxy[0].cpu().tolist()
+    # RGB mode is v1's model handed the channel-swapped frame, nothing more.
+    expected_rgb = v1(image[..., ::-1]).xyxy[0].cpu().tolist()
 
     assert detector.names == {int(k): v for k, v in dict(v1.names).items()}
-    assert len(got) == len(expected)
-    for g, e in zip(got, expected):
-        assert g == pytest.approx(e, abs=1e-4)
+    for mine, v1s in ((got, expected), (got_rgb, expected_rgb)):
+        assert len(mine) == len(v1s)
+        for g, e in zip(mine, v1s):
+            assert g == pytest.approx(e, abs=1e-4)
+    # And the two orders really do differ, or this would prove nothing.
+    assert got != got_rgb

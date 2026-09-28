@@ -233,6 +233,16 @@ On Apple Silicon, MPS clearly helps training, but it is *not* faster than the CP
 
 The Faster R-CNN / Mask R-CNN / SSD models need torchvision 0.29 or newer to train on MPS at all; earlier releases diverge to an infinite loss within one epoch. The uv environment pins a new enough build, but the conda environment may not, so YORU checks the installed version and falls back to the CPU with a message when it is too old.
 
+## YOLOv5 input channels
+
+YORU v1 gave its YOLOv5 models the frames exactly as OpenCV reads them, in BGR order, although YOLOv5 trains on RGB images. YORU v2 does the same by default, so a v1 model reproduces its v1 results. To give YOLOv5 models RGB frames instead, set `YORU_YOLOV5_RGB=1` before launching (`set YORU_YOLOV5_RGB=1` on Windows):
+
+```
+YORU_YOLOV5_RGB=1 uv run yoru
+```
+
+It applies to realtime detection, analysis, evaluation and auto-labelling alike, and only to YOLOv5 (the other models already convert the frames they need). Detections change with it, so do not mix the two settings within one study. Which setting a model was run with is written to `~/.yoru/logs/yoru.log`.
+
 # Learn about YORU
 - [User guides](https://kamikouchi-lab.github.io/YORU_doc/guides/01-install/)
 
