@@ -13,6 +13,8 @@ class init_evaluater:
         self.m_dict["back_to_home"] = False
         self.m_dict["result_dir"] = ""
         self.m_dict["data_dir"] = ""
+        # Set from the project's config.yaml by load_pr_dir.
+        self.m_dict["obb"] = False
 
     def __del__(self):
         print("== Initialization finished ==.")

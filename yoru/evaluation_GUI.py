@@ -13,6 +13,7 @@ import yaml
 
 from yoru.gui_base import apply_default_theme, process_frame as _process_frame
 from yoru.gui_layout import GuiSession
+from yoru.libs.create_yaml_train import is_obb_project
 from yoru.libs.evaluation_calculation import Evaluator, EvaluationImageAnalyzer
 from yoru.libs.file_operation_create_label import file_dialog_tk
 from yoru.libs.gui_error import GuiErrorMixin
@@ -210,6 +211,9 @@ class model_eval_gui(GuiErrorMixin):
             with open(cfg, "r") as yf:
                 data = yaml.safe_load(yf)
             self.m_dict["project_dir"] = data["project_dir"]
+            # The project decides the annotation format, the same as in the
+            # training GUI; labelImg is told explicitly in labelImg_bt.
+            self.m_dict["obb"] = is_obb_project(data)
 
             if data.get("evaluation_info_date"):
                 # Load existing evaluation information
@@ -266,8 +270,30 @@ class model_eval_gui(GuiErrorMixin):
         dpg.set_value("step2_state", "Complete!!")
 
     def labelImg_bt(self):
+        """Open the bundled labelImg on the evaluation images.
+
+        The bundled copy (``-m yoru.labelimg.labelimg``), not the ``labelImg``
+        on PATH: the two share ``~/.labelImgSettings.pkl``, and once the
+        bundled one has saved its settings the upstream one fails to start
+        wherever ``yoru`` is importable (the uv install).  Upstream also cannot
+        read YOLO-OBB labels.  ``--obb`` / ``--no-obb`` is always passed, so
+        the format follows the loaded project.
+        """
+        cmd = [sys.executable, "-m", "yoru.labelimg.labelimg"]
+        data_dir = self.m_dict.get("data_dir") or ""
+        if data_dir and os.path.isdir(data_dir):
+            classes_txt = os.path.join(data_dir, "classes.txt")
+            cmd += [
+                data_dir,
+                classes_txt if os.path.isfile(classes_txt) else "",
+                data_dir,
+            ]
+        cmd.append("--obb" if self.m_dict.get("obb") else "--no-obb")
+
         try:
-            subprocess.Popen(["labelImg"])
+            # Popen, not call, so the GUI keeps rendering.
+            subprocess.Popen(cmd, cwd=os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))))
         except OSError as e:
             self._report_error("Failed to launch LabelImg", e)
             dpg.set_value("step3_state", "Error")
