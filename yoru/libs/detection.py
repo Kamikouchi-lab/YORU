@@ -4,11 +4,11 @@
 import logging
 import time
 
-import cv2
 import numpy as np
 
 from yoru.libs.detector_base import DETECTION_COLUMNS, detection_row
 from yoru.libs.plugins import get_detector
+from yoru.libs.realtime_state import clear_detection
 
 logger = logging.getLogger(__name__)
 
@@ -21,64 +21,66 @@ class yolo_detection:
         self.colormap = {}
 
     def detect(self, m_dict):
-        logger.info("YOLO detection start...")
-
-        while True:
-            try:
-                if not self.m_dict.get("yolo_process_state", False):
-                    if self.m_dict.get("quit", False):
-                        break
-                    time.sleep(0.01)
-                    continue
-
-                self.m_dict = m_dict
-                self.yolo_model_path = self.m_dict["yolo_model"]
-                logger.info("Model: %s", self.m_dict["yolo_model"])
-
-                # Determine which detector backend to use.
-                # "detector_backend" takes priority; fall back to "yolo_model_type".
-                backend = self.m_dict.get(
-                    "detector_backend",
-                    self.m_dict.get("yolo_model_type", "auto"),
-                )
-                self.detector = get_detector(backend, self.yolo_model_path)
-
-                self.m_dict["class_list"] = self.detector.names
-                self.m_dict["class_name_list"] = list(
-                    self.m_dict["class_list"].values()
-                )
-                logger.info("Classes: %s", self.m_dict["class_name_list"])
-
-                while True:
-                    image = self.m_dict.get("current_camera_frame")
-                    if image is not None and image.size > 0 and self.m_dict["yolo_detection"]:
-                        detections = self.detector.detect(image)
-
-                        n = len(detections)
-                        yolo_results = np.empty((n, len(DETECTION_COLUMNS)), dtype=object)
-                        yoru_names_list = []
-                        for i, d in enumerate(detections):
-                            yolo_results[i] = detection_row(
-                                d, self.m_dict["total_time"]
-                            )
-                            yoru_names_list.append(d["class_name"])
-
-                        self.m_dict["yolo_class_names"] = yoru_names_list
-                        self.m_dict["yolo_results"] = yolo_results
-                        self.m_dict["now"] = time.perf_counter()
-
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        break
-                    elif self.m_dict["quit"]:
-                        break
-                    elif not self.m_dict["yolo_process_state"]:
-                        logger.info("YOLO break")
-                        break
-            except Exception as e:
-                logger.error("Detection error: %s", e)
-                time.sleep(0.5)
-            if self.m_dict.get("quit", False):
-                break
+        self.m_dict = m_dict
+        detector = None
+        last_frame = None
+        try:
+            while not m_dict.get("quit", False):
+                try:
+                    if not m_dict.get("yolo_process_state", False):
+                        clear_detection(m_dict)
+                        detector = None
+                        last_frame = None
+                        time.sleep(0.01)
+                        continue
+                    if detector is None:
+                        self.yolo_model_path = m_dict["yolo_model"]
+                        backend = m_dict.get("detector_backend", m_dict.get("yolo_model_type", "auto"))
+                        detector = get_detector(backend, self.yolo_model_path)
+                        self.detector = detector
+                        m_dict["class_list"] = detector.names
+                        m_dict["class_name_list"] = list(detector.names.values())
+                    if not m_dict.get("yolo_detection", False) or not m_dict.get("capture_running", False):
+                        clear_detection(m_dict)
+                        time.sleep(0.01)
+                        continue
+                    generation = m_dict.get("detection_generation", 0)
+                    if (m_dict.get("camera_frame_id"), generation) == last_frame:
+                        time.sleep(0.001)
+                        continue
+                    snapshot = m_dict.get("camera_snapshot")
+                    if snapshot is None:
+                        time.sleep(0.01)
+                        continue
+                    frame_id, captured_at, image = snapshot
+                    key = (frame_id, generation)
+                    if key == last_frame:
+                        time.sleep(0.001)
+                        continue
+                    last_frame = key
+                    detections = detector.detect(image)
+                    # Do not republish a result after OFF/reload/quit during inference.
+                    if (m_dict.get("quit", False) or not m_dict.get("yolo_detection", False)
+                            or not m_dict.get("yolo_process_state", False)
+                            or not m_dict.get("capture_running", False)
+                            or generation != m_dict.get("detection_generation", 0)):
+                        clear_detection(m_dict)
+                        continue
+                    rows = np.asarray(
+                        [detection_row(d, captured_at - m_dict["t0"]) for d in detections],
+                        dtype=object,
+                    ).reshape(-1, len(DETECTION_COLUMNS))
+                    published_at = time.perf_counter()
+                    m_dict["yolo_results"] = rows
+                    m_dict["yolo_class_names"] = [d["class_name"] for d in detections]
+                    m_dict["now"] = published_at
+                    m_dict["detection_snapshot"] = (frame_id, captured_at, published_at, generation, rows)
+                except Exception:
+                    clear_detection(m_dict)
+                    logger.exception("Detection failed")
+                    time.sleep(0.5)
+        finally:
+            clear_detection(m_dict)
 
 
 if __name__ == "__main__":

@@ -40,3 +40,6 @@ class trigger_condition:
         # If 'q' is pressed, exit the loop
         if key == ord("q"):
             return None
+
+    def close(self):
+        cv2.destroyWindow(self.window_name)

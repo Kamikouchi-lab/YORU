@@ -42,8 +42,12 @@ class dio:
         self.task.start()
 
     def stop(self):
-        self.task.stop()
-        self.task.close()
+        task, self.task = self.task, None
+        if task is not None:
+            try:
+                task.stop()
+            finally:
+                task.close()
 
     def writeDO(self, tflist):
         self.task.write(tflist)
@@ -61,9 +65,8 @@ class dio:
         self.writeDO([False, False, False, False])
 
     def __del__(self):
-        print("Destructed: " + self.devID + "")
-        self.task.stop()
-        self.task.close()
+        if getattr(self, "task", None) is not None:
+            self.stop()
 
 
 class ao:

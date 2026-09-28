@@ -19,3 +19,9 @@ class trigger_condition:
             self.mydaqDO.writeDO([True, True])
         else:
             self.mydaqDO.writeDO([False, False])
+
+    def close(self):
+        try:
+            self.mydaqDO.writeDO([False, False])
+        finally:
+            self.mydaqDO.stop()

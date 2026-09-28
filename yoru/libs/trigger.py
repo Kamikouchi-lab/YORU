@@ -10,6 +10,7 @@ import serial.tools.list_ports
 import yoru.libs.arduino as ard
 from yoru.libs.paths import ensure_importable, list_trigger_plugins
 from yoru.libs.user_paths import log_exception
+from yoru.libs.realtime_state import fresh_results
 
 
 class yolo_trigger:
@@ -52,6 +53,7 @@ class yolo_trigger:
             ):
                 try:
                     self.arduino_tri.trigger()
+                    time.sleep(0.001)
                     # trigger processing
                 except serial.serialutil.SerialException as e:
                     log_exception("Arduino trigger serial failure", e)
@@ -71,8 +73,12 @@ class yolo_trigger:
                     break
         finally:
             if self.arduino_tri is not None:
-                self.arduino_tri.close()
-                self.arduino_tri = None
+                try:
+                    self.arduino_tri.close()
+                except Exception as exc:
+                    log_exception("Trigger shutdown failed", exc)
+                finally:
+                    self.arduino_tri = None
 
 
 class trigger_python:
@@ -114,7 +120,12 @@ class trigger_python:
         self.m_dict["plugin_name"] = "trigger_plugins." + self.m_dict.get(
             "in_plugin_name", ""
         )
-        self.trigger_instance = self._load_plugin()
+        self.trigger_instance = None
+        try:
+            self.trigger_instance = self._load_plugin()
+        except Exception:
+            self.close()
+            raise
 
         print("Open Port")
 
@@ -126,7 +137,7 @@ class trigger_python:
         module = importlib.import_module(import_path)
         return module.trigger_condition(self.m_dict)
 
-    def _detected_class_names(self):
+    def _detected_class_names(self, results=None):
         """Class names of detections at or above the trigger confidence threshold.
 
         ``yolo_results`` rows are
@@ -134,7 +145,8 @@ class trigger_python:
         (see :mod:`yoru.libs.detection`).  Reading only this one key keeps the
         confidence and the class name consistent with each other.
         """
-        results = self.m_dict.get("yolo_results")
+        if results is None:
+            results = fresh_results(self.m_dict)
         if results is None or len(results) == 0:
             return []
         names = []
@@ -147,21 +159,37 @@ class trigger_python:
         return names
 
     def trigger(self):
+        results = fresh_results(self.m_dict)
         self.trigger_instance.trigger(
             self.tri_class,
-            self._detected_class_names(),
+            self._detected_class_names(results),
             self.myArduino,
-            self.m_dict.get("yolo_results", []),
-            self.m_dict.get("now"),
+            results,
+            time.perf_counter(),
         )
         # print("trigger_command")
 
     def close(self):
-        if self.myArduino:
+        plugin, self.trigger_instance = self.trigger_instance, None
+        if plugin is not None:
             try:
-                self.myArduino.writeDO_all(0)
+                # Existing plugins accept an empty detection set as output OFF.
+                plugin.trigger(self.tri_class, [], self.myArduino, [], time.perf_counter())
+            except Exception as exc:
+                log_exception("Could not reset trigger output", exc)
             finally:
-                self.myArduino.close()
+                close = getattr(plugin, "close", None)
+                if close is not None:
+                    try:
+                        close()
+                    except Exception as exc:
+                        log_exception("Could not close trigger plugin", exc)
+        board, self.myArduino = self.myArduino, None
+        if board:
+            try:
+                board.writeDO_all(0)
+            finally:
+                board.close()
                 print("Arduino connection closed.")
         self.trigger_instance = None
         print("Trigger instance set to None.")

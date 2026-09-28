@@ -23,6 +23,15 @@ class init_asovi:
         self.m_dict["back_to_home"] = False
         self.m_dict["init_finished"] = False
         self.m_dict["stream"] = False
+        self.m_dict["config_path"] = os.path.abspath(config_file)
+        self.m_dict["capture_running"] = False
+        self.m_dict["camera_snapshot"] = None
+        self.m_dict["camera_frame_id"] = 0
+        self.m_dict["detection_snapshot"] = None
+        self.m_dict["detection_generation"] = 0
+        self.m_dict["result_max_age"] = float(self.conf["trigger"].get("result_max_age", 1.0))
+        if not np.isfinite(self.m_dict["result_max_age"]) or self.m_dict["result_max_age"] <= 0:
+            raise ValueError("trigger.result_max_age must be a positive number of seconds")
         self.m_dict["stg_obst"] = False
         self.m_dict["export"] = self.conf["export"]
         self.m_dict["curLog"] = "hoge.txt"

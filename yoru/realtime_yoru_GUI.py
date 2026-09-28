@@ -19,6 +19,7 @@ import numpy as np
 
 from yoru.gui_base import apply_default_theme, frame_to_data_rgba
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui
 from yoru.libs.detection import yolo_detection
 from yoru.libs.drawing import yolo_drawing
 from yoru.libs.file_operation_realtime import file_dialog_tk
@@ -27,6 +28,8 @@ from yoru.libs.imager import capture_streamCV2, capture_streamMSS, select_run
 from yoru.libs.init_realtime import init_asovi
 from yoru.libs.trigger import read_condition, yolo_trigger
 from yoru.libs.util import loadingParam
+from yoru.libs.realtime_state import clear_detection
+from yoru.libs.realtime_process import run_workers
 
 DEFAULT_CONFIG_PATH = "./config/yoru_default.yaml"
 
@@ -292,49 +295,38 @@ class camGUI(GuiErrorMixin):
         self.m_dict["current_camera_frame"]
 
     def run(self):
-        self.startDPG()
-        plot_error_shown = False
-        while dpg.is_dearpygui_running():
-            try:
-                self.plot_callback()
-                plot_error_shown = False
-            except Exception as e:
-                # Surface a display/detection error once instead of letting it
-                # crash the real-time process silently; keep rendering so the
-                # popup stays visible and the GUI can recover on the next frame.
-                if not plot_error_shown:
-                    self._report_error("Real-time display error", e)
-                    plot_error_shown = True
-            dpg.render_dearpygui_frame()
-            if self.m_dict["quit"]:
-                if self.m_dict["back_to_home"]:
-                    # subprocess.call(["python", "app.py"])
+        self._plot_error_shown = False
+        run_gui(self, dpg, self.startDPG, self._render_frame, self._shutdown,
+                reopen_home=False)
 
-                    from yoru import app as YORU
+    def _render_frame(self):
+        try:
+            self.plot_callback()
+            self._plot_error_shown = False
+        except Exception as exc:
+            if not self._plot_error_shown:
+                self._report_error("Real-time display error", exc)
+                self._plot_error_shown = True
 
-                    YORU.main()
-                dpg.destroy_context()  # <-- moved from __del__
-                break
+    def _shutdown(self):
+        self.m_dict["stream"] = False
+        self.m_dict["Trigger"] = False
+        clear_detection(self.m_dict)
 
     def quit_cb(self):
-        print("quit_pushed")
-        # self.currentLogFile.write("# Streaming finished: " + str(datetime.datetime.now()) + "\r")
-        # self.currentLogFile.close()
         self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
 
     def home_cb(self):
-        print("Back to home")
         self.m_dict["back_to_home"] = True
-        self.m_dict["quit"] = True
-        time.sleep(0.5)
-        dpg.destroy_context()  # <-- moved from __del__
+        self.quit_cb()
 
     def test_cb(self, m_dict):
         print("model path:" + self.m_dict["yolo_model"])
 
     def yolo_model_reload(self):
         self.m_dict["yolo_process_state"] = False
+        self.m_dict["detection_generation"] = self.m_dict.get("detection_generation", 0) + 1
+        clear_detection(self.m_dict)
         self.m_dict["Trigger"] = False
         time.sleep(2)
         self.m_dict["yolo_process_state"] = True
@@ -343,6 +335,9 @@ class camGUI(GuiErrorMixin):
 
     def yolo_condition(self):
         tf = dpg.get_value("yolocheckbox")
+        self.m_dict["yolo_detection"] = False
+        self.m_dict["detection_generation"] = self.m_dict.get("detection_generation", 0) + 1
+        clear_detection(self.m_dict)
         self.m_dict["yolo_detection"] = tf
 
     def trigger_condition(self):
@@ -385,86 +380,57 @@ class camGUI(GuiErrorMixin):
         self.m_dict["trigger_class"] = tf
 
     def logging(self):
-        tf = dpg.get_value("streamingChkBox")
-        if tf:  # streaming start
-            dt = datetime.datetime.now()
-            fnhead = dpg.get_value("fileName")
-            self.currentLogFileName = fnhead + dt.strftime("%Y%m%d-%H%M%S_%f")
-            # self.currentLogFile = open(
-            #     self.m_dict["export"] + "/" + self.currentLogFileName, "a+"
-            # )
-            # self.currentLogFile.write("# Streaming start: " + str(dt) + "\r")
-            # self.currentLogFile.write(
-            #     "# Date, total time, Count, Speed, Track, Position, Dark, Z-stage, Gain_d, di0, di1, di2, di3, "
-            #     + "\r"
-            # )
+        enabled = dpg.get_value("streamingChkBox")
+        if enabled:
+            self.currentLogFileName = dpg.get_value("fileName") + datetime.datetime.now().strftime("%Y%m%d-%H%M%S_%f")
             self.m_dict["curLog"] = self.currentLogFileName
-            self.m_dict["stream"] = tf
-        else:
-            self.m_dict["stream"] = tf
-            ret = shutil.copyfile(
-                self.config_name,
-                self.m_dict["export"] + "/" + self.currentLogFileName + ".yaml",
-            )
-            # print("Saved config: ", ret)
-            # self.currentLogFile.close()
+        self.m_dict["stream"] = enabled
 
-    def __del__(self):
-        if hasattr(self, "quit"):
-            self.m_dict["quit"] = True
-        if hasattr(self, "eventLogfile_man"):
-            self.eventLogfile_man.close()
 
-        print("=== GUI window quit ===")
-        dpg.destroy_context()
+def _run_gui(config_path, state):
+    camGUI(config_file=config_path, m_dict=state).run()
 
-        # Check if Python is in the process of shutting down
-        if not sys.is_finalizing():
-            pass
+
+def _run_capture(state):
+    capture = (capture_streamMSS(m_dict=state) if state["stream_MSS"]
+               else capture_streamCV2(srcCam=state["camera_id"], m_dict=state))
+    capture.run()
+
+
+def _run_detection(state):
+    yolo_detection(m_dict=state).detect(state)
+
+
+def _run_drawing(state):
+    yolo_drawing(m_dict=state).YOLOdraw(state)
+
+
+def _run_trigger(state):
+    yolo_trigger(m_dict=state).init_trigger()
+
 
 def main(confFileName):
+    back_to_home = False
     with Manager() as manager:
-        d = manager.dict()
-        d["initialized"] = False
-        init_md = init_asovi(config_file=confFileName, m_dict=d)
-
-        # MSS or Camera
-        # d["stream_MSS"] = False
-        if d["stream_MSS"]:
-            SR = select_run(m_dict=d)
-            SR.main()
-            imgWin = capture_streamMSS(m_dict=d)
-        else:
-            imgWin = capture_streamCV2(srcCam=d["camera_id"], m_dict=d)
-
-        gui = camGUI(config_file=confFileName, m_dict=d)
-        yolo_det = yolo_detection(m_dict=d)
-        yolo_draw = yolo_drawing(m_dict=d)
-        yolo_tri = yolo_trigger(m_dict=d)
-
-        d["camera_imshow"] = False
-
-        process_pool = []
-
-        prc_imager = Process(target=imgWin.run)
-        prc_gui = Process(target=gui.run)
-        prc_yolo = Process(target=yolo_det.detect, args=(d,))
-        prc_yolo_draw = Process(target=yolo_draw.YOLOdraw, args=(d,))
-        prc_tri = Process(target=yolo_tri.init_trigger)
-
-        prc_gui.start()
-        prc_imager.start()
-        prc_yolo.start()
-        prc_yolo_draw.start()
-        prc_tri.start()
-
-        prc_gui.join()
-        prc_imager.join()
-        prc_yolo.join()
-        prc_yolo_draw.join()
-        prc_tri.join()
-
-        print(d)
+        state = manager.dict()
+        init_asovi(config_file=confFileName, m_dict=state)
+        if state["stream_MSS"]:
+            select_run(m_dict=state).main()
+            if state.get("quit", False):
+                return
+        state["camera_imshow"] = False
+        processes = [
+            Process(name="GUI", target=_run_gui, args=(confFileName, state)),
+            Process(name="capture", target=_run_capture, args=(state,)),
+            Process(name="detection", target=_run_detection, args=(state,)),
+            Process(name="drawing", target=_run_drawing, args=(state,)),
+            Process(name="trigger", target=_run_trigger, args=(state,)),
+        ]
+        run_workers(processes, state)
+        back_to_home = state.get("back_to_home", False)
+    if back_to_home:
+        from yoru import app
+        app.main()
 
 
 def _parse_args(argv=None):

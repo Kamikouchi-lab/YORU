@@ -30,3 +30,9 @@ class trigger_condition:
             self.send_array(np.array([1]))
         else:
             self.send_array(np.array([0]))
+
+    def close(self):
+        try:
+            self.send_array(np.array([0]))
+        finally:
+            self.ser.close()
