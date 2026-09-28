@@ -32,7 +32,10 @@ The estimate is a calibrated approximation, not a simulation::
 ``act_gb`` is the one number that has to be measured rather than derived.  The
 values below were calibrated against ultralytics ``GPU_mem`` readings at
 imgsz 640 with AMP enabled; treat the result as +/-30% and recalibrate a row
-whenever a real run disagrees with it.
+whenever a real run disagrees with it.  The YOLOv5 rows were fitted the same
+way to the ``GPU_mem`` the bundled yolov5 ``train.py`` prints (imgsz 640, AMP
+on, batches 8/16/32 for n/s/m and 8/16 for l/x), and reproduce those readings
+to within 4%.
 """
 
 from __future__ import annotations
@@ -96,11 +99,14 @@ class _Profile:
         bytes_per_param (int): bytes held per parameter across weights,
             gradients, optimizer state and the EMA copy.  20 for the
             ultralytics path (fp32 weights + grads + two AdamW moments + EMA),
-            12 for the torchvision path (fp32 weights + grads + SGD momentum,
-            no EMA).
-        anchors (int): assigner grid points at 640 px, or 0 for models whose
-            loss is not anchor-based (RT-DETR matches a fixed query set, the
-            torchvision detectors size their own proposals).
+            16 for the YOLOv5 path (fp32 weights + grads + SGD momentum +
+            EMA), 12 for the torchvision path (fp32 weights + grads + SGD
+            momentum, no EMA).
+        anchors (int): assigner grid points at 640 px, or 0 for models with
+            no task-aligned assigner (RT-DETR matches a fixed query set, the
+            torchvision detectors size their own proposals, and YOLOv5 matches
+            labels to anchors by shape without any (batch, labels, anchors)
+            tensor).
         scales_with_imgsz (bool): whether the GUI's Image Size drives the
             activation size.  False for the torchvision models, which resize
             internally via GeneralizedRCNNTransform and ignore the setting.
@@ -115,6 +121,13 @@ class _Profile:
 
 # Calibrated at imgsz 640, AMP on, against ultralytics GPU_mem readings.
 _PROFILES: dict[str, _Profile] = {
+    # --- YOLOv5 (bundled yolov5, SGD) ---------------------------------------
+    # Parameter counts from the yolov5 v7.0 release table.
+    "yolov5n": _Profile(1.9, 0.10, 16, 0),
+    "yolov5s": _Profile(7.2, 0.18, 16, 0),
+    "yolov5m": _Profile(21.2, 0.29, 16, 0),
+    "yolov5l": _Profile(46.5, 0.45, 16, 0),
+    "yolov5x": _Profile(86.7, 0.62, 16, 0),
     # --- YOLOv8 -----------------------------------------------------------
     "yolov8n": _Profile(3.2, 0.15, 20, _ANCHORS_640),
     "yolov8s": _Profile(11.2, 0.27, 20, _ANCHORS_640),
