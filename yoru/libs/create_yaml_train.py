@@ -47,7 +47,7 @@ class create_project:
                     "train": self.m_dict["project_dir"] + "/train/",
                     "val": self.m_dict["project_dir"] + "/val/",
                     "yaml_path": file_path,
-                    "Model": self.m_dict.get("weight", "yolo11s.pt"),
+                    "Model": self.m_dict.get("weight", "yolov5s.pt"),
                     # Ultralytics' own word for it, and the one thing in this
                     # file the whole project hangs on: it decides the label
                     # format labelImg writes, the weight the trainer loads and

@@ -131,17 +131,18 @@
 
 8. Check the "YAML Path" and select training conditions, such as epochs, networks and so on.
 
-    > YOLO Version offers YOLOv5, YOLOv8 and YOLO11. YOLOv5 is trained with
-    > the bundled [ultralytics/yolov5](https://github.com/ultralytics/yolov5)
-    > code and its `train.py`, with the same settings as YORU v1. It is not
-    > ultralytics' `yolov5*u`, which is a different network. A project
-    > created with YORU v1 opens with its YOLOv5 selection intact. The GPU
-    > memory estimate below is not available for YOLOv5 yet.
+    > YOLO Version offers YOLOv5 (the default, `yolov5s.pt`), YOLOv8 and
+    > YOLO11. YOLOv5 is trained with the bundled
+    > [ultralytics/yolov5](https://github.com/ultralytics/yolov5) code and its
+    > `train.py`, with the same settings as YORU v1. It is not ultralytics'
+    > `yolov5*u`, which is a different network. A project created with YORU
+    > v1 opens with its YOLOv5 selection intact.
 
     > In an OBB project the weight gains an `-obb` suffix (`yolo11s-obb.pt`)
     > and the model is fixed to YOLOv8 or YOLO11: only these have a
-    > rotated-box head. YOLOv5, RT-DETR, Faster R-CNN, Mask R-CNN and SSD
-    > cannot be trained on oriented boxes.
+    > rotated-box head, so the YOLOv5 default switches to YOLO11. YOLOv5,
+    > RT-DETR, Faster R-CNN, Mask R-CNN and SSD cannot be trained on oriented
+    > boxes.
 
     > The "GPU memory" line under the training conditions estimates how much
     > VRAM the run will need and compares it with what the card has free right
@@ -187,7 +188,7 @@
 |---|---|---|
 | `config.yaml` | `task: detect` | `task: obb` |
 | LabelImg format | YOLO (`class cx cy w h`) | YOLO-OBB (`class x1 y1 … y4`) |
-| Weight | `yolo11s.pt` | `yolo11s-obb.pt` |
+| Weight (default) | `yolov5s.pt` | `yolo11s-obb.pt` |
 | Models | all of them | YOLOv8 / YOLO11 only |
 | Real-time drawing | upright rectangle | rotated rectangle |
 | `*_detect.csv` | `… total_time` | `… total_time, cx, cy, w, h, angle` |

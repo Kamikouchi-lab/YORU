@@ -1068,12 +1068,14 @@ class yoru_train(GuiErrorMixin):
         family = self.m_dict.get("model_family", "YOLO")
         obb = bool(self.m_dict.get("obb"))
         if family == "YOLO":
-            version = self.m_dict.get("yolo_version", "YOLO11")
+            version = self.m_dict.get("yolo_version", "YOLOv5")
+            if obb and version not in OBB_CAPABLE_YOLO_VERSIONS:
+                # YOLOv5 has no -obb weight: what _sync_obb_ui switches to.
+                version = "YOLO11"
             prefix_map = {"YOLOv5": "yolov5", "YOLOv8": "yolov8", "YOLO11": "yolo11"}
-            prefix = prefix_map.get(version, "yolo11")
+            prefix = prefix_map.get(version, "yolov5")
             size = self.m_dict.get("yolo_size", "s")
-            # YOLOv5 has no -obb weight; _sync_obb_ui keeps it out of OBB projects.
-            suffix = "-obb" if obb and version in OBB_CAPABLE_YOLO_VERSIONS else ""
+            suffix = "-obb" if obb else ""
             return f"{prefix}{size}{suffix}.pt"
         elif family == "RT-DETR":
             size = self.m_dict.get("rtdetr_size", "l")
@@ -1084,7 +1086,7 @@ class yoru_train(GuiErrorMixin):
             return "maskrcnn_resnet50_best.pt"
         elif family == "SSD":
             return "ssd_vgg16_best.pt"
-        return "yolo11s.pt"
+        return "yolov5s.pt"
 
     def select_obb(self):
         """The OBB checkbox changed before the project exists."""

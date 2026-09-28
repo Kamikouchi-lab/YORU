@@ -27,6 +27,24 @@ def test_choosing_yolov5_in_an_obb_project_is_refused(gui):
     assert gui.m_dict["weight"] == "yolo11s-obb.pt"
 
 
+def test_ticking_obb_on_the_yolov5_default_moves_to_yolo11(gui):
+    """New projects start on YOLOv5; the OBB box must not leave them there."""
+    from yoru.libs.init_train import init_train
+
+    init_train(m_dict=gui.m_dict)
+    assert gui.m_dict["weight"] == "yolov5s.pt"
+    gui.dpg.values["obb_chk"] = True
+    gui.select_obb()
+    assert gui.m_dict["yolo_version"] == "YOLO11"
+    assert gui.m_dict["weight"] == "yolo11s-obb.pt"
+
+
+def test_a_missing_version_never_builds_a_yolov5_obb_weight(gui):
+    gui.m_dict.update(model_family="YOLO", yolo_size="s", obb=True)
+    gui.m_dict.pop("yolo_version", None)
+    assert gui._build_weight() == "yolo11s-obb.pt"
+
+
 def test_an_obb_project_moves_off_yolov5(gui):
     _select_yolo(gui, "YOLOv5", obb=True)
     gui._sync_obb_ui()

@@ -283,6 +283,10 @@ def test_yolov5_is_offered_for_training_but_not_for_obb():
     m_dict = {}
     init_train(m_dict=m_dict)
     assert "yolov5s.pt" in m_dict["weight_list"]
+    # A new project starts on YOLOv5, as in YORU v1.
+    assert m_dict["yolo_version"] == "YOLOv5"
+    assert m_dict["weight"] == "yolov5s.pt"
+    assert plugins.detect_trainer_backend(m_dict) == "yolov5"
 
 
 # ---------------------------------------------------------------------------

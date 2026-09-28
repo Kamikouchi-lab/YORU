@@ -65,7 +65,9 @@ class init_train:
             # RT-DETR
             "rtdetr-l.pt", "rtdetr-x.pt",
         ]
-        self.m_dict["weight"] = "yolo11s.pt"
+        # YOLOv5 by default, as in YORU v1.  An OBB project
+        # moves to YOLO11, since YOLOv5 has no rotated-box head.
+        self.m_dict["weight"] = "yolov5s.pt"
 
         # Oriented bounding boxes.  Set when the project is created and stored
         # in its config.yaml as ``task: obb``; from there it decides the weight
@@ -82,7 +84,7 @@ class init_train:
 
         # YOLO-specific
         self.m_dict["yolo_version_list"] = MODEL_FAMILY_CONFIG["YOLO"]["versions"]
-        self.m_dict["yolo_version"]      = "YOLO11"
+        self.m_dict["yolo_version"]      = "YOLOv5"
         self.m_dict["yolo_size_list"]    = MODEL_FAMILY_CONFIG["YOLO"]["sizes"]
         self.m_dict["yolo_size"]         = "s"
 
