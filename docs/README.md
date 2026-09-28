@@ -51,6 +51,17 @@ choosing **Reset layout to default**.
 Japanese (and other non-ASCII) text displays correctly throughout, including
 file and folder names in the path fields.
 
+**Quit** and the window's close button use the same cleanup: stop background
+work, release preview videos, save the layout, then close the window. **Back
+to Home** closes the current window before opening the launcher. Prediction
+and evaluation run in the background so Quit remains available during them.
+
+Closing the training window also stops its training subprocess and data-loader
+workers. It first requests an epoch-end stop, then terminates the process tree
+if it has not exited within three seconds. Previously saved checkpoints remain;
+the unfinished epoch may be lost. To preserve the current epoch, use **Stop
+after epoch** and wait for training to stop before closing the window.
+
 # YORU documents
 - [Home](../README.md)
 - [Overview](README.md)

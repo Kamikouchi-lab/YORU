@@ -19,6 +19,7 @@ import serial.tools.list_ports
 import yaml
 
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui
 from yoru.libs.paths import list_trigger_plugins
 
 from yoru.libs.gui_error import GuiErrorMixin
@@ -27,6 +28,8 @@ from yoru.libs.user_paths import log_exception
 
 class ConfigCreatorGUI(GuiErrorMixin):
     def __init__(self):
+        self.m_dict = {"quit": False}
+        self._class_result = None
         self.class_list = ["None"]
         self.com_list = self._get_com_ports()
         self.plugin_list = self._get_plugins()
@@ -333,17 +336,29 @@ class ConfigCreatorGUI(GuiErrorMixin):
             detector = get_detector(model_type if model_type != "auto" else "auto", model_path)
             names_dict = detector.names  # {0: "class0", 1: "class1", ...}
             class_names = [names_dict[i] for i in sorted(names_dict.keys())]
-            self.class_list = class_names + ["None"]
-            dpg.configure_item("cfg_class_list_box", items=self.class_list)
-            dpg.configure_item("cfg_trigger_class", items=self.class_list)
-            if class_names:
-                dpg.set_value("cfg_trigger_class", class_names[0])
-            dpg.set_value("cfg_class_loading_state", f" {len(class_names)} classes loaded")
+            self._class_result = (class_names, None)
         except Exception as e:
             # Worker thread: avoid _report_error (modal from a non-main thread);
             # persist to ~/.yoru/logs/yoru.log and keep the GUI status string.
             log_exception("Failed to load classes from model", e)
-            dpg.set_value("cfg_class_loading_state", f" Error: {e}")
+            self._class_result = (None, str(e))
+
+    def _apply_class_result(self):
+        """The model-loading thread never calls widgets after the window closes."""
+        result = self._class_result
+        if result is None:
+            return
+        self._class_result = None
+        class_names, error = result
+        if error is not None:
+            dpg.set_value("cfg_class_loading_state", f" Error: {error}")
+            return
+        self.class_list = class_names + ["None"]
+        dpg.configure_item("cfg_class_list_box", items=self.class_list)
+        dpg.configure_item("cfg_trigger_class", items=self.class_list)
+        if class_names:
+            dpg.set_value("cfg_trigger_class", class_names[0])
+        dpg.set_value("cfg_class_loading_state", f" {len(class_names)} classes loaded")
 
     def _select_export_dir(self):
         root = tkinter.Tk()
@@ -441,12 +456,10 @@ class ConfigCreatorGUI(GuiErrorMixin):
     # Run loop
     # ------------------------------------------------------------------
     def run(self):
-        self.startDPG()
-        while dpg.is_dearpygui_running():
-            dpg.render_dearpygui_frame()
+        run_gui(self, dpg, self.startDPG, self._apply_class_result, None)
 
     def quit_cb(self):
-        dpg.destroy_context()
+        self.m_dict["quit"] = True
 
     def __del__(self):
         pass

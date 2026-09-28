@@ -13,6 +13,7 @@ import yaml
 
 from yoru.gui_base import apply_default_theme, process_frame as _process_frame
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui, start_gui_task
 from yoru.libs.create_yaml_train import is_obb_project
 from yoru.libs.evaluation_calculation import Evaluator, EvaluationImageAnalyzer
 from yoru.libs.file_operation_create_label import file_dialog_tk
@@ -173,18 +174,7 @@ class model_eval_gui(GuiErrorMixin):
         # listener.start()
 
     def run(self):
-        self.gui_configure()
-        while dpg.is_dearpygui_running():
-            self.plot_callback()
-            dpg.render_dearpygui_frame()
-            if self.m_dict["quit"]:
-                if self.m_dict["back_to_home"]:
-                    # subprocess.call(["python", "app.py"])
-                    from yoru import app as YORU
-
-                    YORU.main()
-                dpg.destroy_context()
-                break
+        run_gui(self, dpg, self.gui_configure, self.plot_callback, None)
 
     def plot_callback(self) -> None:
         if dpg.get_value("streamingChkBox"):
@@ -301,16 +291,13 @@ class model_eval_gui(GuiErrorMixin):
         dpg.set_value("step3_state", "Complete!!")
 
     def yolo_detection(self):
-        try:
+        def work():
             yolo_det = EvaluationImageAnalyzer(self.m_dict)
             yolo_det.analyze_image()
-            dpg.set_value("step4_state", "Complete!!")
-        except Exception as e:
-            self._report_error("Prediction failed", e)
-            dpg.set_value("step4_state", "Error")
+        start_gui_task(self, dpg, work, "Prediction failed", "step4_state")
 
     def cal_aps_btn(self):
-        try:
+        def work():
             data_dir = self.m_dict.get("data_dir")
             if not data_dir:
                 raise RuntimeError(
@@ -319,26 +306,17 @@ class model_eval_gui(GuiErrorMixin):
                 )
             evaluator = Evaluator(self.m_dict)
             evaluator.run_evaluation(data_dir)
-            dpg.set_value("step5_state", "Complete!!")
-        except Exception as e:
-            self._report_error("AP calculation failed", e)
-            dpg.set_value("step5_state", "Error")
+        start_gui_task(self, dpg, work, "AP calculation failed", "step5_state")
 
     def quit_cb(self):
-        print("quit_pushed")
         self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
 
     def home_cb(self):
-        print("Back home")
         self.m_dict["back_to_home"] = True
-        self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
+        self.quit_cb()
 
     def __del__(self):
-        if hasattr(self, "m_dict"):
-            self.m_dict["quit"] = True
-        print("=== GUI window quit ===")
+        pass
 
 
 def main():

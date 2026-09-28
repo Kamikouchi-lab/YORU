@@ -128,6 +128,8 @@ class yolo_analysis:
         print(f"=== Start movie analysis: {total_movies} movie(s) ===", flush=True)
 
         for movie_index, self.mov_path in enumerate(self.mov_path_list, start=1):
+            if self.m_dict.get("quit", False):
+                break
             df_results = pd.DataFrame()
             result_list = []
             video = cv2.VideoCapture(self.mov_path)
@@ -178,6 +180,8 @@ class yolo_analysis:
                 last_logged_pct = -10  # stdout progress, logged in 10% steps
 
                 while video.isOpened():
+                    if self.m_dict.get("quit", False):
+                        break
                     ret, frame = video.read()
                     if not ret:
                         self.m_dict["estimate_time"] = (
@@ -483,6 +487,8 @@ class yolo_analysis_image:
         file_path = os.path.join(self.out_path, "image_analysis_results" + ".csv")
 
         for image_index, self.img_path in enumerate(self.img_path_list):
+            if self.m_dict.get("quit", False):
+                break
             base_name = os.path.basename(self.img_path)
             file_name_without_ext = os.path.splitext(base_name)[0]
 

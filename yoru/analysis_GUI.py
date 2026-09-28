@@ -12,6 +12,7 @@ import numpy as np
 
 from yoru.gui_base import apply_default_theme, frame_to_data_rgb, process_frame as _process_frame
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui
 from yoru.libs.analysis import yolo_analysis, yolo_analysis_image
 from yoru.libs.file_operation_analysis import file_dialog_tk
 from yoru.libs.gui_error import GuiErrorMixin
@@ -380,18 +381,7 @@ class analyze_GUI(GuiErrorMixin):
         })
 
     def run(self):
-        self.startDPG()
-        while dpg.is_dearpygui_running():
-            self.plot_callback()
-            dpg.render_dearpygui_frame()
-            if self.m_dict["quit"]:  # <-- this line was modified
-                if self.m_dict["back_to_home"]:
-                    # subprocess.call(["python", "./yoru/app.py"])
-                    from yoru import app as YORU
-
-                    YORU.main()
-                dpg.destroy_context()
-                break
+        run_gui(self, dpg, self.startDPG, self.plot_callback, self._shutdown)
 
     def _sync_analysis_progress(self) -> None:
         """Copy worker-thread progress out of m_dict into the widgets.
@@ -566,18 +556,21 @@ class analyze_GUI(GuiErrorMixin):
         self.file_open_image()
 
     def quit_cb(self):
-        logger.info("quit_pushed")
         self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
 
     def home_cb(self):
-        logger.info("Back home")
         self.m_dict["back_to_home"] = True
-        self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
+        self.quit_cb()
+
+    def _shutdown(self):
+        thread = getattr(self, "_job_thread", None)
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=3.0)
 
     def _start_job(self, worker, what: str) -> bool:
         """Disable the run buttons and launch *worker* on a daemon thread."""
+        if self.m_dict.get("quit", False):
+            return False
         if self.m_dict.get("analysis_running", False):
             logger.info("An analysis is already running")
             return False
@@ -595,7 +588,8 @@ class analyze_GUI(GuiErrorMixin):
         dpg.disable_item("analyze_btn")
         dpg.disable_item("create_movie")
         dpg.disable_item("analyze_img_btn")
-        threading.Thread(target=self._run_job, args=(worker,), daemon=True).start()
+        self._job_thread = threading.Thread(target=self._run_job, args=(worker,), daemon=True)
+        self._job_thread.start()
         return True
 
     def _run_job(self, worker) -> None:
@@ -698,7 +692,7 @@ class analyze_GUI(GuiErrorMixin):
             )
 
     def __del__(self):
-        logger.info("=== GUI window quit ===")
+        pass
 
 
 def main():

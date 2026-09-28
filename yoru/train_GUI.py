@@ -15,6 +15,7 @@ import dearpygui.dearpygui as dpg
 import yaml
 
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui
 from yoru.libs.create_yaml_train import create_project, is_obb_project
 from yoru.libs.device import KNOWN_DEVICES, describe, resolve_device
 from yoru.libs.file_operation_train import file_dialog_tk, file_move_random
@@ -744,18 +745,7 @@ class yoru_train(GuiErrorMixin):
             self._show_training_outcome()
 
     def run(self):
-        self.startDPG()
-        while dpg.is_dearpygui_running():
-            self.plot_callback()
-            dpg.render_dearpygui_frame()
-            if self.m_dict["quit"]:  # <-- this line was modified
-                if self.m_dict["back_to_home"]:
-                    # subprocess.call(["python", "app.py"])
-                    from yoru import app as YORU
-
-                    YORU.main()
-                dpg.destroy_context()
-                break
+        run_gui(self, dpg, self.startDPG, self.plot_callback, self._shutdown)
 
     def create_pr_dir(self):
         project_name = dpg.get_value("pro_name")
@@ -1026,17 +1016,36 @@ class yoru_train(GuiErrorMixin):
         self._set_step_state("step3_state", "Complete!!")
 
     def quit_cb(self):
-        print("quit_pushed")
-        self._gpu_stop = True
         self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
 
     def home_cb(self):
-        print("Back home")
-        self._gpu_stop = True
         self.m_dict["back_to_home"] = True
-        self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
+        self.quit_cb()
+
+    def _shutdown(self):
+        """Stop GUI-owned work before the manager and window disappear."""
+        self._gpu_stop = True
+        proc = getattr(self, "_train_proc", None)
+        if proc is not None and proc.poll() is None:
+            stop_file = getattr(self, "_stop_file", None)
+            if stop_file is not None:
+                try:
+                    request_stop(stop_file)
+                    self.m_dict["train_stop_mode"] = "graceful"
+                except OSError as exc:
+                    log_message(f"Could not request training stop: {exc}", logging.ERROR)
+            try:
+                proc.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                self.m_dict["train_stop_mode"] = "force"
+                log_message("Closing training GUI: stopping the training process tree; "
+                            "the unfinished epoch is not saved.", logging.WARNING)
+                terminate_process_tree(proc)
+                proc.wait(timeout=3.0)
+        thread = getattr(self, "_train_monitor", None)
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=3.0)
+        clear_stop(getattr(self, "_stop_file", None))
 
     def add_class_file(self):
         classes_path = self.m_dict.get("classes_path", "")
@@ -1333,6 +1342,8 @@ class yoru_train(GuiErrorMixin):
 
     def _start_training(self):
         """Dispatch training to the correct backend plugin."""
+        if self.m_dict.get("quit", False):
+            return
         from yoru.libs.plugins import detect_trainer_backend, get_trainer
 
         backend = detect_trainer_backend(self.m_dict)
@@ -1366,6 +1377,9 @@ class yoru_train(GuiErrorMixin):
             print(f"start training ({backend})")
             total = int(self.m_dict.get("epoch", 300))
             self._train_proc = proc
+            if self.m_dict.get("quit", False):
+                terminate_process_tree(proc)
+                return
             self.m_dict["train_stop_mode"] = ""
             # Clear the previous run's outcome, or a failure would be reported
             # again the next time one finishes.
@@ -1377,6 +1391,7 @@ class yoru_train(GuiErrorMixin):
                 args=(proc, total, getattr(trainer, "epoch_base", 1)),
                 daemon=True,
             )
+            self._train_monitor = t
             t.start()
         except Exception as e:
             self._report_error("Failed to start training", e)

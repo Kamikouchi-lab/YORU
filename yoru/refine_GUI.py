@@ -13,6 +13,7 @@ import numpy as np
 
 from yoru.gui_base import apply_default_theme
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui
 from yoru.libs.file_operation_grab import file_dialog_tk
 from yoru.libs.gui_error import GuiErrorMixin
 
@@ -191,12 +192,7 @@ class grab_gui(GuiErrorMixin):
         self.session.finish(fill_window="refine_main")
 
     def run(self):
-        self.gui_configure()
-        while dpg.is_dearpygui_running():
-            self.plot_callback()
-            dpg.render_dearpygui_frame()
-            if self.m_dict["quit"]:
-                break
+        run_gui(self, dpg, self.gui_configure, self.plot_callback, None)
 
     def plot_callback(self) -> None:
         if dpg.get_value("streamingChkBox"):
@@ -360,16 +356,10 @@ class grab_gui(GuiErrorMixin):
         return data
 
     def quit_cb(self):
-        print("quit_pushed")
         self.m_dict["quit"] = True
-        # subprocess.call(["python", "train_gui.py"])
-        dpg.destroy_context()  # <-- moved from __del__
 
     def __del__(self):
-        if hasattr(self, "quit"):
-            self.m_dict["quit"] = True
-        print("=== GUI window quit ===")
-        dpg.destroy_context()
+        pass
 
 
 def main():

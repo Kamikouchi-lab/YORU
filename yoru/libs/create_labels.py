@@ -59,6 +59,8 @@ class yolo_analysis_image:
         image_count = len(img_path_list)
 
         for img_path in tqdm(img_path_list, desc="Processing images"):
+            if self.m_dict.get("quit", False):
+                return
             base_name = os.path.basename(img_path)
             file_name_without_ext = os.path.splitext(base_name)[0]
 

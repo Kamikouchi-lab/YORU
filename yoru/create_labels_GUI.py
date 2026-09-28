@@ -12,6 +12,7 @@ import yaml
 
 from yoru.gui_base import apply_default_theme, process_frame as _process_frame
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui, start_gui_task
 from yoru.libs.create_labels import yolo_analysis_image
 from yoru.libs.create_yaml_train import is_obb_project
 from yoru.libs.file_operation_create_label import file_dialog_tk
@@ -140,18 +141,7 @@ class model_eval_gui(GuiErrorMixin):
         # listener.start()
 
     def run(self):
-        self.gui_configure()
-        while dpg.is_dearpygui_running():
-            self.plot_callback()
-            dpg.render_dearpygui_frame()
-            if self.m_dict["quit"]:
-                if self.m_dict["back_to_home"]:
-                    # subprocess.call(["python", "app.py"])
-                    from yoru import app as YORU
-
-                    YORU.main()
-                dpg.destroy_context()
-                break
+        run_gui(self, dpg, self.gui_configure, self.plot_callback, None)
 
     def plot_callback(self) -> None:
         if dpg.get_value("streamingChkBox"):
@@ -256,27 +246,20 @@ class model_eval_gui(GuiErrorMixin):
             self._report_error("Failed to launch LabelImg", e)
 
     def yolo_detection(self):
-        try:
+        def work():
             yolo_det = yolo_analysis_image(self.m_dict)
             yolo_det.analyze_image()
-        except Exception as e:
-            self._report_error("Label generation (prediction) failed", e)
+        start_gui_task(self, dpg, work, "Label generation (prediction) failed")
 
     def quit_cb(self):
-        print("quit_pushed")
         self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
 
     def home_cb(self):
-        print("Back home")
         self.m_dict["back_to_home"] = True
-        self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
+        self.quit_cb()
 
     def __del__(self):
-        if hasattr(self, "m_dict"):
-            self.m_dict["quit"] = True
-        print("=== GUI window quit ===")
+        pass
 
 
 def main():

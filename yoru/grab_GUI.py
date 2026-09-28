@@ -30,6 +30,7 @@ import dearpygui.dearpygui as dpg
 
 from yoru.gui_base import apply_default_theme, frame_to_data_rgba, process_frame as _process_frame
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui
 from yoru.libs import frame_extraction
 from yoru.libs.file_operation_grab import file_dialog_tk
 from yoru.libs.gui_error import GuiErrorMixin
@@ -395,30 +396,15 @@ class grab_gui(GuiErrorMixin):
     # ------------------------------------------------------------------
 
     def run(self):
-        self.gui_configure()
-        try:
-            while dpg.is_dearpygui_running():
-                self.plot_callback()
-                dpg.render_dearpygui_frame()
-                if self.m_dict["quit"]:
-                    break
-        finally:
-            self._shutdown()
+        run_gui(self, dpg, self.gui_configure, self.plot_callback, self._shutdown)
 
     def _shutdown(self):
-        """Tear the window down from the render loop, never from a callback.
-
-        Destroying the context inside a button callback frees everything the
-        half-finished frame is still drawing from, which is its own way of
-        hanging on exit.
-        """
+        """Cancel extraction before the common lifecycle releases the window."""
         self._extract_stop = True
         thread = self._extract_thread
         if thread is not None and thread.is_alive():
             thread.join(timeout=2.0)
-        if isinstance(self.vid, cv2.VideoCapture):
-            self.vid.release()
-        dpg.destroy_context()
+
 
     def plot_callback(self) -> None:
         self._pump_extraction()
@@ -722,15 +708,10 @@ class grab_gui(GuiErrorMixin):
         return frame_to_data_rgba(frame)
 
     def quit_cb(self):
-        print("quit_pushed")
-        # The render loop notices the flag and calls _shutdown; a callback must
-        # not destroy the context it is currently being drawn inside of.
         self.m_dict["quit"] = True
 
     def __del__(self):
-        if hasattr(self, "m_dict"):
-            self.m_dict["quit"] = True
-        print("=== GUI window quit ===")
+        pass
 
 
 def main():
