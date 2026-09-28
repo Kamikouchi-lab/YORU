@@ -114,7 +114,7 @@ def obb_to_aabb(
     """Axis-aligned ``(x1, y1, x2, y2)`` enclosing *obb*, optionally clamped.
 
     Every consumer that predates OBB support -- the CSV writer, the trigger
-    plugins, the evaluation IoU -- keeps reading these four numbers, so an OBB
+    plugins -- keeps reading these four numbers, so an OBB
     detection stays usable by them without any change on their side.
     """
     pts = obb_corners(obb)

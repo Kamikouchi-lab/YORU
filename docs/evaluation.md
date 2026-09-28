@@ -50,3 +50,22 @@
 
 
 <img src="./imgs/screenshots_description-03.png" width="100%">
+
+## Interpreting the results
+
+Predictions are ranked by confidence across all evaluation images. Each
+ground-truth box can match only one prediction of the same class. AP uses
+the all-point interpolated precision envelope at IoU thresholds 0.50 to 0.95;
+classes with no ground-truth annotations have `null` AP and are excluded
+from mAP. Overall precision and recall also require a box match at IoU 0.50.
+
+For OBB models, prediction files retain all four corners and IoU measures
+the intersection of the rotated polygons. Ordinary and OBB labels can be
+evaluated together. Rerun **Prediction** before **Calculate APs** on an old
+evaluation dataset: old `_yolo.txt` files contain only upright envelopes and
+cannot recover the original rotation.
+
+These corrected scores can differ from earlier YORU evaluations. They also
+need not equal a training backend's validation score: YORU evaluates the
+predictions retained by its detector's confidence/NMS settings and uses
+geometric polygon IoU and all-point AP interpolation.
