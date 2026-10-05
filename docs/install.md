@@ -39,21 +39,46 @@
      conda activate yoru
      ```
 
-7. Install [Pytorch](https://pytorch.org) corresponding to the CUDA versions.
+7. Install [Pytorch](https://pytorch.org) for your GPU.
 
-    - For CUDA==11.8
-
-    ```
-    pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu118
-    ```
-
-   - For CUDA==12.1
+    - **RTX 50-series (Blackwell) and every card before it — CUDA 12.8**
 
     ```
-    pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
+    pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
     ```
-    
-    >(torch, torchvision and torchaudio will be installed.)
+
+    > This is the build YORU is developed against, and the one the `uv`
+    > install below resolves to. Its wheels carry `sm_61` through `sm_120`, so
+    > it covers a GTX 10-series and an RTX 5090 alike. It needs driver 570 or
+    > newer (Windows 572.xx); check yours with `nvidia-smi`.
+
+    - **Older cards on an older driver — CUDA 12.6**
+
+    ```
+    pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu126
+    ```
+
+    > Only if the driver cannot be updated. This build stops at `sm_90`, so on
+    > an RTX 50-series card every CUDA call fails with *"no kernel image is
+    > available for execution on the device"* even though `torch.cuda
+    > .is_available()` returns True.
+
+    Check that the card is actually usable, not merely detected:
+
+    ```
+    python -c "import torch; print(torch.__version__, torch.cuda.get_arch_list()); print(torch.zeros(1).cuda() + 1)"
+    ```
+
+    > The printed architecture list must contain the one your GPU needs —
+    > `sm_120` for the RTX 50-series, `sm_89` for the 40-series, `sm_86` for
+    > the 30-series. `torch.cuda.is_available()` alone does **not** tell you
+    > this: it returns True on a card the build has no kernels for.
+
+    > **Python version.** YORU runs on Python 3.9, and torch 2.8.0 is the last
+    > release built for it — torch 2.9 and newer need Python 3.10+. There is no
+    > newer torch to move to without moving Python first.
+
+    > torchaudio is not used by YORU and does not need to be installed.
 
 8. Run YORU in a command prompt or miniconda prompt.
 

@@ -55,22 +55,23 @@ Follow these steps to install YORU quickly:
      conda activate yoru
      ```
     
-5. Install [Pytorch](https://pytorch.org) corresponding to the CUDA versions.
-
-    - For CUDA==11.8
+5. Install [Pytorch](https://pytorch.org) for your GPU.
 
     ```
-    pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu118
+    pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
     ```
 
-   - For CUDA==12.1
+    - This CUDA 12.8 build covers every card from the GTX 10-series to the RTX 50-series (Blackwell), and needs driver 570 or newer. torchaudio is not used by YORU.
+
+    - torch 2.8.0 is the last release built for Python 3.9, which is what YORU runs on.
+
+    - Confirm the card is usable, not merely detected — `torch.cuda.is_available()` returns True even on a card the build has no kernels for:
 
     ```
-    pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
+    python -c "import torch; print(torch.cuda.get_arch_list()); print(torch.zeros(1).cuda() + 1)"
     ```
-    
 
-    - (torch, torchvision and torchaudio will be installed.)
+    - The list must contain your GPU's architecture (`sm_120` for the RTX 50-series, `sm_89` for the 40-series, `sm_86` for the 30-series). See [docs/install.md](docs/install.md) if it does not.
 
 6. Run YORU in the command prompt or Anaconda prompt.
 
