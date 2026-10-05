@@ -36,6 +36,8 @@ dependencies = [
     "imgui==2.0.0",
     "pyopengl==3.1.7",
     "pyserial==3.5",
+    "PyQt5==5.15.11; sys_platform == 'win32'",
+    "PyQt5-Qt5==5.15.2; sys_platform == 'win32'",
     # Windows-only, and not imported anywhere in the source tree.
     "pywin32==306; sys_platform == 'win32'",
     # pkg_resources was removed in setuptools 81 and eel still imports it.
