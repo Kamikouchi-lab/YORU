@@ -3,19 +3,28 @@
 
 """Frame Capture — the window that turns a video into frames to label.
 
-Two things about this window are load-bearing and easy to undo by accident:
+Three things about this screen are load-bearing and easy to undo by accident:
 
-* **It owns the whole viewport and lays itself out from the viewport size.**
-  It used to be a floating, dockable window whose position and size were
-  restored from ``logs/custom_layout_grab.ini``, inside a viewport that was
-  pinned to its start size by ``max_width``/``max_height``.  That combination
-  hid the lower half of the controls behind a scrollbar -- the saved layout was
-  shorter than the content and the viewport could not be grown to make room --
-  and dragging the window edge fought DearPyGui, which kept forcing the size
-  back inside its own limits, so the window appeared to freeze.  The window now
-  fills the viewport (``GuiSession.finish(fill_window=...)``), there is no init
-  file and no size clamp, and :meth:`grab_gui._relayout` recomputes the preview
-  and the two panes from the current viewport on every resize.
+* **It is three dockable windows, not one fixed pane layout.**  Preview, Save
+  Frame and Automatic Extraction live in a docking space, so they can be
+  resized against each other, re-tiled, or dragged on top of one another into
+  a tab bar, and the arrangement comes back next time -- the same deal every
+  other YORU screen with more than one thing to look at offers.
+
+  What made a saved layout unusable here before was not the docking.  It was a
+  viewport pinned to its start size by ``max_width``/``max_height``: a restored
+  layout shorter than its content hid the lower half of the controls behind a
+  scrollbar with no way to grow the window, and dragging an edge fought
+  DearPyGui, which kept forcing the size back inside its own limits.
+  ``GuiSession`` drops that clamp, keeps the layout in a file that
+  ``Window > Reset layout to default`` deletes, and each window now carries
+  only the controls that belong to it, so a window too short for them scrolls
+  its own content instead of hiding somebody else's.
+* **The preview is sized from its own window, not from the viewport.**  A
+  docked window is resized by dragging a splitter and a floating one by its
+  own edge; neither fires the viewport resize callback, so
+  :meth:`grab_gui._fit_layout` runs from the render loop instead, and touches
+  DearPyGui only when the size it computes has actually moved.
 * **Extraction runs on a worker thread and talks back through a dict.**  The
   thread never calls DearPyGui; it writes its progress into ``_extract_state``
   and the render loop copies that into the widgets.  Only the render loop
@@ -41,15 +50,18 @@ class grab_gui:
     # makes a resize stutter.
     PREVIEW_TEXTURE = 600
     MIN_PREVIEW = 220
-    SIDE_PANE_WIDTH = 430
-    # The preview pane never goes narrower than its transport row, or the
-    # speed box and the frame counter are quietly cut off the right of it.
-    LEFT_MIN_WIDTH = 470
-    # What the preview pane spends on the slider, the transport row and the
-    # frame counter, plus the child window's own padding.
-    LEFT_CHROME = 116
-    HEADER_H = 100
-    FOOTER_H = 62
+    # What the Preview window spends on everything that is not the image: its
+    # title bar and padding, the source row and its status line above it, and
+    # the slider, the transport row and Quit below it.  Measured against the
+    # default theme at text scale 1.0 and scaled with the text, so a larger
+    # text size shrinks the image rather than pushing the transport row out of
+    # sight.
+    PREVIEW_CHROME_H = 200
+    # Window padding on both sides, plus room for a vertical scrollbar.
+    PREVIEW_CHROME_W = 36
+    # The same, for the windows whose only width-sensitive item is wrapped
+    # text.
+    TEXT_CHROME_W = 34
 
     # Text fields whose caret the arrow-key shortcuts must leave alone: typing
     # a frame name or a range used to step the video instead of moving the
@@ -84,6 +96,12 @@ class grab_gui:
         self._extract_stop = False
         self._extract_state = self._idle_extract_state()
 
+        # The last geometry _fit_layout handed to DearPyGui.  Kept so that the
+        # render loop, which recomputes it every frame, can tell when nothing
+        # has moved and do nothing.
+        self._preview_side = 0
+        self._wraps = {}
+
     @staticmethod
     def _idle_extract_state():
         return {
@@ -104,14 +122,16 @@ class grab_gui:
     # ------------------------------------------------------------------
 
     def gui_configure(self):
-        # No ImGui layout file: this GUI is one window whose panes are sized
-        # from the viewport on every resize, and restoring a saved arrangement
-        # for it only ever reintroduced the stale-size scrollbar.  The
-        # viewport's own size is still remembered.
+        # Docking, like the other screens with more than one window: the three
+        # windows below are arranged by the user -- side by side, stacked, or
+        # tabbed on top of each other -- and the arrangement is restored next
+        # time.  Window > Reset layout to default puts it back.
         self.session = GuiSession(
             "grab", "YORU - Frame Capture", width=1240, height=860,
-            # Small enough for a laptop, wide enough that both panes still get
-            # their contents in rather than clipping them.
+            docking=True,
+            # Small enough for a laptop, wide enough that the default
+            # side-by-side arrangement still gets its contents in rather than
+            # clipping them.
             min_width=960, min_height=720,
         )
         self.session.begin()
@@ -129,12 +149,32 @@ class grab_gui:
                 tag="imwin_tag0",
             )
 
-        with dpg.window(**self.session.window_kwargs("Frame Capture", "main_window")):
+        # Three windows rather than one: each docks on its own, so the preview
+        # can be given the whole left half, or the two control panes dropped on
+        # top of each other into a single tab bar out of its way.
+        #
+        # None of them closes.  A window closed here is a pane of this screen
+        # gone -- the layout menu restores an arrangement, not a window that
+        # was shut -- and hiding one is what docking it into a tab behind
+        # another already does, reversibly.
+        with dpg.window(
+            **self.session.window_kwargs("Preview", "grab_preview", no_close=True)
+        ):
             self._build_source_row()
-            with dpg.group(horizontal=True):
-                self._build_preview_pane()
-                self._build_control_pane()
+            self._build_preview_pane()
             self._build_footer()
+
+        with dpg.window(
+            **self.session.window_kwargs("Save Frame", "grab_save", no_close=True)
+        ):
+            self._build_save_pane()
+
+        with dpg.window(
+            **self.session.window_kwargs(
+                "Automatic Extraction", "grab_extract", no_close=True
+            )
+        ):
+            self._build_extract_pane()
 
         # Shortcuts through DearPyGui's own handlers rather than a pynput
         # listener: a pynput listener is a global OS hook, so Left/Right/Alt
@@ -153,12 +193,14 @@ class grab_gui:
             )
 
         # setup
-        self.session.finish(fill_window="main_window", on_resize=self._relayout)
-        self._relayout()
+        self.session.finish(default_layout={
+            "grab_preview": (0.0, 0.0, 0.62, 1.0),
+            "grab_save": (0.62, 0.0, 0.38, 0.44),
+            "grab_extract": (0.62, 0.44, 0.38, 0.56),
+        })
+        self._fit_layout()
 
     def _build_source_row(self):
-        dpg.add_text(default_value="Video Source")
-        dpg.add_separator()
         with dpg.group(horizontal=True):
             dpg.add_text(default_value="Video Path")
             dpg.add_input_text(
@@ -170,185 +212,189 @@ class grab_gui:
                 callback=lambda: self.file_open(),
                 enabled=True,
             )
+        # Every window says for itself what went wrong in it.  Once they can be
+        # docked into separate tabs, a message left in another window's status
+        # line is a message nobody sees.
+        dpg.add_text(
+            tag="source_status", default_value="", wrap=520, color=(150, 170, 200)
+        )
 
     def _build_preview_pane(self):
-        with dpg.child_window(tag="left_pane", border=False, no_scrollbar=True):
-            dpg.add_image("imwin_tag0", tag="preview_image", width=520, height=520)
-            dpg.add_slider_int(
-                default_value=0,
-                min_value=0,
-                max_value=max(0, self.framecount - 2),
-                tag="frame_bar",
-                width=520,
-                callback=lambda: self.slide_bar_cb(),
+        dpg.add_image("imwin_tag0", tag="preview_image", width=520, height=520)
+        dpg.add_slider_int(
+            default_value=0,
+            min_value=0,
+            max_value=max(0, self.framecount - 2),
+            tag="frame_bar",
+            width=520,
+            callback=lambda: self.slide_bar_cb(),
+            enabled=False,
+        )
+        with dpg.group(horizontal=True):
+            dpg.add_checkbox(
+                label="Streaming",
+                default_value=False,
+                tag="streamingChkBox",
+                callback=lambda: self.stream_cb(),
                 enabled=False,
             )
-            with dpg.group(horizontal=True):
-                dpg.add_checkbox(
-                    label="Streaming",
-                    default_value=False,
-                    tag="streamingChkBox",
-                    callback=lambda: self.stream_cb(),
-                    enabled=False,
-                )
-                dpg.add_spacer(width=8)
-                dpg.add_button(
-                    tag="minus_frame",
-                    label="< Prev",
-                    callback=lambda: self.reverse_frame_bt(),
-                )
-                dpg.add_button(
-                    tag="plus_frame",
-                    label="Next >",
-                    callback=lambda: self.advance_frame_bt(),
-                )
-                dpg.add_spacer(width=8)
-                dpg.add_text(default_value="Speed")
-                dpg.add_combo(
-                    items=[1, 2, 5, 10, 20, 50, 100, 200, 500],
-                    tag="speed_list",
-                    default_value=1,
-                    width=70,
-                    callback=lambda: self.list_of_speed(),
-                )
-                dpg.add_spacer(width=8)
-                dpg.add_text(tag="frame_pos", default_value="Frame 0 / 0")
-
-    def _build_control_pane(self):
-        with dpg.child_window(tag="right_pane", width=-1, border=False):
-            # ---- manual grab -------------------------------------------
-            dpg.add_text(default_value="Save Frame")
-            dpg.add_separator()
-            dpg.add_text(default_value="Save Directory")
-            with dpg.group(horizontal=True):
-                dpg.add_input_text(
-                    tag="grab_path",
-                    readonly=True,
-                    hint="Path/to/save/frame",
-                    width=-92,
-                )
-                dpg.add_button(
-                    label="Select",
-                    width=84,
-                    callback=lambda: self.select_grab_dir(),
-                    enabled=True,
-                )
-            dpg.add_text(default_value="Frame Name")
-            dpg.add_input_text(
-                tag="save_name", default_value="", width=-92, hint="Save frame name"
-            )
-            dpg.add_spacer(height=2)
+            dpg.add_spacer(width=8)
             dpg.add_button(
-                label="Grab Current Frame  (Alt)",
-                tag="grab_btn",
-                width=-1,
-                height=30,
-                callback=lambda: self.grab_btn_cb(),
+                tag="minus_frame",
+                label="< Prev",
+                callback=lambda: self.reverse_frame_bt(),
             )
-            with dpg.group(horizontal=True):
-                dpg.add_text(
-                    tag="count_frames",
-                    default_value=f"{self.grab_count} frames grabbed",
-                )
-                dpg.add_spacer(width=8)
-                dpg.add_button(
-                    label="Reset Count", callback=lambda: self.count_reset_bt()
-                )
+            dpg.add_button(
+                tag="plus_frame",
+                label="Next >",
+                callback=lambda: self.advance_frame_bt(),
+            )
+            dpg.add_spacer(width=8)
+            dpg.add_text(default_value="Speed")
+            dpg.add_combo(
+                items=[1, 2, 5, 10, 20, 50, 100, 200, 500],
+                tag="speed_list",
+                default_value=1,
+                width=70,
+                callback=lambda: self.list_of_speed(),
+            )
+            dpg.add_spacer(width=8)
+            dpg.add_text(tag="frame_pos", default_value="Frame 0 / 0")
 
-            # ---- automatic extraction ----------------------------------
-            dpg.add_spacer(height=10)
-            dpg.add_text(default_value="Automatic Extraction")
-            dpg.add_separator()
+    def _build_save_pane(self):
+        # No section header of its own: the window's title bar -- or its tab,
+        # once it is docked on top of another window -- already carries the
+        # name.
+        dpg.add_text(default_value="Save Directory")
+        with dpg.group(horizontal=True):
+            dpg.add_input_text(
+                tag="grab_path",
+                readonly=True,
+                hint="Path/to/save/frame",
+                width=-92,
+            )
+            dpg.add_button(
+                label="Select",
+                width=84,
+                callback=lambda: self.select_grab_dir(),
+                enabled=True,
+            )
+        dpg.add_text(default_value="Frame Name")
+        dpg.add_input_text(
+            tag="save_name", default_value="", width=-92, hint="Save frame name"
+        )
+        dpg.add_spacer(height=2)
+        dpg.add_button(
+            label="Grab Current Frame  (Alt)",
+            tag="grab_btn",
+            width=-1,
+            height=30,
+            callback=lambda: self.grab_btn_cb(),
+        )
+        with dpg.group(horizontal=True):
             dpg.add_text(
-                default_value="Pick frames across the video the way DeepLabCut does.",
-                wrap=380,
-                color=(150, 170, 200),
+                tag="count_frames",
+                default_value=f"{self.grab_count} frames grabbed",
             )
-            dpg.add_spacer(height=2)
-            with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Frames to pick")
-                dpg.add_spacer(width=8)
-                dpg.add_input_int(
-                    tag="extract_count",
-                    default_value=frame_extraction.DEFAULT_COUNT,
-                    min_value=1,
-                    min_clamped=True,
-                    width=110,
-                    step=1,
-                )
-            with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Algorithm     ")
-                dpg.add_spacer(width=8)
-                dpg.add_combo(
-                    items=list(frame_extraction.ALGORITHMS),
-                    tag="extract_algo",
-                    default_value=frame_extraction.ALGORITHMS[0],
-                    width=150,
-                )
-            with dpg.tooltip("extract_algo"):
-                dpg.add_text(
-                    "uniform: frames drawn at random from the range. Fast, and "
-                    "it mirrors how often each thing actually happens.\n\n"
-                    "kmeans: frames clustered by appearance, one frame taken "
-                    "per cluster. Slower -- it reads the range once -- but rare "
-                    "postures survive the sample.",
-                    wrap=330,
-                )
-            with dpg.group(horizontal=True):
-                dpg.add_text(default_value="Video range   ")
-                dpg.add_spacer(width=8)
-                dpg.add_input_float(
-                    tag="extract_start",
-                    default_value=0.0,
-                    min_value=0.0,
-                    max_value=1.0,
-                    min_clamped=True,
-                    max_clamped=True,
-                    format="%.2f",
-                    step=0.05,
-                    width=110,
-                )
-                dpg.add_text(default_value="to")
-                dpg.add_input_float(
-                    tag="extract_stop",
-                    default_value=1.0,
-                    min_value=0.0,
-                    max_value=1.0,
-                    min_clamped=True,
-                    max_clamped=True,
-                    format="%.2f",
-                    step=0.05,
-                    width=110,
-                )
-            with dpg.tooltip("extract_start"):
-                dpg.add_text(
-                    "Fractions of the video, so 0.25 to 0.75 means the middle "
-                    "half. Use them to skip the handling at the start of a "
-                    "recording.",
-                    wrap=330,
-                )
-            dpg.add_spacer(height=4)
-            with dpg.group(horizontal=True):
-                dpg.add_button(
-                    label="Extract Frames",
-                    tag="extract_btn",
-                    width=170,
-                    height=30,
-                    callback=lambda: self.extract_btn_cb(),
-                )
-                dpg.add_spacer(width=8)
-                dpg.add_button(
-                    label="Stop",
-                    tag="extract_stop_btn",
-                    width=90,
-                    height=30,
-                    enabled=False,
-                    callback=lambda: self.extract_stop_cb(),
-                )
-            dpg.add_progress_bar(
-                tag="extract_progress", default_value=0.0, width=-1, overlay=""
+            dpg.add_spacer(width=8)
+            dpg.add_button(label="Reset Count", callback=lambda: self.count_reset_bt())
+        # Where a frame grabbed by hand reports itself.  The extraction window
+        # keeps a status line of its own: two windows that can end up in
+        # different tabs cannot share one.
+        dpg.add_text(tag="grab_status", default_value="", wrap=380)
+
+    def _build_extract_pane(self):
+        dpg.add_text(
+            tag="extract_hint",
+            default_value="Pick frames across the video the way DeepLabCut does.",
+            wrap=380,
+            color=(150, 170, 200),
+        )
+        dpg.add_spacer(height=2)
+        with dpg.group(horizontal=True):
+            dpg.add_text(default_value="Frames to pick")
+            dpg.add_spacer(width=8)
+            dpg.add_input_int(
+                tag="extract_count",
+                default_value=frame_extraction.DEFAULT_COUNT,
+                min_value=1,
+                min_clamped=True,
+                width=110,
+                step=1,
             )
-            dpg.add_text(tag="extract_status", default_value="", wrap=380)
+        with dpg.group(horizontal=True):
+            dpg.add_text(default_value="Algorithm     ")
+            dpg.add_spacer(width=8)
+            dpg.add_combo(
+                items=list(frame_extraction.ALGORITHMS),
+                tag="extract_algo",
+                default_value=frame_extraction.ALGORITHMS[0],
+                width=150,
+            )
+        with dpg.tooltip("extract_algo"):
+            dpg.add_text(
+                "uniform: frames drawn at random from the range. Fast, and "
+                "it mirrors how often each thing actually happens.\n\n"
+                "kmeans: frames clustered by appearance, one frame taken "
+                "per cluster. Slower -- it reads the range once -- but rare "
+                "postures survive the sample.",
+                wrap=330,
+            )
+        with dpg.group(horizontal=True):
+            dpg.add_text(default_value="Video range   ")
+            dpg.add_spacer(width=8)
+            dpg.add_input_float(
+                tag="extract_start",
+                default_value=0.0,
+                min_value=0.0,
+                max_value=1.0,
+                min_clamped=True,
+                max_clamped=True,
+                format="%.2f",
+                step=0.05,
+                width=110,
+            )
+            dpg.add_text(default_value="to")
+            dpg.add_input_float(
+                tag="extract_stop",
+                default_value=1.0,
+                min_value=0.0,
+                max_value=1.0,
+                min_clamped=True,
+                max_clamped=True,
+                format="%.2f",
+                step=0.05,
+                width=110,
+            )
+        with dpg.tooltip("extract_start"):
+            dpg.add_text(
+                "Fractions of the video, so 0.25 to 0.75 means the middle "
+                "half. Use them to skip the handling at the start of a "
+                "recording.",
+                wrap=330,
+            )
+        dpg.add_spacer(height=4)
+        with dpg.group(horizontal=True):
+            dpg.add_button(
+                label="Extract Frames",
+                tag="extract_btn",
+                width=170,
+                height=30,
+                callback=lambda: self.extract_btn_cb(),
+            )
+            dpg.add_spacer(width=8)
+            dpg.add_button(
+                label="Stop",
+                tag="extract_stop_btn",
+                width=90,
+                height=30,
+                enabled=False,
+                callback=lambda: self.extract_stop_cb(),
+            )
+        dpg.add_progress_bar(
+            tag="extract_progress", default_value=0.0, width=-1, overlay=""
+        )
+        dpg.add_text(tag="extract_status", default_value="", wrap=380)
 
     def _build_footer(self):
         dpg.add_separator()
@@ -365,29 +411,72 @@ class grab_gui:
     # Layout
     # ------------------------------------------------------------------
 
-    def _relayout(self):
-        """Fit the preview and the two panes to the viewport.
+    def _fit_layout(self):
+        """Fit the preview and the wrapped texts to the windows holding them.
 
-        Called once at start-up and on every viewport resize, so it must stay
-        cheap: DearPyGui runs the resize callback for each step of a drag, and
-        anything that decodes a frame or reallocates a texture here would be
-        paid dozens of times per second while the mouse moves.
+        Runs once at start-up and then once per rendered frame, because what
+        it depends on changes without the viewport changing: a docked window
+        is resized by dragging the splitter between it and its neighbour, and
+        a floating one by its own edge, and neither of those is a viewport
+        resize.  Every frame is often enough to follow a drag and cheap enough
+        to afford -- provided nothing here decodes a frame or reallocates a
+        texture, and provided DearPyGui is left alone while the numbers are
+        unchanged, which is what ``_preview_side`` and ``_wraps`` are for.
         """
-        vw = max(1, dpg.get_viewport_client_width())
-        # The Window menu sits above the main window, so it is not room the
-        # panes can spend.
-        vh = max(1, dpg.get_viewport_client_height() - self.session.menu_bar_height())
+        scale = getattr(self.session, "text_scale", 1.0) or 1.0
 
-        body_h = max(self.MIN_PREVIEW + self.LEFT_CHROME, vh - self.HEADER_H - self.FOOTER_H)
-        side = min(body_h - self.LEFT_CHROME, vw - self.SIDE_PANE_WIDTH - 56)
-        side = max(self.MIN_PREVIEW, int(side))
+        width, height = self._window_size("grab_preview")
+        if width:
+            side = min(
+                width - self.PREVIEW_CHROME_W,
+                height - int(self.PREVIEW_CHROME_H * scale),
+            )
+            side = max(self.MIN_PREVIEW, int(side))
+            if side != self._preview_side:
+                self._preview_side = side
+                dpg.configure_item("preview_image", width=side, height=side)
+                dpg.configure_item("frame_bar", width=side)
+            self._fit_wrap("source_status", width - self.PREVIEW_CHROME_W)
 
-        dpg.configure_item(
-            "left_pane", width=max(side + 26, self.LEFT_MIN_WIDTH), height=body_h
-        )
-        dpg.configure_item("right_pane", width=-1, height=body_h)
-        dpg.configure_item("preview_image", width=side, height=side)
-        dpg.configure_item("frame_bar", width=side)
+        width, _ = self._window_size("grab_save")
+        if width:
+            self._fit_wrap("grab_status", width - self.TEXT_CHROME_W)
+
+        width, _ = self._window_size("grab_extract")
+        if width:
+            self._fit_wrap("extract_hint", width - self.TEXT_CHROME_W)
+            self._fit_wrap("extract_status", width - self.TEXT_CHROME_W)
+
+    @staticmethod
+    def _window_size(tag):
+        """``(width, height)`` of a window, or ``(0, 0)`` before it is drawn.
+
+        A window that has not been rendered yet has no rect to report, and
+        sizing the preview against a zero would collapse it to the minimum for
+        a frame and snap it back on the next one.
+        """
+        if not dpg.does_item_exist(tag):
+            return 0, 0
+        size = dpg.get_item_rect_size(tag)
+        if not size or len(size) < 2:
+            return 0, 0
+        width, height = int(size[0]), int(size[1])
+        if width < 2 or height < 2:
+            return 0, 0
+        return width, height
+
+    def _fit_wrap(self, tag, width):
+        """Wrap a hint or status text at the width of the window it sits in.
+
+        A fixed wrap was fine while these lived in a pane of a known width.
+        In a window the user resizes, one too wide puts a horizontal scrollbar
+        under a one-line message, and one too narrow wastes half the window.
+        """
+        width = max(180, int(width))
+        if self._wraps.get(tag) == width or not dpg.does_item_exist(tag):
+            return
+        self._wraps[tag] = width
+        dpg.configure_item(tag, wrap=width)
 
     # ------------------------------------------------------------------
     # Render loop
@@ -420,6 +509,7 @@ class grab_gui:
         dpg.destroy_context()
 
     def plot_callback(self) -> None:
+        self._fit_layout()
         self._pump_extraction()
         if not self.has_video:
             return
@@ -451,7 +541,7 @@ class grab_gui:
         if not vid.isOpened():
             vid.release()
             print("Failed to open video: " + file_path)
-            self._set_status(f"Could not open the video: {file_path}")
+            self._set_source_status(f"Could not open the video: {file_path}")
             return
 
         if isinstance(self.vid, cv2.VideoCapture):
@@ -469,6 +559,7 @@ class grab_gui:
             self.frame = frame
             self.process_frame()
         print("Movie size: ", self.width, self.height)
+        self._set_source_status("")
         dpg.configure_item("frame_bar", max_value=max(0, self.framecount - 2))
         dpg.set_value("frame_bar", 0)
         dpg.set_value("imwin_tag0", self.frame_to_data(self.frame_re))
@@ -561,12 +652,12 @@ class grab_gui:
         # into a text field, so grabbing right after entering the frame name
         # has to keep working.
         if not self.has_video:
-            self._set_status("Select a video first.")
+            self._set_grab_status("Select a video first.")
             return
         self.grab_name = self._save_name()
         if not self.grab_name or not self.grab_dir:
             print("Not selected file dir or name")
-            self._set_status("Select a save directory and a frame name first.")
+            self._set_grab_status("Select a save directory and a frame name first.")
             return
         self.grab_path = os.path.join(
             self.grab_dir,
@@ -579,10 +670,10 @@ class grab_gui:
         if ret and frame is not None and frame_extraction.imwrite(self.grab_path, frame):
             self.grab_count = self.grab_count + 1
             self._update_grab_count()
-            self._set_status(f"Saved {os.path.basename(self.grab_path)}")
+            self._set_grab_status(f"Saved {os.path.basename(self.grab_path)}")
         else:
             print("Failed to read frame for grab")
-            self._set_status("Could not save that frame.")
+            self._set_grab_status("Could not save that frame.")
 
     def count_reset_bt(self):
         self.grab_count = 0
@@ -592,7 +683,16 @@ class grab_gui:
         dpg.set_value("count_frames", f"{self.grab_count} frames grabbed")
 
     def _set_status(self, text):
+        """Say something in the Automatic Extraction window."""
         dpg.set_value("extract_status", text)
+
+    def _set_grab_status(self, text):
+        """Say something in the Save Frame window."""
+        dpg.set_value("grab_status", text)
+
+    def _set_source_status(self, text):
+        """Say something in the Preview window, under the video path."""
+        dpg.set_value("source_status", text)
 
     # ------------------------------------------------------------------
     # Automatic extraction

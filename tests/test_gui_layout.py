@@ -370,3 +370,75 @@ class TestDynamicTextures:
             "a dynamic texture seeded with too few channels crashes on the "
             "first rendered frame:\n" + "\n".join(offenders)
         )
+
+
+# ---------------------------------------------------------------------------
+# Default arrangements
+# ---------------------------------------------------------------------------
+
+
+def _window_tags(tree):
+    """Every window tag a module builds, from its ``window_kwargs`` calls."""
+    tags = set()
+    for call in _calls(tree, "window_kwargs"):
+        if len(call.args) >= 2 and isinstance(call.args[1], ast.Constant):
+            tags.add(call.args[1].value)
+    return tags
+
+
+def _placed_windows(tree):
+    """``(tag, rect)`` for every window a module places through ``finish``."""
+    for call in _calls(tree, "finish"):
+        layout = _kwarg(call, "default_layout")
+        if isinstance(layout, ast.Dict):
+            for key, rect in zip(layout.keys, layout.values):
+                if isinstance(key, ast.Constant):
+                    yield key.value, rect
+        fill = _kwarg(call, "fill_window")
+        if isinstance(fill, ast.Constant):
+            yield fill.value, None
+
+
+class TestDefaultArrangement:
+    def test_a_default_layout_only_names_windows_that_exist(self, repo_root: Path):
+        """A tag that is not a window is skipped in silence, at start-up.
+
+        ``apply_default_layout`` logs a debug line and moves on, so a tag that
+        no longer matches a window does not raise anything: that window simply
+        opens wherever ImGui last left it, which on a first run is on top of
+        the one before it.  Renaming a window's key without renaming it here is
+        exactly the sort of edit that does that.
+        """
+        offenders = []
+        for path, tree in _gui_sources(repo_root):
+            windows = _window_tags(tree)
+            for tag, _ in _placed_windows(tree):
+                if tag not in windows:
+                    offenders.append(
+                        f"{path.name}: {tag!r} is placed but is not one of {sorted(windows)}"
+                    )
+        assert not offenders, (
+            "default layouts naming windows that do not exist:\n" + "\n".join(offenders)
+        )
+
+    def test_a_default_layout_stays_inside_the_content_area(self, repo_root: Path):
+        """The rects are fractions of the viewport, not pixels.
+
+        One written in pixels, or one that adds up to more than the whole,
+        puts part of a window past an edge -- and a window whose title bar is
+        off the top cannot be dragged back.
+        """
+        offenders = []
+        for path, tree in _gui_sources(repo_root):
+            for tag, rect in _placed_windows(tree):
+                if not isinstance(rect, ast.Tuple) or len(rect.elts) != 4:
+                    continue
+                values = [e.value for e in rect.elts if isinstance(e, ast.Constant)]
+                if len(values) != 4:
+                    continue
+                x, y, width, height = values
+                if not (0 <= x <= 1 and 0 <= y <= 1 and 0 < width <= 1 and 0 < height <= 1):
+                    offenders.append(f"{path.name}: {tag} = {values} is not in fractions")
+                elif x + width > 1.001 or y + height > 1.001:
+                    offenders.append(f"{path.name}: {tag} = {values} runs off the edge")
+        assert not offenders, "default layouts that do not fit:\n" + "\n".join(offenders)

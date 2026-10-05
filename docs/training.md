@@ -18,6 +18,11 @@
 
 3. Extract frames for labeling using Grab GUI. (Step1)
 
+   > The screen is three panes: **Preview**, **Save Frame** and **Automatic
+   > Extraction**. Drag one by its title bar to re-tile it, or drop it on top
+   > of another to put the two in a tab bar, and the arrangement is there
+   > again next time. **Window > Reset layout to default** puts it back.
+
    I. Select a video in the Video file path in the Grab GUI.
 
    Ⅱ. Select Save directory. (Basically, all_label_images in the project folder is a good choice.)
