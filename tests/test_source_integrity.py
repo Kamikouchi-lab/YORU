@@ -35,9 +35,17 @@ def test_app_entry_point_is_importable():
     assert callable(mod.main)
 
 
-def test_cli_entry_point_is_importable():
+def test_cli_entry_point_is_importable(monkeypatch):
     """The CLI must import without pulling in the GUI stack."""
     import sys
+
+    # Both modules are dropped first, so what this measures is what importing
+    # yoru.cli pulls in -- not what an earlier test happened to leave behind.
+    # test_app_entry_point_is_importable imports yoru.app and runs before this
+    # one wherever pywebview is installed, which used to fail the assertion at
+    # the end for a reason that had nothing to do with the CLI.
+    for name in ("yoru.cli", "yoru.app"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
 
     mod = importlib.import_module("yoru.cli")
     assert callable(mod.main)
