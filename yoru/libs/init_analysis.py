@@ -28,6 +28,8 @@ class init_analysis:
 
         self.m_dict["threshold"] = 0.3
         self.m_dict["tracking_exclude_classes"] = []
+        # Max centre movement per frame (px) that keeps a tracking ID; 0 = no limit.
+        self.m_dict["tracking_max_dist"] = 0.0
 
         # Progress published by the analysis worker thread and mirrored into
         # the widgets by analyze_GUI.plot_callback().

@@ -351,6 +351,16 @@ class analyze_GUI(GuiErrorMixin):
                 )
             with dpg.group(tag="tracking_exclude_group", show=self.m_dict["tracking_state"]):
                 dpg.add_spacer(height=4)
+                with dpg.group(horizontal=True):
+                    dpg.add_text(default_value="Max move/frame (px)")
+                    dpg.add_spacer(width=8)
+                    dpg.add_input_text(
+                        tag="tracking_max_dist",
+                        default_value=str(self.m_dict["tracking_max_dist"]),
+                        width=100,
+                        callback=lambda: self.in_tracking_max_dist(),
+                    )
+                    dpg.add_text(default_value="0 = no limit")
                 dpg.add_text(default_value="Exclude classes from tracking:")
                 with dpg.child_window(
                     tag="tracking_class_checkboxes", height=90, width=300, border=True
@@ -679,6 +689,15 @@ class analyze_GUI(GuiErrorMixin):
         tf = dpg.get_value("tracking_state")
         self.m_dict["tracking_state"] = tf
         dpg.configure_item("tracking_exclude_group", show=tf)
+
+    def in_tracking_max_dist(self):
+        tf = dpg.get_value("tracking_max_dist")
+        try:
+            self.m_dict["tracking_max_dist"] = max(0.0, float(tf))
+        except (ValueError, TypeError):
+            logger.warning(
+                "Invalid max tracking distance: %r (keeping previous value)", tf
+            )
 
     def in_thresh(self):
         tf = dpg.get_value("conf_threshold")

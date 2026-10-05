@@ -10,7 +10,6 @@ from tkinter import filedialog
 import cv2
 import numpy as np
 import pandas as pd
-import torch
 from munkres import Munkres
 
 from yoru.libs.detector_base import obb_of
@@ -35,6 +34,49 @@ def _conf_thresh(m_dict) -> float:
         return DEFAULT_CONF_THRESH
 
 
+def _tracking_max_dist(m_dict):
+    """Per-frame movement cap for tracking, in pixels; ``None`` for no cap."""
+    try:
+        max_dist = float(m_dict.get("tracking_max_dist", 0))
+    except (TypeError, ValueError):
+        return None
+    return max_dist if max_dist > 0 else None
+
+
+def match_to_previous(pre_pos, cur_pos, max_dist=None):
+    """Match this frame's detection centres to the previous frame's.
+
+    Returns one entry per current detection: the index into ``pre_pos`` of the
+    detection it continues, or -1 when it starts a new track.
+
+    The assignment minimises the summed centre distance over matched pairs.
+    When the frames hold different numbers of detections, Munkres pads the
+    rectangular matrix with zeros, so the surplus is left unmatched at a
+    constant cost and which detection is left over depends only on distances
+    between real detections -- not on where it sits in the image.
+
+    ``max_dist`` caps how far a detection may move between frames and keep its
+    ID.  Distances are clipped at the cap before the assignment and pairs past
+    it are split afterwards, which is the optimum of letting each detection
+    stay unmatched at half the cap.
+    """
+    if not cur_pos:
+        return []
+    if not pre_pos:
+        return [-1] * len(cur_pos)
+    pre = np.asarray(pre_pos, dtype=np.float64)
+    cur = np.asarray(cur_pos, dtype=np.float64)
+    dist = np.linalg.norm(pre[:, None, :] - cur[None, :, :], axis=2)
+    cost = dist if max_dist is None else np.minimum(dist, max_dist)
+    matches = [-1] * len(cur_pos)
+    # A list, not an array: pad_matrix() extends rows with ``+=``, which
+    # would add elementwise to a numpy row instead of appending.
+    for i, j in Munkres().compute(cost.tolist()):
+        if max_dist is None or dist[i, j] <= max_dist:
+            matches[j] = i
+    return matches
+
+
 class yolo_analysis:
     def __init__(self, m_dict):
         self.m_dict = m_dict
@@ -42,41 +84,6 @@ class yolo_analysis:
         self.mov_path_list = self.m_dict["input_path"]
         self.out_path = self.m_dict["output_path"]
         logger.debug("yolo_analysis initialized")
-
-    def cal_id(self, pre_mat, cur_mat):
-        pre_mat_calculate = pre_mat.copy()
-        cur_mat_calculate = cur_mat.copy()
-
-
-        actual_cur_num = len(cur_mat_calculate)
-        actual_pre_num = len(pre_mat_calculate)
-
-        while len(cur_mat_calculate) > len(pre_mat_calculate):
-            pre_mat_calculate.append((-1000, -1000))
-        while len(pre_mat_calculate) > len(cur_mat_calculate):
-            cur_mat_calculate.append((-1000, -1000))
-
-        if actual_cur_num < 1:
-            return None
-        pre_mat_calculate = torch.tensor(pre_mat_calculate).type(torch.float64)
-        cur_mat_calculate = torch.tensor(cur_mat_calculate).type(torch.float64)
-
-        # print(pre_mat , "pre_mat")
-        # print(cur_mat , "cur_mat")
-        matrix = torch.cdist(pre_mat_calculate, cur_mat_calculate)
-        matrix = matrix.numpy()
-        match_mat = Munkres().compute(matrix)
-
-        ret_match_mat = []
-
-        for i, j in match_mat:
-            if i >= actual_pre_num:
-                i = -1
-            if j >= actual_cur_num:
-                j = -1
-            ret_match_mat.append((i, j))
-
-        return ret_match_mat
 
     def drawing(self, result, img):
         for (res_frame_no, *res_box, res_x_center, res_y_center,
@@ -121,6 +128,7 @@ class yolo_analysis:
         self.class_names = detector.names
 
         self.colormap = get_colormap(self.class_names, "gist_rainbow")
+        max_dist = _tracking_max_dist(self.m_dict)
 
         movie_count = len(self.mov_path_list)
         total_movies = movie_count
@@ -235,23 +243,16 @@ class yolo_analysis:
                             cur_center_pos.append((x_center, y_center))
 
                     if self.m_dict["tracking_state"]:
-                        id_matrix = self.cal_id(pre_center_pos, cur_center_pos)
                         cur_ids = []
-                        if id_matrix is not None:
-                            id_matrix.sort(
-                                key=lambda x: x[1] if x[1] >= 0 else float("inf")
-                            )
-                            for ids in id_matrix:
-                                if ids[0] == -1 or ids[1] == -1:
-                                    cur_ids.append(global_counter)
-                                    global_counter += 1
-                                else:
-                                    if 0 <= ids[0] < len(pre_ids):
-                                        cur_ids.append(pre_ids[ids[0]])
-                                    else:
-                                        cur_ids.append(global_counter)
-                                        global_counter += 1
-                            result = [x + [y] for x, y in zip(result, cur_ids)]
+                        for i in match_to_previous(
+                            pre_center_pos, cur_center_pos, max_dist
+                        ):
+                            if i >= 0:
+                                cur_ids.append(pre_ids[i])
+                            else:
+                                cur_ids.append(global_counter)
+                                global_counter += 1
+                        result = [x + [y] for x, y in zip(result, cur_ids)]
 
                         pre_ids = cur_ids
                         pre_center_pos = cur_center_pos
