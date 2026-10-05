@@ -9,6 +9,7 @@ This module is part of YORU core and is NOT subject to any plugin's license.
 import importlib
 import logging
 import os
+import re
 
 from yoru.libs.detector_base import DetectorBase
 from yoru.libs.trainer_base import TrainerBase
@@ -102,6 +103,14 @@ def _normalize_backend(name: str) -> str:
     return _BACKEND_ALIASES.get(name, name)
 
 
+#: ultralytics' YOLOv5u weights: a YOLOv5 backbone under YOLOv8's anchor-free
+#: head, published as "yolov5su.pt", "yolov5x6u.pt" and so on.  The "u" sits
+#: right after the size letter, which is all that separates them from the
+#: upstream names -- and they are a different network, in ultralytics' format,
+#: that the bundled YOLOv5 code cannot read.
+_YOLOV5U_RE = re.compile(r"yolov?5[nsmlx]6?u")
+
+
 def _auto_detect_backend(model_path: str) -> str:
     """Infer the detector backend from the model file."""
     basename = os.path.basename(model_path).lower()
@@ -139,7 +148,8 @@ def _auto_detect_backend(model_path: str) -> str:
     # fetches the real YOLOv5 release, where ultralytics would silently swap
     # in its different "yolov5su.pt".
     if "yolov5" in basename:
-        return "yolov5"
+        # ...unless the name asks for YOLOv5u, which is ultralytics'.
+        return "ultralytics" if _YOLOV5U_RE.search(basename) else "yolov5"
 
     return "ultralytics"
 
@@ -300,8 +310,9 @@ def detect_trainer_backend(m_dict: dict) -> str:
 
     weight = os.path.basename(str(m_dict.get("weight", ""))).lower()
     if weight.startswith("yolov5"):
-        # Trained with the bundled YOLOv5 (yoru/libs/yolov5), as in YORU v1.
-        return "yolov5"
+        # Trained with the bundled YOLOv5 (yoru/libs/yolov5), as in YORU v1 --
+        # unless the name is one of ultralytics' YOLOv5u models.
+        return "ultralytics" if _YOLOV5U_RE.match(weight) else "yolov5"
     if any(tag in weight for tag in ("yolov8", "yolo8", "yolo11", "yolov11")):
         return "ultralytics"
 

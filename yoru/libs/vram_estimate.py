@@ -41,6 +41,7 @@ to within 4%.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -157,6 +158,12 @@ _PROFILES: dict[str, _Profile] = {
 # Longest keys first so "yolov8n" is not shadowed by a shorter prefix.
 _PROFILE_KEYS = sorted(_PROFILES, key=len, reverse=True)
 
+# ultralytics' YOLOv5u models: a YOLOv5 backbone under a YOLOv8 head, so
+# neither the activation cost nor the assigner cost of the yolov5* rows
+# describes them.  Matched here only to keep "yolov5su" off the "yolov5s" row;
+# no estimate is better than a wrong one.
+_YOLOV5U_RE = re.compile(r"^yolov5[nsmlx]6?u")
+
 
 def profile_for(weight: str) -> _Profile | None:
     """Look up the profile for a weight file name.
@@ -170,6 +177,8 @@ def profile_for(weight: str) -> _Profile | None:
         can be given.
     """
     stem = Path(str(weight)).stem.lower()
+    if _YOLOV5U_RE.match(stem):
+        return None
     for key in _PROFILE_KEYS:
         if stem.startswith(key):
             return _PROFILES[key]
