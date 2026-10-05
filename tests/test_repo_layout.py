@@ -17,7 +17,19 @@ def test_config_template_exists(repo_root: Path):
     cfg = repo_root / "config" / "template.yaml"
     assert cfg.exists(), "config/template.yaml not found"
 
-def test_yolov5_local_copy_removed(repo_root: Path):
-    """YOLOv5 is now provided via the ultralytics pip package, not a local copy."""
+def test_yolov5_is_vendored(repo_root: Path):
+    """Upstream YOLOv5 is carried in-tree, not installed.
+
+    It cannot come from a pip package: a checkpoint trained with YORU v1
+    unpickles into these exact classes, under these exact module names, and
+    ultralytics refuses the file outright.  The __init__.py is YORU's, and is
+    what binds 'models' and 'utils' for that unpickling.
+    """
     yv5 = repo_root / "yoru" / "libs" / "yolov5"
-    assert not yv5.exists(), "yoru/libs/yolov5/ should be removed; use ultralytics package instead"
+    assert yv5.exists(), "yoru/libs/yolov5/ not found (vendored YOLOv5 missing)"
+    for rel in ("__init__.py", "train.py", "models/yolo.py", "models/common.py",
+                "models/experimental.py", "utils/general.py", "utils/augmentations.py"):
+        assert (yv5 / rel).exists(), f"yoru/libs/yolov5/{rel} not found"
+    # The pretrained architectures the training GUI offers.
+    for size in "nsmlx":
+        assert (yv5 / "models" / f"yolov5{size}.yaml").exists(), size

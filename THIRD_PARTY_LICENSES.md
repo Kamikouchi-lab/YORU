@@ -76,6 +76,28 @@ Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency
 
 ## Bundled Code
 
+### YOLOv5
+
+- **Location:** `yoru/libs/yolov5/`
+- **License:** AGPL-3.0
+- **Copyright:** (c) Ultralytics
+- **License file:** `yoru/libs/yolov5/LICENSE`
+- **Upstream:** https://github.com/ultralytics/yolov5
+- **Why bundled rather than installed:** a checkpoint trained with YORU v1
+  unpickles into these exact classes under these exact module names
+  (`models.yolo.DetectionModel`, ...). The ultralytics package cannot read
+  those files at all, and pinning them to a pip release would make an old
+  project's weights depend on what happens to be installed.
+- **Modifications:**
+  - `weights_only=False` on every `torch.load`, and `torch.amp.autocast` in
+    place of the deprecated `torch.cuda.amp.autocast`, for PyTorch 2.6
+  - `pkg_resources` imported under a suppressed deprecation warning
+  - `yoru/libs/yolov5/__init__.py` added (YORU's, not upstream's): binds the
+    top-level `models` and `utils` the checkpoints name, without putting the
+    directory ahead of anything on `sys.path`
+  - `train.py` gained `yoru_stop_requested()` and one call to it at the end of
+    the epoch loop, for the training GUI's "stop after this epoch"
+
 ### labelImg
 
 - **Location:** `yoru/labelimg/`
@@ -120,7 +142,7 @@ Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency
 
 ### Copyleft Licenses
 
-1. **AGPL-3.0** (ultralytics, ultralytics-thop)
+1. **AGPL-3.0** (ultralytics, ultralytics-thop, bundled YOLOv5)
    - YORU itself is licensed under AGPL-3.0, so these are compatible.
    - Source code disclosure is required when distributing or serving over a network.
 
@@ -135,7 +157,9 @@ Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency
 
 ### Ultralytics Commercial Licensing
 
-Ultralytics YOLO is dual-licensed:
+Ultralytics YOLO is dual-licensed. This covers both the `ultralytics` package
+(YOLOv8 / YOLO11 / RT-DETR) and the YOLOv5 copy bundled in
+`yoru/libs/yolov5/`, which is Ultralytics' code under the same terms:
 
 - **AGPL-3.0 (default):** Requires that any project incorporating Ultralytics code
   or models trained with it must be open-sourced under AGPL-3.0. This obligation

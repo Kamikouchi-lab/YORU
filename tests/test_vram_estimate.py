@@ -23,7 +23,7 @@ from yoru.libs.vram_estimate import (
 def _selectable_weights():
     """Every weight file name train_GUI._build_weight can produce."""
     names = []
-    for version, prefix in (("YOLOv8", "yolov8"), ("YOLO11", "yolo11")):
+    for version, prefix in (("YOLOv5", "yolov5"), ("YOLOv8", "yolov8"), ("YOLO11", "yolo11")):
         assert version in MODEL_FAMILY_CONFIG["YOLO"]["versions"]
         names += [f"{prefix}{s}.pt" for s in MODEL_FAMILY_CONFIG["YOLO"]["sizes"]]
     names += [f"rtdetr-{s}.pt" for s in MODEL_FAMILY_CONFIG["RT-DETR"]["sizes"]]

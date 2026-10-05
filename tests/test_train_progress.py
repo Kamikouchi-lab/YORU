@@ -126,3 +126,82 @@ def test_epoch_header_and_summaries_are_never_redraws():
     for line in (HEADER, "3 epochs completed in 0.001 hours.",
                  "Results saved to runs/detect/train", "Epoch [1/50] Avg Loss: 0.42"):
         assert ProgressPrinter.is_redraw(line) is False
+
+
+# --- YOLOv5 -----------------------------------------------------------------
+# Upstream YOLOv5 draws a plain TQDM bar (U+2588 plus partial blocks, fenced by
+# "|") instead of ultralytics' heavy rules, and redraws it the same way.  Left
+# unrecognised, a run would put every batch in the scrollback.
+
+def _v5_epoch_writes(epoch: int, batches: int = 5) -> str:
+    """Bytes upstream YOLOv5's TQDM bar writes for one epoch."""
+    width = 10
+    parts = []
+    for i in range(1, batches + 1):
+        done = int(width * i / batches)
+        parts.append(
+            "\r      {e}/99      2.1G    0.09122    0.03011    0.01004"
+            "         13        640: {p}%|{bar}| {i}/{n} [00:31<00:13,  3.50it/s]".format(
+                e=epoch, p=int(i / batches * 100),
+                bar="█" * done + " " * (width - done), i=i, n=batches,
+            )
+        )
+    parts.append("\n")
+    return "".join(parts)
+
+
+def test_yolov5_bar_step_progress_is_read():
+    line = "      1/99      2.1G: 71%|" + "█" * 7 + "   | 115/161 [00:31<00:13]"
+    assert ProgressPrinter.step_progress(line) == (115, 161)
+    assert ProgressPrinter.is_redraw(line) is True
+
+
+def test_yolov5_partial_block_glyphs_are_part_of_the_bar():
+    """TQDM renders the leading edge as one of U+2589..U+258F, not U+2588."""
+    line = "      1/99      2.1G: 75%|" + "█" * 7 + "▌  | 121/161 [00:33<00:11]"
+    assert ProgressPrinter.step_progress(line) == (121, 161)
+
+
+def test_yolov5_keeps_one_row_per_epoch():
+    raw = _v5_epoch_writes(0) + _v5_epoch_writes(1)
+    rows = [r for r in _render(_run(raw, in_place=True)) if r]
+    assert len(rows) == 2, rows
+    assert all(row.endswith("5/5 [00:31<00:13,  3.50it/s]") for row in rows)
+    assert rows[0].lstrip().startswith("0/99")
+    assert rows[1].lstrip().startswith("1/99")
+
+
+def test_yolov5_final_draw_of_an_epoch_is_kept_when_redirected():
+    rows = [r for r in _render(_run(_v5_epoch_writes(0), in_place=False)) if r]
+    assert len(rows) == 1 and "5/5" in rows[0]
+
+
+def test_yolov5_ascii_bar_is_read_too():
+    """TQDM falls back to "#" when the stream cannot encode block glyphs --
+    which is what the training pipe gets on a non-UTF-8 Windows console."""
+    mid = ("        0/1         0G    0.07859   0.006475     0.0193          4"
+           "         96:  50%|#####     | 1/2 [00:00<00:00,  3.71it/s]")
+    end = ("        0/1         0G    0.07859   0.006475     0.0193          4"
+           "         96: 100%|##########| 2/2 [00:00<00:00,  4.61it/s]")
+    assert ProgressPrinter.step_progress(mid) == (1, 2)
+    assert ProgressPrinter.is_redraw(mid) is True
+    assert ProgressPrinter.is_redraw(end) is False
+
+
+def test_yolov5_ascii_partial_glyph_is_a_digit_not_a_block():
+    line = ("        0/1         0G: 53%|#####3    | 1/2 [00:00<00:00,  3.71it/s]")
+    assert ProgressPrinter.step_progress(line) == (1, 2)
+
+
+def test_a_tqdm_bar_counting_bytes_is_judged_by_its_percentage():
+    """No n/N to compare, so the percentage is what says it will be redrawn."""
+    part = "yolov5s.pt:  40%|####      | 2.10M/5.40M [00:01<00:01, 3.4MB/s]"
+    done = "yolov5s.pt: 100%|##########| 5.40M/5.40M [00:02<00:00, 3.4MB/s]"
+    assert ProgressPrinter.is_redraw(part) is True
+    assert ProgressPrinter.is_redraw(done) is False
+
+
+def test_yolov5_validation_row_is_kept():
+    line = ("                 Class     Images  Instances          P          R"
+            "      mAP50   mAP50-95: 100%|##########| 1/1 [00:00<00:00,  1.35it/s]")
+    assert ProgressPrinter.is_redraw(line) is False

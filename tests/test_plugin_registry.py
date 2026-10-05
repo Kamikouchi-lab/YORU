@@ -55,8 +55,11 @@ def test_unknown_backend_reports_what_is_available():
     [
         ("yolov8", "ultralytics"),
         ("yolo11", "ultralytics"),
-        # v1 configs still say yolov5; it must not become an unknown backend.
-        ("yolov5", "ultralytics"),
+        # v1 configs say yolov5, and must reach the vendored upstream backend:
+        # ultralytics cannot read the checkpoints those configs point at.
+        ("yolov5", "yolov5"),
+        # ...while ultralytics' own YOLOv5u models go the other way.
+        ("yolov5u", "ultralytics"),
         ("fasterrcnn", "torchvision"),
         ("maskrcnn", "torchvision"),
         ("ssd", "torchvision"),
@@ -77,6 +80,12 @@ def test_backend_aliases(config_value, expected):
         ("ssd_vgg16_best.pt", "torchvision"),
         ("yolo11s.pt", "ultralytics"),
         ("yolov8m.pt", "ultralytics"),
+        # Upstream YOLOv5 against ultralytics' YOLOv5u: one "u" apart in the
+        # file name, and two backends apart in what can read the file.
+        ("yolov5s.pt", "yolov5"),
+        ("yolov5x.pt", "yolov5"),
+        ("yolov5su.pt", "ultralytics"),
+        ("yolov5x6u.pt", "ultralytics"),
     ],
 )
 def test_auto_detect_backend_from_filename(filename, expected):

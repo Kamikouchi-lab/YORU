@@ -16,12 +16,22 @@ class loadingParam:
 #: have no rotated-box head at all, so an OBB project cannot offer them.
 OBB_CAPABLE_FAMILIES = ("YOLO",)
 
+#: ...and within that family, only these versions.  YOLOv5 predates the OBB
+#: head entirely, so an OBB project must not offer it even though its family
+#: as a whole is OBB-capable.
+OBB_CAPABLE_YOLO_VERSIONS = ("YOLOv8", "YOLO11")
+
+#: Version selected when nothing else decides, and the one an OBB project
+#: falls back to when the current selection cannot do oriented boxes.
+DEFAULT_YOLO_VERSION = "YOLO11"
+
 # Per-family option definitions
 MODEL_FAMILY_CONFIG = {
     "YOLO": {
-        # YOLOv5 is intentionally absent: the bundled yolov5 backend was removed
-        # in v2.0 and ultralytics cannot train a legacy yolov5 checkpoint.
-        "versions":  ["YOLOv8", "YOLO11"],
+        # YOLOv5 here is upstream YOLOv5, trained and served by the vendored
+        # copy in yoru/libs/yolov5 -- not ultralytics' YOLOv5u, which is a
+        # different model and is reached by naming its weight directly.
+        "versions":  ["YOLOv5", "YOLOv8", "YOLO11"],
         "sizes":     ["n", "s", "m", "l", "x"],
     },
     "RT-DETR": {
@@ -46,6 +56,8 @@ class init_train:
         self.m_dict["project_dir"] = "."
         self.m_dict["yaml_path"] = self.m_dict["project_dir"] + "/config.yaml"
         self.m_dict["weight_list"] = [
+            # YOLOv5 (upstream, anchor-based -- no OBB variant exists)
+            "yolov5n.pt", "yolov5s.pt", "yolov5m.pt", "yolov5l.pt", "yolov5x.pt",
             # YOLOv8
             "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
             # YOLO11
@@ -68,14 +80,15 @@ class init_train:
         # rather than with the training run.
         self.m_dict["obb"] = False
         self.m_dict["obb_capable_families"] = list(OBB_CAPABLE_FAMILIES)
+        self.m_dict["obb_capable_yolo_versions"] = list(OBB_CAPABLE_YOLO_VERSIONS)
 
         # Model family
         self.m_dict["model_family_list"] = list(MODEL_FAMILY_CONFIG.keys())
         self.m_dict["model_family"]      = "YOLO"
 
         # YOLO-specific
-        self.m_dict["yolo_version_list"] = MODEL_FAMILY_CONFIG["YOLO"]["versions"]
-        self.m_dict["yolo_version"]      = "YOLO11"
+        self.m_dict["yolo_version_list"] = list(MODEL_FAMILY_CONFIG["YOLO"]["versions"])
+        self.m_dict["yolo_version"]      = DEFAULT_YOLO_VERSION
         self.m_dict["yolo_size_list"]    = MODEL_FAMILY_CONFIG["YOLO"]["sizes"]
         self.m_dict["yolo_size"]         = "s"
 

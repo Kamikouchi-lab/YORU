@@ -27,11 +27,12 @@ class ConfigCreatorGUI:
         self.class_list = ["None"]
         self.com_list = self._get_com_ports()
         self.plugin_list = self._get_plugins()
-        # "yolov5" is deliberately not offered for new configs: the bundled
-        # yolov5 backend was removed in v2.0.  Existing configs that still say
-        # "yolov5" keep working via the alias in yoru.libs.plugins.
+        # "yolov5" means upstream YOLOv5, served by the vendored copy in
+        # yoru/libs/yolov5 -- the only backend that can read a checkpoint
+        # trained with YORU v1.  ultralytics' YOLOv5u models are reached
+        # through "yolov8"/"yolo11" (or "auto"), which share their format.
         self.model_type_list = [
-            "auto", "yolov8", "yolo11", "rtdetr",
+            "auto", "yolov5", "yolov8", "yolo11", "rtdetr",
             "fasterrcnn", "maskrcnn", "ssd", "onnx",
         ]
 

@@ -32,14 +32,31 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 # The bar glyphs are U+2501 (heavy), U+2578 (half heavy) and U+2500 (light).
 _BAR_RE = re.compile(r"\d+%\s+[\u2501\u2578\u2500]+\s+(\d+)/(\d+)(?![/\d])")
 
+# YOLOv5 draws a plain tqdm bar instead, fenced by "|", e.g.
+#   "     1/99   2.1G  0.09  0.03  0.01  13  640: 71%|#######   | 115/161 [00:31<00:13]"
+# Two glyph sets, and which one appears is not ours to choose: tqdm draws
+# U+2588 with the partial blocks U+2589..U+258F when the stream can encode
+# them, and falls back to "#" with the digits 1-9 as partials when it cannot --
+# which is what a pipe on a non-UTF-8 Windows console gets.
+_TQDM_FILL = r"\u2588-\u258f#0-9 "
+_TQDM_BAR_RE = re.compile(
+    r"\d+%\|[" + _TQDM_FILL + r"]*\|\s*(\d+)/(\d+)(?![/\d])"
+)
+
+# The same bar when it carries no n/N -- a byte count, say ("2.1M/5.4M").  The
+# percentage says on its own whether a later draw supersedes this one.
+_TQDM_PCT_RE = re.compile(r"(\d+)%\|[" + _TQDM_FILL + r"]*\|")
+
 # train_torchvision.py, e.g. "Epoch [1/50] Step [10/161] Loss: 0.4231"
 _STEP_RE = re.compile(r"\bStep\s*\[\s*(\d+)\s*/\s*(\d+)\s*\]")
 
 # Any bar, including the ones drawn without a total (downloads of unknown
 # size, streamed sources). Those carry no n/N, and TQDM fills them solid
 # only when it closes -- which is what tells a final draw from a redraw.
-_BAR_RUN_RE = re.compile(r"[\u2501\u2578\u2500]{4,}")
-_FILLED = "\u2501"
+_BAR_RUN_RE = re.compile(r"[\u2501\u2578\u2500]{4,}|[\u2588-\u258f]{4,}")
+#: The glyph each bar style uses for a completed segment -- U+2501 for
+#: ultralytics, U+2588 for tqdm.  A run made only of these is a closed bar.
+_FILLED = frozenset("\u2501\u2588")
 
 
 class ProgressPrinter:
@@ -74,7 +91,7 @@ class ProgressPrinter:
     @staticmethod
     def step_progress(line):
         """Return ``(done, total)`` if *line* is a step-progress line, else None."""
-        m = _BAR_RE.search(line) or _STEP_RE.search(line)
+        m = _BAR_RE.search(line) or _TQDM_BAR_RE.search(line) or _STEP_RE.search(line)
         if m is None:
             return None
         return int(m.group(1)), int(m.group(2))
@@ -85,9 +102,12 @@ class ProgressPrinter:
         progress = cls.step_progress(line)
         if progress is not None:
             return progress[0] < progress[1]
+        pct = _TQDM_PCT_RE.search(line)
+        if pct is not None:
+            return int(pct.group(1)) < 100
         run = _BAR_RUN_RE.search(line)
         if run is not None:
-            return set(run.group()) != {_FILLED}
+            return not set(run.group()) <= _FILLED
         return False
 
     def write(self, line):

@@ -12,7 +12,7 @@ model:
 
  yolo_model_path: "Path to YORU model"  # Specify the YORU model (.pt file)
 
- yolo_model_type: "auto"  # Model type: "auto" (inferred from filename), "yolov8", "yolo11", "rtdetr", "fasterrcnn", "maskrcnn", "ssd", "onnx"
+ yolo_model_type: "auto"  # Model type: "auto" (inferred from filename), "yolov5", "yolov8", "yolo11", "rtdetr", "fasterrcnn", "maskrcnn", "ssd", "onnx"
 
  Trigger: False
 

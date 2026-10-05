@@ -38,6 +38,7 @@ whenever a real run disagrees with it.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -115,6 +116,26 @@ class _Profile:
 
 # Calibrated at imgsz 640, AMP on, against ultralytics GPU_mem readings.
 _PROFILES: dict[str, _Profile] = {
+    # --- YOLOv5 -----------------------------------------------------------
+    # Parameter counts measured by building models/yolov5*.yaml at nc=80.
+    #
+    # act_gb measured on an RTX 5060 Ti as the slope of peak reserved VRAM
+    # between batch 2 and batch 10 over a real 1-epoch run at 640 px -- every
+    # batch-independent term cancels, leaving the per-image cost.  The same
+    # measurement run against the YOLOv8 rows below came out 1.21x lower than
+    # the figures they carry, so these are that slope times 1.21: what matters
+    # for an estimate the GUI colours green/orange/red is that all the rows sit
+    # on one scale, not that any single row is exact.
+    #
+    # anchors=0 is not an oversight: YOLOv5 assigns labels by matching them to
+    # three anchor boxes per cell, which costs a handful of (anchors, labels)
+    # tensors, not the (batch, labels, anchor_points) workspace that YOLOv8's
+    # task-aligned assigner builds.
+    "yolov5n": _Profile(1.9, 0.12, 20, 0),
+    "yolov5s": _Profile(7.2, 0.25, 20, 0),
+    "yolov5m": _Profile(21.2, 0.36, 20, 0),
+    "yolov5l": _Profile(46.6, 0.53, 20, 0),
+    "yolov5x": _Profile(86.7, 0.75, 20, 0),
     # --- YOLOv8 -----------------------------------------------------------
     "yolov8n": _Profile(3.2, 0.15, 20, _ANCHORS_640),
     "yolov8s": _Profile(11.2, 0.27, 20, _ANCHORS_640),
@@ -144,6 +165,12 @@ _PROFILES: dict[str, _Profile] = {
 # Longest keys first so "yolov8n" is not shadowed by a shorter prefix.
 _PROFILE_KEYS = sorted(_PROFILES, key=len, reverse=True)
 
+# ultralytics' YOLOv5u models: a YOLOv5 backbone under a YOLOv8 head, so
+# neither the parameter counts nor the assigner cost of the yolov5* rows
+# describe them.  Matched here only to keep "yolov5su" off the "yolov5s" row;
+# no estimate is better than a wrong one.
+_YOLOV5U_RE = re.compile(r"^yolov5[nsmlx]6?u")
+
 
 def profile_for(weight: str) -> _Profile | None:
     """Look up the profile for a weight file name.
@@ -157,6 +184,8 @@ def profile_for(weight: str) -> _Profile | None:
         can be given.
     """
     stem = Path(str(weight)).stem.lower()
+    if _YOLOV5U_RE.match(stem):
+        return None
     for key in _PROFILE_KEYS:
         if stem.startswith(key):
             return _PROFILES[key]

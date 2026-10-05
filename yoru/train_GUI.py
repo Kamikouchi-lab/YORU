@@ -769,14 +769,17 @@ class yoru_train:
             self.m_dict["obb"] = True
             w = w.replace("-obb", "")
         if w.startswith("yolov5"):
-            # v1 projects: YOLOv5 training is no longer bundled, so restore the
-            # same size on YOLO11 instead of showing an unusable selection.
-            size = w[6] if len(w) > 6 else "s"
-            print(
-                f"[yoru] This project was trained with '{weight}'. YOLOv5 training "
-                f"is no longer bundled; switching to yolo11{size}.pt."
-            )
-            family, version = "YOLO", "YOLO11"
+            if re.match(r"yolov5[nsmlx]6?u", w):
+                # ultralytics' YOLOv5u, not upstream YOLOv5: a different model,
+                # and one the combos below cannot express.  Leaving the weight
+                # untouched keeps it training on the ultralytics backend rather
+                # than silently becoming the anchor-based yolov5s.pt.
+                print(
+                    f"[yoru] '{weight}' is an ultralytics YOLOv5u model, which the "
+                    f"YOLO Version selector does not cover; keeping it as the weight."
+                )
+                return
+            family, version, size = "YOLO", "YOLOv5", w[6] if len(w) > 6 else "s"
         elif w.startswith("yolov8"):
             family, version, size = "YOLO", "YOLOv8", w[6] if len(w) > 6 else "s"
         elif w.startswith("yolo11"):
@@ -810,8 +813,9 @@ class yoru_train:
                 self.m_dict["rtdetr_size"] = size
                 dpg.set_value("rtdetr_size_combo", size)
 
-        # Keep the weight in step with the restored combos; this is what remaps
-        # a legacy yolov5 selection onto a weight that can actually be trained.
+        # Keep the weight in step with the restored combos: a v1 project whose
+        # config records a bare "yolov5" gains its ".pt", and an OBB project
+        # gains the "-obb" suffix.
         self.m_dict["weight"] = self._build_weight()
         dpg.set_value("weight_display_text", self.m_dict["weight"])
 
@@ -983,7 +987,7 @@ class yoru_train:
         family = self.m_dict.get("model_family", "YOLO")
         obb = bool(self.m_dict.get("obb"))
         if family == "YOLO":
-            prefix_map = {"YOLOv8": "yolov8", "YOLO11": "yolo11"}
+            prefix_map = {"YOLOv5": "yolov5", "YOLOv8": "yolov8", "YOLO11": "yolo11"}
             prefix = prefix_map.get(self.m_dict.get("yolo_version", "YOLO11"), "yolo11")
             size = self.m_dict.get("yolo_size", "s")
             suffix = "-obb" if obb else ""
@@ -1007,10 +1011,17 @@ class yoru_train:
     def _sync_obb_ui(self):
         """Make the rest of the form agree with the OBB flag.
 
-        Only ultralytics' YOLO has a rotated-box head, so an OBB project forces
-        the family back to YOLO and says why, rather than letting the user pick
-        RT-DETR and discover at training time that it cannot read the labels.
+        Only ultralytics' YOLOv8 / YOLO11 have a rotated-box head, so an OBB
+        project forces the family back to YOLO and hides the YOLO versions that
+        cannot do it, rather than letting the user pick RT-DETR or YOLOv5 and
+        discover at training time that it cannot read the labels.
         """
+        from yoru.libs.init_train import (
+            DEFAULT_YOLO_VERSION,
+            MODEL_FAMILY_CONFIG,
+            OBB_CAPABLE_YOLO_VERSIONS,
+        )
+
         obb = bool(self.m_dict.get("obb"))
         if obb and self.m_dict.get("model_family") != "YOLO":
             self.m_dict["model_family"] = "YOLO"
@@ -1018,6 +1029,18 @@ class yoru_train:
             dpg.configure_item("yolo_options_group",   show=True)
             dpg.configure_item("rtdetr_options_group", show=False)
             dpg.configure_item("tv_options_group",     show=False)
+
+        # The version list is per-task: YOLOv5 exists for ordinary detection
+        # and not at all for oriented boxes.
+        versions = list(
+            OBB_CAPABLE_YOLO_VERSIONS if obb else MODEL_FAMILY_CONFIG["YOLO"]["versions"]
+        )
+        self.m_dict["yolo_version_list"] = versions
+        dpg.configure_item("yolo_version_combo", items=versions)
+        if self.m_dict.get("yolo_version") not in versions:
+            self.m_dict["yolo_version"] = DEFAULT_YOLO_VERSION
+            dpg.set_value("yolo_version_combo", DEFAULT_YOLO_VERSION)
+
         dpg.set_value(
             "obb_note",
             "OBB project: only YOLOv8 / YOLO11 have a rotated-box head, so the "
@@ -1056,7 +1079,16 @@ class yoru_train:
         dpg.set_value("weight_display_text", self.m_dict["weight"])
 
     def select_version(self):
-        self.m_dict["yolo_version"] = dpg.get_value("yolo_version_combo")
+        from yoru.libs.init_train import OBB_CAPABLE_YOLO_VERSIONS
+
+        version = dpg.get_value("yolo_version_combo")
+        if self.m_dict.get("obb") and version not in OBB_CAPABLE_YOLO_VERSIONS:
+            # _sync_obb_ui normally keeps this out of the list; refusing here
+            # as well means a stale combo cannot start an unusable run.
+            dpg.set_value("yolo_version_combo", self.m_dict.get("yolo_version"))
+            print(f"[yoru] This is an OBB project; {version} has no rotated-box head.")
+            return
+        self.m_dict["yolo_version"] = version
         self.m_dict["weight"] = self._build_weight()
         dpg.set_value("weight_display_text", self.m_dict["weight"])
 
@@ -1134,11 +1166,22 @@ class yoru_train:
             target=terminate_process_tree, args=(proc,), daemon=True,
         ).start()
 
-    def _monitor_training(self, proc, total_epochs: int) -> None:
-        """Read subprocess stdout line by line, parse epoch progress, update m_dict."""
-        # Matches: "Epoch [1/50]" (torchvision) or "      1/100 " (ultralytics/yolov5)
+    def _monitor_training(self, proc, total_epochs: int, zero_based_epochs=False) -> None:
+        """Read subprocess stdout line by line, parse epoch progress, update m_dict.
+
+        Args:
+            proc: the training subprocess, its stdout a pipe.
+            total_epochs (int): epochs requested, used until the output says.
+            zero_based_epochs (bool): True for a trainer that counts its epochs
+                from zero.  YOLOv5 prints ``0/99`` through ``99/99`` for a
+                100-epoch run where ultralytics prints ``1/100`` through
+                ``100/100``; adding one to both numbers is what keeps the
+                progress bar and the ETA reading the same either way.
+        """
+        # Matches: "Epoch [1/50]" (torchvision) or "      1/100 " (YOLO trainers)
         torchvision_re = re.compile(r"Epoch\s*\[\s*(\d+)/(\d+)\s*\]")
         ultralytics_re = re.compile(r"^\s+(\d+)/(\d+)\s")
+        offset = 1 if zero_based_epochs else 0
 
         # Ultralytics redraws its progress bar with a carriage return, which
         # the pipe translates into a newline: echo through ProgressPrinter so
@@ -1158,8 +1201,8 @@ class yoru_train:
                 printer.write(line)  # pass-through to console, one row per epoch
                 m = torchvision_re.search(line) or ultralytics_re.match(line)
                 if m:
-                    current = int(m.group(1))
-                    total   = int(m.group(2))
+                    current = int(m.group(1)) + offset
+                    total   = int(m.group(2)) + offset
                     if start_time is None:
                         start_time = time.monotonic()
                         start_epoch = current - 1
@@ -1239,7 +1282,11 @@ class yoru_train:
             self.m_dict["train_stop_mode"] = ""
             self.m_dict["training_active"] = True
             t = threading.Thread(
-                target=self._monitor_training, args=(proc, total), daemon=True,
+                target=self._monitor_training,
+                args=(proc, total),
+                # YOLOv5 numbers its epochs from zero; see _monitor_training.
+                kwargs={"zero_based_epochs": backend == "yolov5"},
+                daemon=True,
             )
             t.start()
         except Exception as e:

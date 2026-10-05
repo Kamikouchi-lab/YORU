@@ -9,6 +9,7 @@ This module is part of YORU core and is NOT subject to any plugin's license.
 import importlib
 import logging
 import os
+import re
 
 from yoru.libs.detector_base import DetectorBase
 from yoru.libs.trainer_base import TrainerBase
@@ -59,8 +60,10 @@ _PLUGIN_MODULES = [
     "yoru.libs.plugins.onnx_detector",
     "yoru.libs.plugins.ultralytics_detector",
     "yoru.libs.plugins.torchvision_detector",
+    "yoru.libs.plugins.yolov5_detector",
     "yoru.libs.plugins.ultralytics_trainer",
     "yoru.libs.plugins.torchvision_trainer",
+    "yoru.libs.plugins.yolov5_trainer",
 ]
 
 
@@ -86,7 +89,10 @@ def _ensure_plugins_loaded():
 # ---------------------------------------------------------------------------
 
 _BACKEND_ALIASES: dict[str, str] = {
-    "yolov5": "ultralytics",
+    # "yolov5" is NOT here: it is a backend of its own, served by the vendored
+    # upstream copy.  Only that backend can read a v1 checkpoint, whose pickle
+    # names classes in YOLOv5's own 'models' package.
+    "yolov5u": "ultralytics",
     "yolov8": "ultralytics",
     "yolo11": "ultralytics",
     "fasterrcnn": "torchvision",
@@ -118,6 +124,11 @@ def _auto_detect_backend(model_path: str) -> str:
         return "ultralytics"
     if "yolov8" in basename or "yolo8" in basename:
         return "ultralytics"
+    if "yolov5" in basename or "yolo5" in basename:
+        # "yolov5su.pt" and friends are ultralytics' re-trained YOLOv5u
+        # models, which the ultralytics backend reads and this one cannot.
+        # The "u" sits right after the size letter: yolov5s.pt / yolov5su.pt.
+        return "ultralytics" if re.search(r"yolov?5[nsmlx]6?u", basename) else "yolov5"
 
     # For ambiguous names (e.g. "best.pt"), inspect the checkpoint contents.
     sniffed = _sniff_checkpoint(model_path)
@@ -161,6 +172,11 @@ def _sniff_checkpoint(model_path: str):
                 return "torchvision"
     if b"ultralytics" in blob:
         return "ultralytics"
+    # Upstream YOLOv5 pickles its classes in a top-level "models" package --
+    # the very reason ultralytics cannot read these files.  Checked after
+    # "ultralytics" because a YOLOv5u checkpoint is an ultralytics one.
+    if b"models.yolo" in blob or b"models.common" in blob:
+        return "yolov5"
     if b"torchvision" in blob:
         return "torchvision"
     return None
@@ -181,7 +197,7 @@ def get_detector(
     """Instantiate, load, and return a detector plugin.
 
     Args:
-        backend: One of ``'ultralytics'``, ``'rtdetr'``,
+        backend: One of ``'ultralytics'``, ``'yolov5'``, ``'rtdetr'``,
                  ``'torchvision'``, ``'onnx'``, or ``'auto'``.
         model_path: Path to model weights.
         conf_thresh: Confidence threshold applied by every backend.
@@ -244,5 +260,9 @@ def detect_trainer_backend(m_dict: dict) -> str:
     weight = m_dict.get("weight", "").lower()
     if any(tag in weight for tag in ("yolov8", "yolo8", "yolo11", "yolov11")):
         return "ultralytics"
+    if "yolov5" in weight or "yolo5" in weight:
+        # Same "u" test as _auto_detect_backend: yolov5su.pt trains under
+        # ultralytics, yolov5s.pt under the vendored upstream trainer.
+        return "ultralytics" if re.search(r"yolov?5[nsmlx]6?u", weight) else "yolov5"
 
     return "ultralytics"

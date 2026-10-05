@@ -137,9 +137,17 @@
 8. Check the "YAML Path" and select training conditions, such as epochs, networks and so on.
 
     > In an OBB project the weight gains an `-obb` suffix (`yolo11s-obb.pt`)
-    > and the model family is fixed to YOLO: only YOLOv8 and YOLO11 have a
-    > rotated-box head. RT-DETR, Faster R-CNN, Mask R-CNN and SSD cannot be
-    > trained on oriented boxes.
+    > and the choice narrows to YOLOv8 and YOLO11: only those two have a
+    > rotated-box head. YOLOv5, RT-DETR, Faster R-CNN, Mask R-CNN and SSD
+    > cannot be trained on oriented boxes, and an OBB project does not offer
+    > them.
+
+    > **YOLOv5** is upstream YOLOv5, trained by the copy bundled in
+    > `yoru/libs/yolov5/`. Pick it to continue a line of work started in YORU
+    > v1; for a new project YOLO11 is both faster and more accurate at the
+    > same size. Note that it is *not* ultralytics' YOLOv5u, which is a YOLOv5
+    > backbone under a YOLOv8 head — a different model, with different
+    > weights. See [Working with YOLOv5](#working-with-yolov5).
 
     > The "GPU memory" line under the training conditions estimates how much
     > VRAM the run will need and compares it with what the card has free right
@@ -186,7 +194,7 @@
 | `config.yaml` | `task: detect` | `task: obb` |
 | LabelImg format | YOLO (`class cx cy w h`) | YOLO-OBB (`class x1 y1 … y4`) |
 | Weight | `yolo11s.pt` | `yolo11s-obb.pt` |
-| Model families | all of them | YOLOv8 / YOLO11 only |
+| Models offered | all of them | YOLOv8 / YOLO11 only |
 | Real-time drawing | upright rectangle | rotated rectangle |
 | `*_detect.csv` | `… total_time` | `… total_time, cx, cy, w, h, angle` |
 
@@ -206,3 +214,57 @@ the *upright* box around each rotated one. Two boxes that overlap perfectly as
 rectangles but differ in angle therefore score lower than they should, which
 makes the mAP it reports for an OBB model conservative. The rotated mAP that
 ultralytics prints at the end of training is the figure to quote.
+
+---
+
+## Working with YOLOv5
+
+YORU supports upstream YOLOv5 — the anchor-based model from
+[ultralytics/yolov5](https://github.com/ultralytics/yolov5), the one YORU v1
+trained with. It is a first-class backend: training, real-time detection,
+analysis and evaluation all work with it, and nothing has to be exported.
+
+### Opening a v1 project
+
+Open the project folder in the Training GUI as usual. Its `config.yaml` records
+`yolov5` or a `yolov5*.pt` weight, and the GUI restores that selection instead
+of substituting a different model. For detection, set `yolo_model_type: "yolov5"`
+in the condition file, or leave it on `auto` — YORU identifies a v1 checkpoint by
+reading which classes it was pickled with, so a weight named `best.pt` is
+routed correctly without being renamed.
+
+> **Why a v1 checkpoint needs this backend.** It stores the model as a pickled
+> `models.yolo.DetectionModel`, a class that lives only in YOLOv5's own source
+> tree. The `ultralytics` package refuses those files by name, which is why
+> YOLOv5 is bundled in `yoru/libs/yolov5/` rather than installed from PyPI.
+
+> **A `.pt` file runs code when it is opened.** Loading one of these
+> checkpoints means unpickling it, and unpickling executes whatever the file
+> says to. That is unavoidable for the format. Train your own weights, or get
+> them from someone you trust.
+
+### YOLOv5 and YOLOv5u are different models
+
+The **YOLOv5** entry in the YOLO Version selector always means upstream
+YOLOv5 — `yolov5s.pt` and friends.
+
+Ultralytics also publishes **YOLOv5u** (`yolov5su.pt`): the same backbone under
+YOLOv8's anchor-free head. It is a different model with different weights and a
+different output format, and it is served by the ultralytics backend, not this
+one. YORU keeps them apart by the `u` in the file name, so nothing silently
+turns into the other. To train a YOLOv5u model, name its weight in
+`config.yaml` directly; the Version selector does not offer it.
+
+Ultralytics also rewrites a bare `yolov5s.pt` into `yolov5su.pt` when *it* is
+asked to load one. YORU never routes an upstream YOLOv5 weight through
+ultralytics, so that rewrite cannot happen behind your back — but it is worth
+knowing when quoting a model name in a paper.
+
+### What YOLOv5 cannot do here
+
+- **Oriented bounding boxes.** No rotated-box head exists for YOLOv5 at any
+  size, so an OBB project does not list it.
+- **Rotated boxes of any kind.** YOLOv5 predicts upright boxes only, so an
+  analysis that needs a body angle wants YOLOv8 or YOLO11 in an OBB project.
+
+The "GPU memory" estimate covers YOLOv5 to the same ±30% as the other models.

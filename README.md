@@ -137,11 +137,13 @@ This project includes code from the following repositories:
 
 - [LabelImg](https://github.com/HumanSignal/labelImg): Licensed under the MIT License
 
+- [YOLOv5](https://github.com/ultralytics/yolov5): Licensed under the AGPL-3.0 License. Bundled in `yoru/libs/yolov5/` so that models trained with YORU v1 keep working — the `ultralytics` package cannot read those checkpoints.
+
 For a complete list of all dependencies and their licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Ultralytics Commercial Licensing Notice
 
-YORU uses [Ultralytics YOLO](https://ultralytics.com) for object detection, which is dual-licensed:
+YORU uses [Ultralytics YOLO](https://ultralytics.com) for object detection — both the `ultralytics` package (YOLOv8 / YOLO11 / RT-DETR) and the bundled YOLOv5 — which is dual-licensed:
 
 - **AGPL-3.0 (default):** Requires that any project incorporating Ultralytics code or models trained with it must be open-sourced under AGPL-3.0. This obligation extends to training code and models produced by that code.
 
