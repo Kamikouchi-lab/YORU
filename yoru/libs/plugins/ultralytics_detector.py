@@ -9,6 +9,7 @@ Requires: ``pip install ultralytics``
 import torch
 
 from yoru.libs.detector_base import DetectorBase
+from yoru.libs.device import resolve_device
 from yoru.libs.plugins import (
     DEFAULT_CONF_THRESH,
     DEFAULT_IOU_THRESH,
@@ -29,6 +30,9 @@ class _UltralyticsDetectorBase(DetectorBase):
         self._names: dict = dict(self._model.names)
         self._conf_thresh = float(kwargs.get("conf_thresh", DEFAULT_CONF_THRESH))
         self._iou_thresh = float(kwargs.get("iou_thresh", DEFAULT_IOU_THRESH))
+        # ultralytics' own selection falls back CUDA -> CPU and never reaches
+        # MPS, so Apple Silicon needs the device named on every predict call.
+        self._device = resolve_device(kwargs.get("device", "auto"))
 
     @property
     def names(self) -> dict:
@@ -39,6 +43,7 @@ class _UltralyticsDetectorBase(DetectorBase):
             image,
             conf=self._conf_thresh,
             iou=self._iou_thresh,
+            device=self._device,
             verbose=False,
         )
         result = results[0]

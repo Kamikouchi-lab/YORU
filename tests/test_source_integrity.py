@@ -35,18 +35,8 @@ def test_app_entry_point_is_importable():
     assert callable(mod.main)
 
 
-def test_cli_entry_point_is_importable(monkeypatch):
-    """The CLI must import without pulling in the GUI stack."""
-    import sys
-
-    # Both modules are dropped first, so what this measures is what importing
-    # yoru.cli pulls in -- not what an earlier test happened to leave behind.
-    # test_app_entry_point_is_importable imports yoru.app and runs before this
-    # one wherever pywebview is installed, which used to fail the assertion at
-    # the end for a reason that had nothing to do with the CLI.
-    for name in ("yoru.cli", "yoru.app"):
-        monkeypatch.delitem(sys.modules, name, raising=False)
-
+def test_cli_entry_point_is_importable():
+    """The CLI must import and expose main() and the parser defaults."""
     mod = importlib.import_module("yoru.cli")
     assert callable(mod.main)
     parser = mod.build_parser()
@@ -54,7 +44,28 @@ def test_cli_entry_point_is_importable(monkeypatch):
     assert ns.command == "gui"
     # --config defaults to None so the remembered condition file is preserved.
     assert ns.config is None
-    assert "yoru.app" not in sys.modules
+
+
+def test_importing_the_cli_does_not_pull_in_the_gui():
+    """The CLI must not drag the GUI stack in with it.
+
+    Checked in a fresh interpreter rather than against this process's
+    ``sys.modules``: test_app_entry_point_is_importable above imports
+    ``yoru.app`` on purpose, so an in-process assertion would only be
+    measuring which test ran first.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, yoru.cli; yoru.cli.build_parser().parse_args([]); "
+        "leaked = sorted(m for m in sys.modules if m.startswith('yoru.app')); "
+        "assert not leaked, leaked"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120
+    )
+    assert proc.returncode == 0, proc.stderr
 
 
 def test_version_is_consistent(repo_root: Path):

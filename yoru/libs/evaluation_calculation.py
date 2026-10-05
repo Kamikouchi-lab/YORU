@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) YORU contributors — see LICENSE for details.
 
-import glob
 import itertools
 import json
 import logging
@@ -9,6 +8,11 @@ import os
 from collections import Counter
 
 import cv2
+import matplotlib
+
+# Evaluation writes figures to files, including from a GUI worker thread.
+# An interactive Matplotlib backend would create another GUI on that thread.
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -16,6 +20,8 @@ import seaborn as sns
 from tqdm import tqdm
 
 from yoru.libs.plugins import get_detector
+from yoru.libs.detector_base import obb_of
+from yoru.libs.obb import obb_corners
 
 logger = logging.getLogger(__name__)
 
@@ -30,40 +36,50 @@ class EvaluationImageAnalyzer:
     def analyze_image(self):
         detector = get_detector("auto", self.yolo_model_path)
 
-        # クラス名の取得
+        # Get class names
         class_names = detector.names
         logger.debug("Class names: %s", class_names)
 
         # run_evaluation() below also accepts .jpg, so gather the same set here;
         # a JPEG dataset used to produce no _yolo.txt files at all.
-        img_path_list = []
-        for ext in ("*.png", "*.jpg", "*.jpeg"):
-            img_path_list.extend(glob.glob(os.path.join(self.data_path, ext)))
-        img_path_list.sort()
+        img_path_list = sorted(
+            os.path.join(self.data_path, name) for name in os.listdir(self.data_path)
+            if os.path.splitext(name)[1].lower() in (".png", ".jpg", ".jpeg")
+        )
         logger.debug("Found %d images under %s", len(img_path_list), self.data_path)
         image_count = len(img_path_list)
 
         for img_path in tqdm(img_path_list, desc="Processing images"):
+            if self.m_dict.get("quit", False):
+                return
             base_name = os.path.basename(img_path)
             file_name_without_ext = os.path.splitext(base_name)[0]
 
             frame = cv2.imread(img_path)
+            if frame is None:
+                raise ValueError(f"Could not read evaluation image: {img_path}")
             height, width, channels = frame.shape
 
             detections = detector.detect(frame)
 
-            # 出力パスの作成
+            # Create the output path
             result_txt_path = os.path.join(
                 self.data_path, file_name_without_ext + "_yolo.txt"
             )
             result = []
             for d in detections:
-                # xywhn形式（中心x, 中心y, 幅, 高さ）に変換（正規化）
+                if d.get("angle") is not None:
+                    corners = obb_corners(obb_of(d))
+                    result.append([d["class_id"], d["conf"], *[
+                        value for x, y in corners for value in (x / width, y / height)
+                    ]])
+                    continue
+                # Convert to xywhn format (center x, center y, width, height), normalised
                 x_center = (d["x1"] + d["x2"]) / 2 / width
                 y_center = (d["y1"] + d["y2"]) / 2 / height
                 w = (d["x2"] - d["x1"]) / width
                 h = (d["y2"] - d["y1"]) / height
-                # 結果をリストに保存
+                # Save the result to the list
                 result.append(
                     [
                         d["class_id"],
@@ -106,20 +122,7 @@ class ModelValidation:
         return iou
 
     def convert_to_corners(self, box):
-        """``(x1, y1, x2, y2)`` from a label file's coordinate fields.
-
-        Accepts both label formats: four numbers are ``x_center y_center w h``,
-        and eight are the four corners of an oriented box, which are reduced
-        here to the upright box around them.
-
-        **The IoU below is therefore the upright-box IoU, for OBB datasets as
-        well.**  Two boxes that overlap perfectly as rectangles but differ in
-        angle score lower than they should, so an OBB model's mAP from this
-        tool is a conservative figure, not the rotated mAP ultralytics reports
-        at the end of training.  Rotated IoU is a separate piece of work; what
-        matters here is that an OBB dataset evaluates at all rather than
-        failing on an unpackable line.
-        """
+        """Upright envelope; evaluation uses label_iou to preserve rotation."""
         values = [float(v) for v in box]
         if len(values) == 8:
             xs = values[0::2]
@@ -132,12 +135,45 @@ class ModelValidation:
         y2 = y_center + height / 2
         return [x1, y1, x2, y2]
 
+    def label_iou(self, box_a, box_b):
+        """Geometric IoU of YOLO xywh or YOLO-OBB four-corner labels.
+
+        Normalising x and y independently preserves intersection/union ratios,
+        including for non-square images. Never refit a rectangle after that
+        transformation: the normalised polygon can be a parallelogram.
+        """
+        def polygon(box):
+            values = np.asarray(box, dtype=np.float32)
+            if not np.isfinite(values).all():
+                raise ValueError("Box coordinates must be finite")
+            if len(values) == 4:
+                x, y, w, h = values
+                if w < 0 or h < 0:
+                    raise ValueError("Box dimensions must be non-negative")
+                values = np.array([[x-w/2, y-h/2], [x+w/2, y-h/2],
+                                   [x+w/2, y+h/2], [x-w/2, y+h/2]], dtype=np.float32)
+            elif len(values) == 8:
+                values = values.reshape(4, 2)
+            else:
+                raise ValueError("Expected xywh or four corner coordinates")
+            # Work above OpenCV's small-coordinate intersection tolerances.
+            return cv2.convexHull(values.reshape(4, 2) * 1024.0)
+
+        a, b = polygon(box_a), polygon(box_b)
+        area_a, area_b = cv2.contourArea(a), cv2.contourArea(b)
+        if area_a <= 0 or area_b <= 0:
+            return 0.0
+        intersection, _ = cv2.intersectConvexConvex(a, b)
+        intersection = min(max(float(intersection), 0.0), area_a, area_b)
+        return intersection / (area_a + area_b - intersection)
+
     def calculate_tp_fp(self, gt_boxes, pred_boxes, iou_threshold):
         """
-        gt_boxes: 真のバウンディングボックスのリスト
-        pred_boxes: 予測されたバウンディングボックスのリスト。各ボックスは(score, x1, y1, x2, y2)の形式。
-        iou_threshold: IoUのしきい値
-        iou_list: Iouのリスト
+        gt_boxes: List of ground-truth bounding boxes
+        Predictions are (class, score, *coordinates), GT is (class, *coordinates).
+        Outputs follow descending confidence order.
+        iou_threshold: IoU threshold
+        iou_list: List of IoU values
         tp: True positive
         fp: False positive
         """
@@ -147,11 +183,11 @@ class ModelValidation:
             iou_list = []
             return tp, fp, iou_list
 
-        # IOUの結果のリスト
+        # List of IoU results
         iou_list = []
 
-        # 予測ボックスをスコアでソート
-        pred_boxes = sorted(pred_boxes, key=lambda x: x[0], reverse=True)
+        # Sort predicted boxes by score
+        pred_boxes = sorted(pred_boxes, key=lambda x: float(x[1]), reverse=True)
 
         tp = np.zeros(len(pred_boxes))
         fp = np.zeros(len(pred_boxes))
@@ -162,17 +198,15 @@ class ModelValidation:
             max_gt_idx = -1
 
             for j, gt_box in enumerate(gt_boxes):
-                float_gt_box = [float(item) for item in gt_box[1:]]
-                float_pred_box = [float(item) for item in pred_box[2:]]
-                gt_box_corner = self.convert_to_corners(float_gt_box)
-                pred_box_corner = self.convert_to_corners(float_pred_box)
-                current_iou = self.calculate_iou(pred_box_corner, gt_box_corner)
+                if j in matched or int(float(gt_box[0])) != int(float(pred_box[0])):
+                    continue
+                current_iou = self.label_iou(pred_box[2:], gt_box[1:])
 
                 if current_iou > max_iou:
                     max_iou = current_iou
                     max_gt_idx = j
 
-            # IOUリストに追加
+            # Append to the IoU list
             if max_iou >= 0:
                 iou_list.append(max_iou)
 
@@ -200,21 +234,17 @@ class ModelValidation:
 
     def calculate_ap(self, recalls, precisions):
         """Interpolated AP - VOC 2010 way"""
-        # 並び替える
-        recalls = np.sort(recalls)
-        precisions = np.sort(precisions)
-
         recalls = np.concatenate(([0.0], recalls, [1.0]))
         precisions = np.concatenate(([0.0], precisions, [0.0]))
 
-        # Precisionの値を後ろから見ていき、現在の値より大きな値が見られた場合には現在の値をその大きな値に置き換えます
+        # Scan the precision values from the end; if a larger value is found, replace the current value with that larger value
         for i in range(precisions.size - 2, -1, -1):
             precisions[i] = np.maximum(precisions[i], precisions[i + 1])
 
-        # 今回のrecallの値と前回のrecallの値の差分を取得
+        # Get the difference between the current recall value and the previous recall value
         indices = np.where(recalls[1:] != recalls[:-1])[0]
 
-        # 各変化点でのprecisionの平均を取り、それをrecallの変化量で重み付けして合計する
+        # Take the precision at each change point, weight it by the change in recall, and sum the result
         ap = np.sum((recalls[indices + 1] - recalls[indices]) * precisions[indices + 1])
 
         return ap
@@ -226,98 +256,69 @@ class Evaluator(ModelValidation):
         logger.info("Starting evaluation...")
 
     def evaluate(self, gt_boxes, pred_boxes, classes, model_base_name):
-        iou_thresholds = np.arange(0.50, 1.00, 0.05)
-        ap_50_95 = {}
-        mAP_50_95 = {}
-        ap_50 = {}
-        ap_75 = {}
-        iou_results = {}
-        recalls_dict = {}
-        precisions_dict = {}
-
-        # 各クラスに対して評価を行う
-        for class_id in tqdm(classes, desc="Processing images"):
-            class_aps = []
-            iou_per_class = []
-            counter = 0
-            for iou_thresh in iou_thresholds:
-                all_tps = []
-                all_fps = []
-                total_gts = 0
-                iou_thresh_hold_disp = int(iou_thresh * 100)
-
-                for list_indx, pred_box_image in enumerate(pred_boxes):
-                    gt_box_image = gt_boxes[list_indx]
-                    class_gt_boxes = [
-                        box
-                        for box in gt_box_image
-                        if int(float(box[0])) == int(class_id)
-                    ]
-                    class_pred_boxes = [
-                        box
-                        for box in pred_box_image
-                        if int(float(box[0])) == int(class_id)
-                    ]
-
-                    tp, fp, iou_list = self.calculate_tp_fp(
-                        class_gt_boxes, class_pred_boxes, iou_thresh
-                    )
-
-                    all_tps.extend(tp)
-                    all_fps.extend(fp)
-                    if counter == 0:
-                        iou_list = [n for n in iou_list if n > 0]
-                        iou_per_class.extend(iou_list)
-                    total_gts += len(class_gt_boxes)
-
-                # PrecisionとRecallの計算
-                counter += 1
-                tp_cumsum = np.cumsum(all_tps)
-                fp_cumsum = np.cumsum(all_fps)
-                recalls = tp_cumsum / total_gts
-                precisions = tp_cumsum / (tp_cumsum + fp_cumsum)
-
-                # Precisionの補正
-                precisions = np.concatenate(
-                    ([0.0], np.maximum.accumulate(precisions[::-1]), [0.0])
-                )
-                recalls = np.concatenate(([0.0], recalls, [1.0]))
-
+        if len(gt_boxes) != len(pred_boxes):
+            raise ValueError("Ground truth and predictions must cover the same images")
+        thresholds = np.linspace(0.5, 0.95, 10)
+        aps, iou_results, recalls_dict, precisions_dict = {}, {}, {}, {}
+        for class_id in tqdm(classes, desc="Processing classes"):
+            gt = [[b for b in image if int(float(b[0])) == int(class_id)]
+                  for image in gt_boxes]
+            pred = [sorted((b for b in image if int(float(b[0])) == int(class_id)),
+                           key=lambda b: float(b[1]), reverse=True)
+                    for image in pred_boxes]
+            total_gt = sum(map(len, gt))
+            scores = [float(b[1]) for image in pred for b in image]
+            order = np.argsort(-np.asarray(scores), kind="stable")
+            aps[class_id] = []
+            iou_results[class_id] = []
+            for index, threshold in enumerate(thresholds):
+                if self.m_dict.get("quit", False):
+                    raise InterruptedError("Evaluation cancelled")
+                tps, fps = [], []
+                for truth, predictions in zip(gt, pred):
+                    if self.m_dict.get("quit", False):
+                        raise InterruptedError("Evaluation cancelled")
+                    tp, fp, ious = self.calculate_tp_fp(truth, predictions, threshold)
+                    tps.extend(tp)
+                    fps.extend(fp)
+                    if index == 0:
+                        iou_results[class_id].extend(ious)
+                tp = np.cumsum(np.asarray(tps)[order])
+                fp = np.cumsum(np.asarray(fps)[order])
+                recall = tp / total_gt if total_gt else np.zeros_like(tp)
+                precision = np.divide(tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) > 0)
+                # Classes without annotations have undefined AP and do not enter mAP.
+                aps[class_id].append(float(self.calculate_ap(recall, precision))
+                                     if total_gt else None)
+                if index == 0:
+                    recalls_dict[class_id] = recall.tolist()
+                    precisions_dict[class_id] = precision.tolist()
+                plot_recall = np.r_[0.0, recall, 1.0]
+                plot_precision = np.r_[0.0, precision, 0.0]
+                plot_precision = np.maximum.accumulate(plot_precision[::-1])[::-1]
                 self.plot_precision_recall_curve(
-                    precisions,
-                    recalls,
-                    classes[class_id],
-                    self.m_dict["pr_curve_dir"],
-                    model_base_name,
-                    iou_thresh_hold_disp,
+                    plot_precision, plot_recall, classes[class_id],
+                    self.m_dict["pr_curve_dir"], model_base_name, round(threshold * 100),
                 )
 
-                # APの計算
-                ap = np.sum((recalls[1:] - recalls[:-1]) * precisions[1:])
-                class_aps.append(ap)
+        ap50 = {c: values[0] for c, values in aps.items()}
+        ap75 = {c: values[5] for c, values in aps.items()}
+        per_class = {c: float(np.mean(values)) if values[0] is not None else None
+                     for c, values in aps.items()}
 
-            ap_50_95[class_id] = class_aps
-            ap_50[class_id] = class_aps[0]
-            ap_75[class_id] = class_aps[5]
-            mAP_50_95[class_id] = np.mean(class_aps)
-            iou_results[class_id] = iou_per_class
+        def mean_defined(values):
+            values = [v for v in values if v is not None]
+            return float(np.mean(values)) if values else None
 
-        mAP_50 = np.mean(list(ap_50.values()))
-        mAP_75 = np.mean(list(ap_75.values()))
-
-        return (
-            {
-                "AP@[.50:.05:.95]_per_class": ap_50_95,
-                "mAP@[.50:.05:.95]_per_class": mAP_50_95,
-                "AP@.50_per_class": ap_50,
-                "mAP@.50": mAP_50,
-                "AP@.75_per_class": ap_75,
-                "mAP@.75": mAP_75,
-            },
-            iou_results,
-            recalls_dict,
-            precisions_dict,
-        )
+        return ({
+            "AP@[.50:.05:.95]_per_class": aps,
+            "mAP@[.50:.05:.95]_per_class": per_class,
+            "AP@.50_per_class": ap50, "mAP@.50": mean_defined(ap50.values()),
+            "AP@.75_per_class": ap75, "mAP@.75": mean_defined(ap75.values()),
+            "mAP@[.50:.05:.95]": mean_defined(per_class.values()),
+            "IoU method": "polygon (rotation preserved)",
+            "AP method": "all-point interpolated precision envelope",
+        }, iou_results, recalls_dict, precisions_dict)
 
     def read_boxes_txt(self, box_path):
         boxes_list = []
@@ -325,7 +326,8 @@ class Evaluator(ModelValidation):
         with open(box_path, "r") as file:
             lines = file.readlines()
             for line in lines:
-                boxes_list.append(line.strip().split())
+                if line.strip():
+                    boxes_list.append(line.strip().split())
 
         return boxes_list
 
@@ -335,14 +337,14 @@ class Evaluator(ModelValidation):
             [(key, value) for key, values in data_dict.items() for value in values],
             columns=col_name,
         )
-        # クラス名を変換
+        # Convert class names
         df["class_name"] = df["class"].map(classes_dict)
         return df
 
     def read_yolo_det_box_txt(self):
         detector = get_detector("auto", self.m_dict["model_path"])
 
-        # クラス名の取得
+        # Get class names
         class_names = detector.names
         return class_names
 
@@ -386,7 +388,7 @@ class Evaluator(ModelValidation):
 
     def count_correct_predictions(self, labels, predictions):
         """
-        ラベルと予測ラベルの一致をカウントします。重複するラベルにも対応しています。
+        Count matches between labels and predicted labels. Handles duplicate labels as well.
         """
         label_counts = Counter(labels)
         prediction_counts = Counter(predictions)
@@ -396,45 +398,26 @@ class Evaluator(ModelValidation):
         return correct
 
     def calculate_precision_recall(self, directory):
-        total_labels = 0
-        total_predictions = 0
-        correct_predictions = 0
-
-        for file in tqdm(os.listdir(directory)):
-            if file.endswith(".png") or file.endswith(".jpg"):
-                # splitext, not split("."): a name like "fly.2024-05-01.png"
-                # would otherwise be truncated to "fly" and never matched.
-                base_filename = os.path.splitext(file)[0]
-                label_file = os.path.join(directory, base_filename + ".txt")
-                yolo_file = os.path.join(directory, base_filename + "_yolo.txt")
-
-                if os.path.exists(label_file) and os.path.exists(yolo_file):
-                    with open(label_file, "r") as lf, open(yolo_file, "r") as yf:
-                        labels = [int(line.split()[0]) for line in lf.readlines()]
-                        predictions = [int(line.split()[0]) for line in yf.readlines()]
-
-                        total_labels += len(labels)
-                        total_predictions += len(predictions)
-
-                        correct_predictions += self.count_correct_predictions(
-                            labels, predictions
-                        )
-
-        if total_labels > 0 and total_predictions > 0:
-            recall = correct_predictions / total_labels
-            precision = correct_predictions / total_predictions
-            return (
-                precision,
-                recall,
-                total_labels,
-                total_predictions,
-                correct_predictions,
-            )
-        else:
-            return 0, 0, 0, 0, 0
+        """Micro precision/recall with one-to-one, same-class matches at IoU .5."""
+        total_labels = total_predictions = correct_predictions = 0
+        for filename in sorted(os.listdir(directory)):
+            if self.m_dict.get("quit", False):
+                raise InterruptedError("Evaluation cancelled")
+            if os.path.splitext(filename)[1].lower() not in (".png", ".jpg", ".jpeg"):
+                continue
+            base = os.path.join(directory, os.path.splitext(filename)[0])
+            truth = self.read_boxes_txt(base + ".txt")
+            predictions = self.read_boxes_txt(base + "_yolo.txt")
+            tp, _, _ = self.calculate_tp_fp(truth, predictions, 0.5)
+            total_labels += len(truth)
+            total_predictions += len(predictions)
+            correct_predictions += int(np.sum(tp))
+        precision = correct_predictions / total_predictions if total_predictions else 0.0
+        recall = correct_predictions / total_labels if total_labels else 0.0
+        return precision, recall, total_labels, total_predictions, correct_predictions
 
     def run_evaluation(self, image_directory):
-        # ディレクトリ内の全ての画像を取得
+        # Get all images in the directory
 
         precision, recall, total_labels, total_predictions, correct_predictions = (
             self.calculate_precision_recall(image_directory)
@@ -442,24 +425,24 @@ class Evaluator(ModelValidation):
 
         image_files = [
             f
-            for f in os.listdir(image_directory)
-            if f.endswith(".jpg") or f.endswith(".png")
+            for f in sorted(os.listdir(image_directory))
+            if os.path.splitext(f)[1].lower() in (".jpg", ".png", ".jpeg")
         ]
 
         gt_boxes = []
         pred_boxes = []
 
         for img_file in image_files:
-            # 対応するground truthとYOLOの結果のtxtファイル名を構築
+            # Build the txt file names for the corresponding ground truth and YOLO results
             base_name = os.path.splitext(img_file)[0]
             gt_txt = os.path.join(image_directory, base_name + ".txt")
             yolo_txt = os.path.join(image_directory, base_name + "_yolo.txt")
 
-            # これらのtxtファイルからデータを読み込む
+            # Read the data from these txt files
             gt_boxes.append(self.read_boxes_txt(gt_txt))
             pred_boxes.append(self.read_boxes_txt(yolo_txt))
 
-        # クラス名のリストを取得
+        # Get the list of class names
         class_names = self.read_yolo_det_box_txt()
         logger.debug("Class names: %s", class_names)
 
@@ -495,14 +478,14 @@ class Evaluator(ModelValidation):
         self.save_dict_to_txt(results, result_directory)
         logger.info("Saved results to: %s", result_directory)
 
-        # iou listの出力
+        # Output the iou list
         iou_dataframe = self.dict_to_dataframe(iou_res, class_names)
         result_directory_iou = os.path.join(
             self.m_dict["result_dir"], model_base_name + "_iou_results" + ".csv"
         )
         iou_dataframe.to_csv(result_directory_iou)
 
-        # 結果の描写
+        # Plot the results
         self.drawing_graph(
             results, class_names, self.m_dict["result_dir"], model_base_name
         )
@@ -518,25 +501,25 @@ class Evaluator(ModelValidation):
         # Draw on a fresh figure: without this the plot was added to whatever
         # figure was current, so a second evaluation overlaid the first.
         plt.figure()
-        # データのプロット
+        # Plot the data
         for key, color in zip(result, colors):
             plt.plot(x, result[key], color=color, marker="o", label=classes_dict[key])
 
-        # x軸の目盛りを設定
-        x_ticks = np.arange(0.5, 0.95 + 0.05, 0.10)  # 0.5から0.95まで0.05刻み
+        # Set the x-axis ticks
+        x_ticks = np.arange(0.5, 0.95 + 0.05, 0.10)  # From 0.5 to 0.95 in steps of 0.05
         plt.xticks(x_ticks)
         plt.xlim(0.45, 1.00)
         plt.ylim(0, 1)
 
-        # 軸のラベル
+        # Axis labels
         plt.xlabel("IOU")
         plt.ylabel("AP")
 
-        # タイトルと凡例
+        # Title and legend
         plt.title("AP@[.50:.05:.95]")
         plt.legend()
 
-        # グラフを保存
+        # Save the graph
         result_directory = os.path.join(result_dir, model_base_name + "_ap50-95.png")
         plt.savefig(result_directory)
         plt.close()
@@ -544,53 +527,54 @@ class Evaluator(ModelValidation):
     def drawing_iou_boxplot_graph(
         self, dataframe, classes_dict, result_dir, model_base_name
     ):
-        # データのプロット
+        # Plot the data
         sns.set()
         sns.set_style("whitegrid")
         sns.set_palette("Set3")
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
-        # y軸の目盛りを設定
+        # Set the y-axis ticks
         plt.ylim(0, 1)
 
-        sns.boxplot(x="class_name", y="value", data=dataframe, showfliers=False, ax=ax)
-        sns.stripplot(
-            x="class_name", y="value", data=dataframe, jitter=True, color="black", ax=ax
-        )
+        if not dataframe.empty:
+            sns.boxplot(x="class_name", y="value", data=dataframe, showfliers=False, ax=ax)
+            sns.stripplot(
+                x="class_name", y="value", data=dataframe, jitter=True, color="black", ax=ax
+            )
 
-        # サンプル数の計算
+        # Calculate the sample counts
         sample_counts = dataframe["class_name"].value_counts()
 
-        # 各カテゴリの位置を取得
+        # Get the position of each category
         categories = dataframe["class_name"].unique()
 
-        # 各ボックスプロットのx=0のラインの少し上にサンプル数を表示
+        # Display the sample count slightly above the x=0 line of each box plot
         for i, category in enumerate(categories):
-            # カテゴリに対応するサンプル数
+            # Sample count corresponding to the category
             count = sample_counts[category]
 
-            # カテゴリの位置を取得
+            # Get the position of the category
             category_pos = i
 
-            # テキストの位置を設定（x軸の位置とy軸の少し下）
+            # Set the text position (x-axis position and slightly below the y-axis)
             ax.text(
                 category_pos,
-                0.05,  # y軸の位置（0の少し下）
+                0.05,  # y-axis position (slightly below 0)
                 f"n={count}",
                 horizontalalignment="center",
-                size="medium",  # テキストのサイズを大きく
+                size="medium",  # Enlarge the text size
                 color="black",
                 weight="semibold",
             )
 
-        # 軸のラベル
+        # Axis labels
         plt.xlabel("Class")
         plt.ylabel("IOU")
 
-        # タイトルと凡例
+        # Title and legend
         plt.title("IOU distributions")
 
-        # グラフを保存
+        # Save the graph
         result_directory = os.path.join(result_dir, model_base_name + "_iou_graph.png")
         fig.savefig(result_directory)
         plt.close()
@@ -605,28 +589,28 @@ class Evaluator(ModelValidation):
         iou_threshold,
     ):
         """
-        Precision-Recall 曲線を描画し、保存する関数。
+        Function that draws and saves the Precision-Recall curve.
 
         Args:
-            precisions: Precision のリスト
-            recalls: Recall のリスト
-            class_name: クラス名
-            result_dir: 結果を保存するディレクトリのパス
-            model_base_name: モデルのベース名
+            precisions: List of precision values
+            recalls: List of recall values
+            class_name: Class name
+            result_dir: Path to the directory where results are saved
+            model_base_name: Base name of the model
         """
-        # 図の準備
+        # Prepare the figure
         plt.figure()
         plt.plot(recalls, precisions, marker=".", label=class_name)
 
-        # 軸のラベル
+        # Axis labels
         plt.xlabel("Recall")
         plt.ylabel("Precision")
 
-        # タイトルと凡例
+        # Title and legend
         plt.title(f"Precision-Recall Curve - {class_name}")
         plt.legend()
 
-        # グラフを保存
+        # Save the graph
         file_path = os.path.join(
             result_dir,
             f"{model_base_name}_precision_recall_{class_name}_IOU{str(iou_threshold)}.png",

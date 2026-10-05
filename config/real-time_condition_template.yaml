@@ -16,6 +16,7 @@ capture_style:
  stream_MSS: True # When using the screen capture function, set to True.
 
 trigger:
+ result_max_age: 1.0 # Maximum age of a captured frame used for triggering (seconds)
  trigger_threshold_configuration: 0.5 # Confidence threshold for firing the trigger
  trigger_class: "wing_extension" # Which detected class fires the trigger
  Arduino_COM: "None" # COM port the Arduino is connected to ("None" = no device)

@@ -9,6 +9,7 @@ import time
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+from yoru.libs.realtime_state import fresh_results
 
 from yoru.libs.detector_base import DETECTION_COLUMNS
 from yoru.libs.obb import obb_corners, obb_to_aabb
@@ -123,30 +124,16 @@ class yolo_drawing:
         return img
 
     def YOLOdraw(self, m_dict):
-        logger.info("YOLO detection start...")
-
-        while True:
-            if self.m_dict["yolo_process_state"]:
-                self.m_dict = m_dict
-
-                while True:
-                    self.names = self.m_dict["class_name_list"]
-                    self.colormap = self.get_colormap(self.names, "gist_rainbow")
-
-                    image = self.m_dict["current_camera_frame"]
-                    results = self.m_dict["yolo_results"]
-
-                    if image.any() and self.m_dict["yolo_detection"]:
-                        image_result = self.drawing(image, results)
-                        self.m_dict["yolo_detection_frame"] = image_result
-                        self.m_dict["now"] = time.perf_counter()
-
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        break
-                    elif self.m_dict["quit"]:
-                        break
-                    elif not self.m_dict["yolo_process_state"]:
-                        logger.info("YOLO drawing break")
-                        break
-            if self.m_dict["quit"]:
-                break
+        self.m_dict = m_dict
+        previous_names = None
+        while not m_dict.get("quit", False):
+            self.names = m_dict["class_name_list"]
+            if self.names != previous_names:
+                self.colormap = self.get_colormap(self.names, "gist_rainbow")
+                previous_names = list(self.names)
+            image = m_dict.get("current_camera_frame")
+            if image is not None and image.size:
+                # Publish the clean image too, so OFF/expiry removes old boxes.
+                results = fresh_results(m_dict)
+                m_dict["yolo_detection_frame"] = self.drawing(image.copy(), results)
+            time.sleep(1 / 30)

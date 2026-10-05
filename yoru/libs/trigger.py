@@ -9,6 +9,8 @@ import serial.tools.list_ports
 
 import yoru.libs.arduino as ard
 from yoru.libs.paths import ensure_importable, list_trigger_plugins
+from yoru.libs.user_paths import log_exception
+from yoru.libs.realtime_state import fresh_results
 
 
 class yolo_trigger:
@@ -21,7 +23,7 @@ class yolo_trigger:
         while not self.m_dict.get("quit", False):
             # print("a")
             if not self.m_dict.get("Trigger", False):
-                time.sleep(1)  # 1秒間スリープしてCPUの使用率を下げる
+                time.sleep(1)  # Sleep for 1 second to reduce CPU usage
                 continue
 
             print("trigger loading...")
@@ -36,9 +38,10 @@ class yolo_trigger:
 
             #     time.sleep(1)
             # continue
-            except Exception as e:  # 具体的なエラーメッセージを出力
+            except Exception as e:  # Print a specific error message
+                log_exception("Trigger setup failed", e)
                 print(f"Error: {e}")
-                time.sleep(1)  # 失敗が続いてもCPUを占有しないようにする
+                time.sleep(1)  # back off to avoid tight-loop log spam
                 continue
 
             self.process_triggers()
@@ -50,8 +53,10 @@ class yolo_trigger:
             ):
                 try:
                     self.arduino_tri.trigger()
-                    # 　trigger処理
-                except serial.serialutil.SerialException:
+                    time.sleep(0.001)
+                    # trigger processing
+                except serial.serialutil.SerialException as e:
+                    log_exception("Arduino trigger serial failure", e)
                     print("Trigger failure ....")
                     time.sleep(1)
                     break
@@ -60,14 +65,20 @@ class yolo_trigger:
                     time.sleep(1)
                     break
                 except Exception as e:
-                    # 想定外の例外でトリガープロセスごと落ちないようにする
+                    # Keep an unexpected exception from taking the whole
+                    # trigger process down with it.
+                    log_exception("Arduino trigger failed", e)
                     print(f"Trigger error: {e}")
                     time.sleep(1)
                     break
         finally:
             if self.arduino_tri is not None:
-                self.arduino_tri.close()
-                self.arduino_tri = None
+                try:
+                    self.arduino_tri.close()
+                except Exception as exc:
+                    log_exception("Trigger shutdown failed", exc)
+                finally:
+                    self.arduino_tri = None
 
 
 class trigger_python:
@@ -80,16 +91,17 @@ class trigger_python:
         except (TypeError, ValueError):
             print(f"Invalid trigger pin {self.m_dict.get('pin')!r}; falling back to 13")
             self.pin = 13
-        self.myArduino = None  # 初期化
+        self.myArduino = None  # Initialize
         # self.ser_baudrate = int(self.m_dict.get("baudrate", 9600))
 
         if self.com and self.com != "None":
             try:
                 self.myArduino = ard.dio(comport=self.com, doCh_IDs=[self.pin])
             except PermissionError as e:
+                log_exception(f"Could not open Arduino port '{self.com}'", e)
                 print(f"Error: could not open port '{self.com}': {e}")
                 if self.myArduino:
-                    self.myArduino.close()        # ard.dio の close メソッド
+                    self.myArduino.close()        # close method of ard.dio
                 self.myArduino = None
             
         else:
@@ -108,7 +120,12 @@ class trigger_python:
         self.m_dict["plugin_name"] = "trigger_plugins." + self.m_dict.get(
             "in_plugin_name", ""
         )
-        self.trigger_instance = self._load_plugin()
+        self.trigger_instance = None
+        try:
+            self.trigger_instance = self._load_plugin()
+        except Exception:
+            self.close()
+            raise
 
         print("Open Port")
 
@@ -120,7 +137,7 @@ class trigger_python:
         module = importlib.import_module(import_path)
         return module.trigger_condition(self.m_dict)
 
-    def _detected_class_names(self):
+    def _detected_class_names(self, results=None):
         """Class names of detections at or above the trigger confidence threshold.
 
         ``yolo_results`` rows are
@@ -128,7 +145,8 @@ class trigger_python:
         (see :mod:`yoru.libs.detection`).  Reading only this one key keeps the
         confidence and the class name consistent with each other.
         """
-        results = self.m_dict.get("yolo_results")
+        if results is None:
+            results = fresh_results(self.m_dict)
         if results is None or len(results) == 0:
             return []
         names = []
@@ -141,21 +159,37 @@ class trigger_python:
         return names
 
     def trigger(self):
+        results = fresh_results(self.m_dict)
         self.trigger_instance.trigger(
             self.tri_class,
-            self._detected_class_names(),
+            self._detected_class_names(results),
             self.myArduino,
-            self.m_dict.get("yolo_results", []),
-            self.m_dict.get("now"),
+            results,
+            time.perf_counter(),
         )
         # print("trigger_command")
 
     def close(self):
-        if self.myArduino:
+        plugin, self.trigger_instance = self.trigger_instance, None
+        if plugin is not None:
             try:
-                self.myArduino.writeDO_all(0)
+                # Existing plugins accept an empty detection set as output OFF.
+                plugin.trigger(self.tri_class, [], self.myArduino, [], time.perf_counter())
+            except Exception as exc:
+                log_exception("Could not reset trigger output", exc)
             finally:
-                self.myArduino.close()
+                close = getattr(plugin, "close", None)
+                if close is not None:
+                    try:
+                        close()
+                    except Exception as exc:
+                        log_exception("Could not close trigger plugin", exc)
+        board, self.myArduino = self.myArduino, None
+        if board:
+            try:
+                board.writeDO_all(0)
+            finally:
+                board.close()
                 print("Arduino connection closed.")
         self.trigger_instance = None
         print("Trigger instance set to None.")

@@ -8,6 +8,7 @@ counter has to end up telling the truth.  DearPyGui is replaced by a recorder
 so all of that can be driven without a window.
 """
 
+import os
 import time
 import types
 
@@ -125,7 +126,9 @@ def test_an_empty_frame_name_falls_back_to_the_video_name(gui, monkeypatch):
 
     monkeypatch.setattr(frame_extraction, "extract_frames", stub)
     fake.values["save_name"] = ""
-    g.file_path = r"C:\videos\arena7.mp4"
+    # Built for the running platform: _save_name() goes through
+    # os.path.basename, which does not split on a backslash off Windows.
+    g.file_path = os.path.join("videos", "arena7.mp4")
     g.extract_btn_cb()
     _pump(g, lambda: not g._extract_state["running"])
     assert seen["name"] == "arena7"

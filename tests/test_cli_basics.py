@@ -24,9 +24,9 @@ def test_version_flag_prints_semver_like_tag():
     assert re.search(r"(\d+\.\d+\.\d+|0\+unknown)", proc.stdout), proc.stdout
 
 def test_build_parser_defaults_and_help_without_gui_import(monkeypatch):
-    # Import cli in-process and ensure parsing help does not import yoru.app
-    import sys as _sys
-    assert "yoru.app" not in _sys.modules
+    # That building the parser does not import yoru.app is checked in a fresh
+    # interpreter by test_source_integrity.py: asserting it against this
+    # process's sys.modules only measures which test happened to run first.
     from yoru.cli import build_parser
     parser = build_parser()
     # Default command should be GUI (but help shouldn't launch anything)
@@ -34,5 +34,3 @@ def test_build_parser_defaults_and_help_without_gui_import(monkeypatch):
     assert getattr(ns, "command", None) == "gui"
     with pytest.raises(SystemExit):  # argparse exits on --help
         parser.parse_args(["--help"])
-    # Still no GUI import happened as a side-effect
-    assert "yoru.app" not in _sys.modules

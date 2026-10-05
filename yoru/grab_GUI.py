@@ -39,11 +39,13 @@ import dearpygui.dearpygui as dpg
 
 from yoru.gui_base import apply_default_theme, frame_to_data_rgba, process_frame as _process_frame
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui
 from yoru.libs import frame_extraction
 from yoru.libs.file_operation_grab import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 
 
-class grab_gui:
+class grab_gui(GuiErrorMixin):
     # The preview texture is allocated once and the image item is scaled to
     # whatever the window currently affords; a texture cannot be resized in
     # place, and reallocating it mid-drag is exactly the kind of work that
@@ -483,30 +485,15 @@ class grab_gui:
     # ------------------------------------------------------------------
 
     def run(self):
-        self.gui_configure()
-        try:
-            while dpg.is_dearpygui_running():
-                self.plot_callback()
-                dpg.render_dearpygui_frame()
-                if self.m_dict["quit"]:
-                    break
-        finally:
-            self._shutdown()
+        run_gui(self, dpg, self.gui_configure, self.plot_callback, self._shutdown)
 
     def _shutdown(self):
-        """Tear the window down from the render loop, never from a callback.
-
-        Destroying the context inside a button callback frees everything the
-        half-finished frame is still drawing from, which is its own way of
-        hanging on exit.
-        """
+        """Cancel extraction before the common lifecycle releases the window."""
         self._extract_stop = True
         thread = self._extract_thread
         if thread is not None and thread.is_alive():
             thread.join(timeout=2.0)
-        if isinstance(self.vid, cv2.VideoCapture):
-            self.vid.release()
-        dpg.destroy_context()
+
 
     def plot_callback(self) -> None:
         self._fit_layout()
@@ -540,8 +527,11 @@ class grab_gui:
         vid = cv2.VideoCapture(file_path)
         if not vid.isOpened():
             vid.release()
-            print("Failed to open video: " + file_path)
             self._set_source_status(f"Could not open the video: {file_path}")
+            self._report_error(
+                "Failed to open video file",
+                IOError(f"Could not open movie file: {file_path}"),
+            )
             return
 
         if isinstance(self.vid, cv2.VideoCapture):
@@ -672,8 +662,14 @@ class grab_gui:
             self._update_grab_count()
             self._set_grab_status(f"Saved {os.path.basename(self.grab_path)}")
         else:
-            print("Failed to read frame for grab")
             self._set_grab_status("Could not save that frame.")
+            self._report_error(
+                "Failed to grab frame",
+                IOError(
+                    f"Could not read or write frame {self.current_frame_num} "
+                    f"from {self.file_path}"
+                ),
+            )
 
     def count_reset_bt(self):
         self.grab_count = 0
@@ -812,15 +808,10 @@ class grab_gui:
         return frame_to_data_rgba(frame)
 
     def quit_cb(self):
-        print("quit_pushed")
-        # The render loop notices the flag and calls _shutdown; a callback must
-        # not destroy the context it is currently being drawn inside of.
         self.m_dict["quit"] = True
 
     def __del__(self):
-        if hasattr(self, "m_dict"):
-            self.m_dict["quit"] = True
-        print("=== GUI window quit ===")
+        pass
 
 
 def main():

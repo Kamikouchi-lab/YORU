@@ -1,361 +1,486 @@
-"""The upstream-YOLOv5 backend, and the v1 checkpoints only it can read.
+"""YOLOv5, run by the bundled ultralytics/yolov5 code: recognition, training, loading.
 
-A checkpoint written by YORU v1 pickles ``models.yolo.DetectionModel``, which
-exists in the vendored tree and nowhere else -- ultralytics rejects those files
-by name.  These tests build a checkpoint in that same format and take it all
-the way through the plugin, because the failure mode being guarded against
-(``ModuleNotFoundError: No module named 'models'``) only shows up at unpickle
-time and only for a file laid out this way.
+YORU v1 trained every model with YOLOv5, and v2.0 beta could load none of them:
+the "yolov5" model type was routed to ultralytics, which refuses a YOLOv5
+checkpoint.  These tests pin down each piece of the way back -- that such a
+checkpoint is recognised whatever it is called, that training reaches yolov5's
+own train.py with the arguments v1 gave it, and that a loaded model gives the
+detections v1's ``torch.hub.load`` gave.
 """
 
-from __future__ import annotations
-
-import contextlib
-import io
+import os
+import pickle
 import sys
+import types
+import zipfile
 from pathlib import Path
 
 import pytest
 
-torch = pytest.importorskip("torch", reason="torch not installed")
-np = pytest.importorskip("numpy", reason="numpy not installed")
-
-from yoru.libs import plugins  # noqa: E402
-from yoru.libs.detector_base import DETECTION_COLUMNS, detection_row  # noqa: E402
-from yoru.libs.yolov5 import YOLOV5_DIR, ensure_importable  # noqa: E402
-
-# The smallest architecture upstream ships: these tests build one for real, so
-# the difference between yolov5n and yolov5x is the difference between a test
-# suite that runs and one nobody waits for.
-_ARCH = "yolov5n.yaml"
-_NAMES = {0: "fly", 1: "wing"}
+from yoru.libs import plugins, yolov5_support
+from yoru.libs import train_yolov5 as tv5
+from yoru.libs.plugins import yolov5_detector as v5det
 
 
-@pytest.fixture(scope="module")
-def legacy_checkpoint(tmp_path_factory):
-    """A .pt in v1's format: the model object itself, pickled by class path."""
-    ensure_importable()
-    from models.yolo import DetectionModel
+# ---------------------------------------------------------------------------
+# Recognising a YOLOv5 checkpoint without unpickling it
+# ---------------------------------------------------------------------------
 
-    with contextlib.redirect_stdout(io.StringIO()):
-        model = DetectionModel(str(YOLOV5_DIR / "models" / _ARCH), ch=3, nc=len(_NAMES))
-    model.names = dict(_NAMES)
 
-    path = tmp_path_factory.mktemp("yolov5") / "best.pt"
-    torch.save({"model": model, "epoch": -1}, path)
+def _pickled_instance(monkeypatch, module_name, protocol, extra=None):
+    """Bytes of a pickle naming a class of *module_name*, as torch.save writes."""
+    # pickle imports the class's module, parents included, to check it.
+    parts = module_name.split(".")
+    for i in range(1, len(parts)):
+        parent = ".".join(parts[:i])
+        if parent not in sys.modules:
+            monkeypatch.setitem(sys.modules, parent, types.ModuleType(parent))
+    module = types.ModuleType(module_name)
+
+    class DetectionModel:
+        pass
+
+    DetectionModel.__module__ = module_name
+    DetectionModel.__qualname__ = "DetectionModel"
+    module.DetectionModel = DetectionModel
+    monkeypatch.setitem(sys.modules, module_name, module)
+    payload = {"model": DetectionModel(), "epoch": 3}
+    if extra:
+        payload.update(extra)
+    return pickle.dumps(payload, protocol=protocol)
+
+
+def _checkpoint(path: Path, blob: bytes) -> Path:
+    """A zip-format torch checkpoint whose data.pkl is *blob*."""
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("archive/data.pkl", blob)
+        zf.writestr("archive/data/0", b"\0" * 16)
     return path
 
 
-class TestVendoredImport:
-    def test_binds_the_names_a_legacy_pickle_asks_for(self):
-        ensure_importable()
-        assert "models" in sys.modules and "utils" in sys.modules
-        import models.yolo  # noqa: F401  -- the path the unpickler walks
-
-        assert str(YOLOV5_DIR) in models.yolo.__file__
-
-    def test_is_idempotent(self):
-        first = ensure_importable()
-        models_before = sys.modules["models"]
-        assert ensure_importable() == first
-        assert sys.modules["models"] is models_before
-
-    def test_does_not_prepend_itself_to_sys_path(self):
-        """v1 did, via torch.hub, and shadowed every later 'import utils'."""
-        ensure_importable()
-        assert str(YOLOV5_DIR) != sys.path[0]
-
-    def test_refuses_to_overwrite_somebody_else_s_module(self, monkeypatch):
-        import types
-
-        import yoru.libs.yolov5 as vendored
-
-        monkeypatch.setitem(sys.modules, "models", types.ModuleType("models"))
-        with pytest.raises(RuntimeError, match="already taken"):
-            vendored._bind("models")
+@pytest.mark.parametrize("protocol", [2, 4])
+def test_a_yolov5_checkpoint_is_recognised_by_its_contents(tmp_path, monkeypatch, protocol):
+    blob = _pickled_instance(monkeypatch, "models.yolo", protocol)
+    ckpt = _checkpoint(tmp_path / "best.pt", blob)
+    assert plugins._sniff_checkpoint(str(ckpt)) == "yolov5"
+    assert plugins._auto_detect_backend(str(ckpt)) == "yolov5"
 
 
-class TestBackendRouting:
-    def test_a_v1_checkpoint_is_recognised_by_its_contents(self, legacy_checkpoint):
-        """Not by its name: v1 projects call their weights best.pt too."""
-        assert plugins._sniff_checkpoint(str(legacy_checkpoint)) == "yolov5"
-
-    def test_auto_sends_it_to_the_yolov5_backend(self, legacy_checkpoint):
-        assert plugins._auto_detect_backend(str(legacy_checkpoint)) == "yolov5"
-
-    def test_the_backend_is_registered(self):
-        plugins._ensure_plugins_loaded()
-        assert "yolov5" in plugins._DETECTOR_REGISTRY
-        assert "yolov5" in plugins._TRAINER_REGISTRY
-        assert not plugins._PLUGIN_IMPORT_ERRORS, plugins._PLUGIN_IMPORT_ERRORS
-
-    @pytest.mark.parametrize("weight,expected", [
-        ("yolov5s.pt", "yolov5"),
-        ("yolov5x.pt", "yolov5"),
-        ("yolov5su.pt", "ultralytics"),
-        ("yolo11s.pt", "ultralytics"),
-    ])
-    def test_the_trainer_follows_the_weight(self, weight, expected):
-        m = {"model_family": "YOLO", "weight": weight}
-        assert plugins.detect_trainer_backend(m) == expected
+def test_the_contents_outrank_a_misleading_name(tmp_path, monkeypatch):
+    """v1 users named their models freely; the file decides, not the name."""
+    blob = _pickled_instance(monkeypatch, "models.yolo", 2)
+    ckpt = _checkpoint(tmp_path / "yolov8_compare_best.pt", blob)
+    assert plugins._auto_detect_backend(str(ckpt)) == "yolov5"
 
 
-class TestDetection:
-    @pytest.fixture(scope="class")
-    def detector(self, legacy_checkpoint):
-        with contextlib.redirect_stdout(io.StringIO()):
-            return plugins.get_detector(
-                "auto", str(legacy_checkpoint), conf_thresh=0.001, device="cpu"
-            )
-
-    def test_class_names_survive_the_round_trip(self, detector):
-        assert detector.names == _NAMES
-
-    def test_detections_have_the_shape_the_rest_of_yoru_expects(self, detector):
-        frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-        for det in detector.detect(frame):
-            assert {"x1", "y1", "x2", "y2", "conf", "class_id", "class_name"} <= set(det)
-            # Upright boxes only: obb_of() derives the rest.
-            assert "angle" not in det
-            assert len(detection_row(det, 0.01)) == len(DETECTION_COLUMNS)
-
-    def test_boxes_come_back_in_frame_coordinates_not_letterboxed_ones(self, detector):
-        """A 640x640 model on a wide frame: scale_boxes has to undo the pad."""
-        h, w = 480, 1280
-        frame = np.random.randint(0, 255, (h, w, 3), dtype=np.uint8)
-        for det in detector.detect(frame):
-            assert -1 <= det["x1"] <= w + 1 and -1 <= det["x2"] <= w + 1
-            assert -1 <= det["y1"] <= h + 1 and -1 <= det["y2"] <= h + 1
-
-    def test_the_confidence_threshold_is_honoured(self, legacy_checkpoint):
-        frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-        with contextlib.redirect_stdout(io.StringIO()):
-            strict = plugins.get_detector(
-                "yolov5", str(legacy_checkpoint), conf_thresh=0.99, device="cpu"
-            )
-        assert strict.detect(frame) == []
+def test_a_clone_of_the_yolov5_repo_is_not_mistaken_for_ultralytics(tmp_path, monkeypatch):
+    """yolov5 saves its git remote -- github.com/ultralytics/yolov5 -- in every run."""
+    blob = _pickled_instance(
+        monkeypatch, "models.yolo", 2,
+        extra={"git": {"remote": "https://github.com/ultralytics/yolov5"}},
+    )
+    ckpt = _checkpoint(tmp_path / "best.pt", blob)
+    assert b"ultralytics" in blob
+    assert plugins._sniff_checkpoint(str(ckpt)) == "yolov5"
 
 
-class TestTrainerCommand:
-    def _cmd(self, **overrides):
-        config = {
-            "weights": "yolov5s.pt",
-            "data_yaml": "proj/config.yaml",
-            "epochs": 50,
-            "img_size": 640,
-            "batch_size": 8,
-            "project_dir": "proj",
-        }
-        config.update(overrides)
-        trainer = plugins.get_trainer("yolov5")
-        captured = {}
-
-        class _FakePopen:
-            def __init__(self, cmd, **kwargs):
-                captured["cmd"] = cmd
-                captured["kwargs"] = kwargs
-
-        import yoru.libs.plugins.yolov5_trainer as mod
-
-        real, mod.subprocess.Popen = mod.subprocess.Popen, _FakePopen
-        try:
-            trainer.train(config)
-        finally:
-            mod.subprocess.Popen = real
-        return captured
-
-    def test_it_runs_yorus_launcher_not_upstream_train_py(self):
-        """train.main() would git-fetch and pip-install; the launcher does not."""
-        cmd = self._cmd()["cmd"]
-        assert cmd[1].endswith("train_yolov5.py")
-
-    def test_the_settings_reach_the_command_line(self):
-        cmd = self._cmd()["cmd"]
-        for flag, value in [("--weights", "yolov5s.pt"), ("--epochs", "50"),
-                            ("--imgsz", "640"), ("--batch", "8")]:
-            assert cmd[cmd.index(flag) + 1] == value
-
-    def test_the_stop_file_is_passed_only_when_there_is_one(self):
-        assert "--stop-file" not in self._cmd()["cmd"]
-        cmd = self._cmd(stop_file="proj/.yoru_stop_request")["cmd"]
-        assert cmd[cmd.index("--stop-file") + 1] == "proj/.yoru_stop_request"
-
-    def test_it_runs_from_the_repository_root(self):
-        """Upstream relpath()s its own directory against the cwd, which raises
-        on Windows when the project lives on another drive."""
-        kwargs = self._cmd()["kwargs"]
-        assert (Path(kwargs["cwd"]) / "yoru" / "libs" / "yolov5").is_dir()
+@pytest.mark.parametrize("module_name", ["ultralytics.nn.tasks", "ultralytics.models.yolo.detect"])
+def test_an_ultralytics_checkpoint_stays_ultralytics(tmp_path, monkeypatch, module_name):
+    """Including one naming ultralytics' own ``models.yolo`` subpackage."""
+    blob = _pickled_instance(monkeypatch, module_name, 2)
+    ckpt = _checkpoint(tmp_path / "best.pt", blob)
+    assert plugins._sniff_checkpoint(str(ckpt)) == "ultralytics"
+    assert plugins._auto_detect_backend(str(ckpt)) == "ultralytics"
 
 
-class TestStopFileHook:
-    """The patch YORU carries in the vendored train.py."""
-
-    def test_no_env_var_means_no_stop(self, monkeypatch):
-        ensure_importable()
-        import train as yolov5_train
-
-        monkeypatch.delenv("YORU_STOP_FILE", raising=False)
-        assert yolov5_train.yoru_stop_requested() is False
-
-    def test_the_request_is_seen_and_then_taken(self, monkeypatch, tmp_path):
-        ensure_importable()
-        import train as yolov5_train
-
-        stop_file = tmp_path / ".yoru_stop_request"
-        monkeypatch.setenv("YORU_STOP_FILE", str(stop_file))
-        assert yolov5_train.yoru_stop_requested() is False
-
-        stop_file.touch()
-        assert yolov5_train.yoru_stop_requested() is True
-        # Taken, so it cannot also end the next run after one epoch.
-        assert not stop_file.exists()
-        assert yolov5_train.yoru_stop_requested() is False
+def test_a_pre_zip_yolov5_checkpoint_is_recognised(tmp_path, monkeypatch):
+    """torch < 1.6 wrote a bare pickle stream; early YOLOv5 releases predate the zip."""
+    blob = _pickled_instance(monkeypatch, "models.yolo", 2)
+    ckpt = tmp_path / "last.pt"
+    ckpt.write_bytes(b"\x80\x02\x8a\x0al\xfc\x9cF\xf9 j\xa8P\x19." + blob + b"\0" * 64)
+    assert plugins._sniff_checkpoint(str(ckpt)) == "yolov5"
 
 
-class TestObbIsNotOffered:
-    """YOLOv5 has no rotated-box head, so an OBB project must not show it."""
+def test_yolov5_weights_train_with_the_bundled_yolov5():
+    # Built for the running platform: os.path.basename does not split on a
+    # backslash off Windows.
+    for weight in ("yolov5s.pt", "yolov5x.pt", os.path.join("models", "yolov5m.pt")):
+        assert plugins.detect_trainer_backend(
+            {"model_family": "YOLO", "weight": weight}
+        ) == "yolov5"
 
-    def test_the_version_list_excludes_it_for_obb(self):
-        from yoru.libs.init_train import (
-            MODEL_FAMILY_CONFIG,
-            OBB_CAPABLE_YOLO_VERSIONS,
+
+def test_the_yolov5_backends_are_registered():
+    """Registered -- that is, their modules import -- for both directions."""
+    pytest.importorskip("torch")
+    plugins._ensure_plugins_loaded()
+    assert "yolov5" in plugins._DETECTOR_REGISTRY, plugins._PLUGIN_IMPORT_ERRORS
+    assert "yolov5" in plugins._TRAINER_REGISTRY, plugins._PLUGIN_IMPORT_ERRORS
+
+
+# ---------------------------------------------------------------------------
+# Making the bundled code importable
+# ---------------------------------------------------------------------------
+
+
+def test_the_bundled_yolov5_is_found():
+    assert yolov5_support.require_bundled_yolov5() == yolov5_support.YOLOV5_DIR
+
+
+def test_the_path_entry_is_removed_again(monkeypatch):
+    monkeypatch.delitem(sys.modules, "models", raising=False)
+    monkeypatch.delitem(sys.modules, "utils", raising=False)
+    before = list(sys.path)
+    with yolov5_support.yolov5_importable() as root:
+        assert sys.path[0] == str(root)
+    assert sys.path == before
+
+
+def test_a_foreign_utils_module_is_reported_not_used(monkeypatch, tmp_path):
+    """yolov5's ``from utils.general import ...`` would silently get the wrong one."""
+    foreign = types.ModuleType("utils")
+    foreign.__file__ = str(tmp_path / "utils.py")
+    monkeypatch.setitem(sys.modules, "utils", foreign)
+    with pytest.raises(ImportError, match="utils"):
+        with yolov5_support.yolov5_importable():
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Training: the command, the device, the run folder, the stop request
+# ---------------------------------------------------------------------------
+
+
+def test_the_run_is_named_after_the_model():
+    assert tv5.run_name("yolov5s.pt") == "exp_yolov5s"
+    # Built for the running platform: Path does not split on a backslash off
+    # Windows.
+    assert tv5.run_name(os.path.join("w", "yolov5m.pt")) == "exp_yolov5m"
+
+
+@pytest.mark.parametrize(
+    "resolved,expected",
+    [
+        # yolov5's select_device() does not know "cuda"; its default is CUDA:0.
+        ("cuda", ""),
+        ("cpu", "cpu"),
+        ("mps", "mps"),
+        ("1", "1"),
+    ],
+)
+def test_the_device_is_named_only_when_it_is_not_the_default(monkeypatch, resolved, expected):
+    monkeypatch.setattr(tv5, "resolve_device", lambda _pref: resolved)
+    assert tv5.yolov5_device("auto") == expected
+
+
+def test_train_py_gets_the_arguments_yoru_v1_gave_it(monkeypatch):
+    monkeypatch.setattr(tv5, "resolve_device", lambda _pref: "cuda")
+    args = types.SimpleNamespace(
+        imgsz=640, batch=16, epochs=300, data="d/config.yaml",
+        weights="yolov5s.pt", project="d", name=None, device="auto",
+    )
+    argv = tv5.yolov5_argv(args)
+    assert argv == [
+        "--imgsz", "640", "--batch-size", "16", "--epochs", "300",
+        "--data", "d/config.yaml", "--weights", "yolov5s.pt", "--project", "d",
+        "--name", "exp_yolov5s",
+    ]
+
+
+def test_a_working_directory_on_another_drive_is_left_before_importing(monkeypatch, tmp_path):
+    """yolov5's train.py calls os.path.relpath at import; Windows raises across drives."""
+    moved = []
+
+    def _relpath(*_a):
+        raise ValueError("path is on mount 'C:', start on mount 'D:'")
+
+    monkeypatch.setattr(tv5.os.path, "relpath", _relpath)
+    monkeypatch.setattr(tv5.os, "chdir", moved.append)
+    weights = tmp_path / "best.pt"
+    weights.write_bytes(b"")
+    args = types.SimpleNamespace(
+        data="config.yaml", project="proj", weights=str(weights),
+    )
+    tv5._cwd_on_the_drive_of(yolov5_support.YOLOV5_DIR, args)
+
+    assert moved == [tv5._REPO_ROOT]
+    # Made absolute first, so they still name what they named.
+    assert Path(args.data).is_absolute() and Path(args.project).is_absolute()
+    assert Path(args.weights) == weights.resolve()
+
+
+def test_a_working_directory_on_the_same_drive_is_kept(monkeypatch):
+    moved = []
+    monkeypatch.setattr(tv5.os, "chdir", moved.append)
+    args = types.SimpleNamespace(data="config.yaml", project="proj", weights="yolov5s.pt")
+    tv5._cwd_on_the_drive_of(Path.cwd(), args)
+    assert moved == []
+    assert args.data == "config.yaml"
+
+
+def _fake_train_module():
+    class EarlyStopping:
+        def __init__(self, patience=30):
+            self.patience = patience
+
+        def __call__(self, epoch, fitness):
+            return False
+
+    return types.SimpleNamespace(EarlyStopping=EarlyStopping)
+
+
+def test_a_stop_request_ends_the_run_after_the_epoch(tmp_path, capsys):
+    stop_file = tmp_path / ".yoru_stop_request"
+    module = _fake_train_module()
+    tv5.install_stop_request(module, str(stop_file))
+
+    stopper = module.EarlyStopping(patience=100)
+    assert stopper.patience == 100
+    assert stopper(epoch=4, fitness=0.5) is False
+
+    stop_file.touch()
+    assert stopper(epoch=5, fitness=0.5) is True
+    # Taken, so it cannot end the next run too; reported 1-based, as the GUI shows it.
+    assert not stop_file.exists()
+    assert "ending after epoch 6" in capsys.readouterr().out
+
+
+def test_no_stop_file_leaves_train_py_alone():
+    module = _fake_train_module()
+    original = module.EarlyStopping
+    tv5.install_stop_request(module, None)
+    assert module.EarlyStopping is original
+
+
+def test_the_trainer_launches_the_yolov5_script(monkeypatch):
+    pytest.importorskip("torch")
+    plugins._ensure_plugins_loaded()
+    trainer = plugins.get_trainer("yolov5")
+    # yolov5 prints the first of 300 epochs as "0/299".
+    assert trainer.epoch_base == 0
+
+    launched = {}
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: launched.setdefault("cmd", cmd))
+    trainer.train({
+        "img_size": 320, "batch_size": 4, "epochs": 3, "data_yaml": "p/config.yaml",
+        "weights": "yolov5n.pt", "project_dir": "p", "stop_file": "p/.stop", "device": "cpu",
+    })
+    cmd = launched["cmd"]
+    assert cmd[0] == sys.executable
+    assert Path(cmd[1]).name == "train_yolov5.py"
+    assert cmd[cmd.index("--weights") + 1] == "yolov5n.pt"
+    assert cmd[cmd.index("--stop-file") + 1] == "p/.stop"
+    assert cmd[cmd.index("--device") + 1] == "cpu"
+
+
+def test_yolov5_is_offered_for_training_but_not_for_obb():
+    from yoru.libs.init_train import (
+        MODEL_FAMILY_CONFIG,
+        OBB_CAPABLE_YOLO_VERSIONS,
+        init_train,
+    )
+
+    assert "YOLOv5" in MODEL_FAMILY_CONFIG["YOLO"]["versions"]
+    assert "YOLOv5" not in OBB_CAPABLE_YOLO_VERSIONS
+    m_dict = {}
+    init_train(m_dict=m_dict)
+    assert "yolov5s.pt" in m_dict["weight_list"]
+    # A new project starts on YOLOv5, as in YORU v1.
+    assert m_dict["yolo_version"] == "YOLOv5"
+    assert m_dict["weight"] == "yolov5s.pt"
+    assert plugins.detect_trainer_backend(m_dict) == "yolov5"
+
+
+# ---------------------------------------------------------------------------
+# Channel order: BGR as in v1, RGB on request
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "env,expected",
+    [(None, False), ("", False), ("0", False), ("off", False),
+     ("1", True), ("true", True), ("Yes", True), ("ON", True),
+     # A typo keeps v1's behaviour rather than changing every detection.
+     ("rbg", False)],
+)
+def test_the_environment_variable_decides_the_channel_order(monkeypatch, env, expected):
+    if env is None:
+        monkeypatch.delenv(v5det.RGB_ENV_VAR, raising=False)
+    else:
+        monkeypatch.setenv(v5det.RGB_ENV_VAR, env)
+    assert v5det.rgb_input_requested() is expected
+
+
+def test_an_explicit_setting_outranks_the_environment(monkeypatch):
+    monkeypatch.setenv(v5det.RGB_ENV_VAR, "1")
+    assert v5det.rgb_input_requested(False) is False
+    monkeypatch.setenv(v5det.RGB_ENV_VAR, "0")
+    assert v5det.rgb_input_requested(True) is True
+
+
+class _Recorder:
+    """Stands in for AutoShape: records the frame it is given, returns *rows*."""
+
+    class _Rows:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def cpu(self):
+            return self
+
+        def tolist(self):
+            return self.rows
+
+    def __init__(self, rows=()):
+        self.rows = [list(r) for r in rows]
+        self.names = {0: "fly", 1: "copulation"}
+
+    def __call__(self, image):
+        self.seen = image
+        return types.SimpleNamespace(xyxy=[self._Rows(self.rows)])
+
+
+def _detector_with(rgb=False, rows=(), conf_thresh=0.25):
+    detector = v5det.YOLOv5Detector()
+    detector._model, detector._names, detector._rgb = _Recorder(rows), {}, rgb
+    detector._conf_thresh = conf_thresh
+    return detector
+
+
+def test_frames_go_in_as_bgr_by_default():
+    np = pytest.importorskip("numpy")
+    frame = np.dstack([np.full((4, 6), c, np.uint8) for c in (10, 20, 30)])  # B, G, R
+    detector = _detector_with(rgb=False)
+    detector.detect(frame)
+    assert detector._model.seen is frame
+
+
+def test_frames_go_in_as_rgb_when_asked():
+    np = pytest.importorskip("numpy")
+    bgra = np.dstack([np.full((4, 6), c, np.uint8) for c in (10, 20, 30, 255)])
+    detector = _detector_with(rgb=True)
+    detector.detect(bgra)
+    assert detector._model.seen.shape == (4, 6, 3)
+    assert detector._model.seen[0, 0].tolist() == [30, 20, 10]  # R, G, B; alpha dropped
+
+
+def test_a_grey_frame_is_left_alone_in_rgb_mode():
+    np = pytest.importorskip("numpy")
+    grey = np.zeros((4, 6), np.uint8)
+    detector = _detector_with(rgb=True)
+    detector.detect(grey)
+    assert detector._model.seen is grey
+
+
+# ---------------------------------------------------------------------------
+# Confidence threshold: after NMS above 0.25, as v1 applied it
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("requested,nms", [(0.5, 0.25), (0.25, 0.25), (0.1, 0.1)])
+def test_nms_runs_at_v1s_threshold_unless_asked_for_less(monkeypatch, requested, nms):
+    """v1's NMS always ran at 0.25; a higher threshold came after it.
+
+    Running NMS at the higher threshold changes the candidate set, and with
+    fp16 scores tied boxes then resolve differently: v1 fly-video analysis at
+    0.5 differed in 2 of 355 boxes until NMS stayed at 0.25.
+    """
+    pytest.importorskip("torch")
+    fake = _Recorder()
+    monkeypatch.setattr(v5det, "load_yolov5_model", lambda path, device: fake)
+    monkeypatch.delenv(v5det.RGB_ENV_VAR, raising=False)
+    v5det.YOLOv5Detector().load("best.pt", conf_thresh=requested, device="cpu")
+    assert fake.conf == nms
+    assert fake.iou == plugins.DEFAULT_IOU_THRESH
+
+
+def test_a_higher_threshold_is_applied_after_nms():
+    rows = [(0, 0, 10, 10, 0.30, 0), (5, 5, 20, 20, 0.50, 1), (1, 1, 9, 9, 0.80, 0)]
+    detector = _detector_with(rows=rows, conf_thresh=0.5)
+    # Kept at and above the threshold, as v1's "conf < threshold: skip".
+    assert [d["conf"] for d in detector.detect(_frame())] == [0.50, 0.80]
+
+
+def _frame():
+    np = pytest.importorskip("numpy")
+    return np.zeros((4, 6, 3), np.uint8)
+
+
+# ---------------------------------------------------------------------------
+# A real YOLOv5 model: the same detections as YORU v1
+# ---------------------------------------------------------------------------
+
+
+def _yolov5_weights(repo_root: Path):
+    """A YOLOv5 checkpoint to test with: $YORU_YOLOV5_WEIGHTS, else ./yolov5s.pt."""
+    env = os.environ.get("YORU_YOLOV5_WEIGHTS", "")
+    for candidate in (env, repo_root / "yolov5s.pt"):
+        if candidate and Path(candidate).is_file():
+            return Path(candidate)
+    return None
+
+
+@pytest.mark.slow
+def test_detections_match_yoru_v1(repo_root, tmp_path, monkeypatch):
+    """The plugin must give exactly what v1's ``torch.hub.load`` path gave."""
+    torch = pytest.importorskip("torch")
+    cv2 = pytest.importorskip("cv2")
+    weights = _yolov5_weights(repo_root)
+    if weights is None:
+        pytest.skip("set YORU_YOLOV5_WEIGHTS to a YOLOv5 checkpoint to run this")
+    from yoru.libs.device import resolve_device
+
+    # Where the plugin will run (YORU_DEVICE is honoured).  v1 ran on yolov5's
+    # default -- CUDA:0, else the CPU -- so compare there, or on the CPU.
+    device = resolve_device("auto")
+    if device not in ("cuda", "cpu"):
+        pytest.skip(f"compared on CUDA:0 or the CPU, not {device}")
+    # Renamed so that nothing can be read off the name, as for a v1 best.pt.
+    ckpt = tmp_path / "best.pt"
+    ckpt.write_bytes(weights.read_bytes())
+    cuda_env = os.environ.get("CUDA_VISIBLE_DEVICES")
+    # The default must be v1's BGR whatever the machine has set.
+    monkeypatch.delenv(v5det.RGB_ENV_VAR, raising=False)
+    image = cv2.imread(str(yolov5_support.YOLOV5_DIR / "data" / "images" / "zidane.jpg"))
+
+    def boxes(detector, frame):
+        return [
+            [d["x1"], d["y1"], d["x2"], d["y2"], d["conf"], d["class_id"]]
+            for d in detector.detect(frame)
+        ]
+
+    detector = plugins.get_detector("auto", str(ckpt))
+    assert type(detector).__name__ == "YOLOv5Detector"
+    got = boxes(detector, image)
+    got_rgb = boxes(plugins.get_detector("auto", str(ckpt), rgb_input=True), image)
+    # Loading must not have pinned the process to a device, nor left the
+    # yolov5 directory on the import path.
+    assert os.environ.get("CUDA_VISIBLE_DEVICES") == cuda_env
+    assert str(yolov5_support.YOLOV5_DIR) not in sys.path
+
+    # What YORU v1's YOLOv5Wrapper did, BGR frame included.  Naming the CPU
+    # makes yolov5's select_device() hide CUDA from this process; undo that.
+    hub_device = {"device": "cpu"} if device == "cpu" else {}
+    try:
+        v1 = torch.hub.load(
+            str(yolov5_support.YOLOV5_DIR), "custom", path=str(ckpt), source="local",
+            **hub_device,
         )
+    finally:
+        if cuda_env is None:
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+        else:
+            os.environ["CUDA_VISIBLE_DEVICES"] = cuda_env
+    expected = v1(image).xyxy[0].cpu().tolist()
+    # RGB mode is v1's model handed the channel-swapped frame, nothing more.
+    expected_rgb = v1(image[..., ::-1]).xyxy[0].cpu().tolist()
 
-        assert "YOLOv5" in MODEL_FAMILY_CONFIG["YOLO"]["versions"]
-        assert "YOLOv5" not in OBB_CAPABLE_YOLO_VERSIONS
-
-    def test_no_obb_weight_is_offered_for_it(self):
-        from yoru.libs.init_train import init_train
-
-        m = {}
-        init_train(m)
-        assert not [w for w in m["weight_list"] if "yolov5" in w and "obb" in w]
-
-    def test_every_plain_yolov5_weight_it_can_build_is_offered(self):
-        from yoru.libs.init_train import init_train
-
-        m = {}
-        init_train(m)
-        for size in m["yolo_size_list"]:
-            assert f"yolov5{size}.pt" in m["weight_list"]
-
-
-class TestVramEstimate:
-    def test_yolov5_is_covered(self):
-        from yoru.libs.vram_estimate import profile_for
-
-        for size in "nsmlx":
-            assert profile_for(f"yolov5{size}.pt") is not None
-
-    def test_the_assigner_workspace_is_not_charged_to_it(self):
-        """Anchor matching costs (anchors, labels), not (batch, labels, points)."""
-        from yoru.libs.vram_estimate import profile_for
-
-        assert profile_for("yolov5s.pt").anchors == 0
-        assert profile_for("yolov8s.pt").anchors > 0
-
-    def test_a_yolov5u_name_does_not_borrow_the_yolov5_row(self):
-        """Different parameter count and a different loss; no estimate beats a
-        wrong one."""
-        from yoru.libs.vram_estimate import profile_for
-
-        assert profile_for("yolov5su.pt") is None
-
-
-# ---------------------------------------------------------------------------
-# The training GUI's model selector
-# ---------------------------------------------------------------------------
-
-class _FakeDpg:
-    """Enough of DearPyGui to exercise the selector logic without a context."""
-
-    def __init__(self):
-        self.values = {}
-        self.items = {}
-
-    def set_value(self, tag, value):
-        self.values[tag] = value
-
-    def get_value(self, tag):
-        return self.values.get(tag)
-
-    def configure_item(self, tag, **kw):
-        self.items.setdefault(tag, {}).update(kw)
-
-    def enable_item(self, tag):
-        pass
-
-    def disable_item(self, tag):
-        pass
-
-
-@pytest.fixture
-def gui(monkeypatch):
-    from yoru import train_GUI
-    from yoru.libs.init_train import init_train
-
-    fake = _FakeDpg()
-    monkeypatch.setattr(train_GUI, "dpg", fake)
-    g = train_GUI.yoru_train.__new__(train_GUI.yoru_train)
-    g.m_dict = {}
-    init_train(g.m_dict)
-    return g, fake
-
-
-class TestTrainingGuiSelector:
-    @pytest.mark.parametrize("size", list("nsmlx"))
-    def test_it_builds_a_yolov5_weight(self, gui, size):
-        g, _ = gui
-        g.m_dict.update(model_family="YOLO", yolo_version="YOLOv5", yolo_size=size)
-        assert g._build_weight() == f"yolov5{size}.pt"
-
-    def test_a_v1_project_is_restored_as_yolov5_not_remapped(self, gui):
-        """v2.0 swapped these onto YOLO11 because nothing could train them."""
-        g, fake = gui
-        g._restore_model_ui("yolov5m.pt")
-        assert g.m_dict["yolo_version"] == "YOLOv5"
-        assert g.m_dict["yolo_size"] == "m"
-        assert g.m_dict["weight"] == "yolov5m.pt"
-        assert fake.values["weight_display_text"] == "yolov5m.pt"
-
-    def test_a_bare_yolov5_in_a_v1_config_gains_its_size_and_extension(self, gui):
-        g, _ = gui
-        g._restore_model_ui("yolov5.pt")
-        assert g.m_dict["weight"] == "yolov5s.pt"
-
-    def test_a_yolov5u_weight_is_left_exactly_as_it_is(self, gui):
-        """Rewriting it to yolov5s.pt would quietly swap the model."""
-        g, _ = gui
-        g.m_dict["weight"] = "yolov5su.pt"
-        g._restore_model_ui("yolov5su.pt")
-        assert g.m_dict["weight"] == "yolov5su.pt"
-
-    def test_an_obb_project_does_not_offer_yolov5(self, gui):
-        g, fake = gui
-        g.m_dict["obb"] = True
-        g.m_dict["model_family"] = "YOLO"
-        g._sync_obb_ui()
-        assert "YOLOv5" not in fake.items["yolo_version_combo"]["items"]
-
-    def test_a_detection_project_does_offer_it(self, gui):
-        g, fake = gui
-        g.m_dict["obb"] = False
-        g._sync_obb_ui()
-        assert "YOLOv5" in fake.items["yolo_version_combo"]["items"]
-
-    def test_ticking_obb_moves_a_yolov5_selection_off_it(self, gui):
-        g, fake = gui
-        g.m_dict.update(model_family="YOLO", yolo_version="YOLOv5", yolo_size="s")
-        g.m_dict["obb"] = True
-        g._sync_obb_ui()
-        assert g.m_dict["yolo_version"] == "YOLO11"
-        assert g.m_dict["weight"] == "yolo11s-obb.pt"
-
-    def test_selecting_yolov5_in_an_obb_project_is_refused(self, gui):
-        g, fake = gui
-        g.m_dict.update(model_family="YOLO", yolo_version="YOLO11", yolo_size="s",
-                        obb=True)
-        fake.set_value("yolo_version_combo", "YOLOv5")
-        g.select_version()
-        assert g.m_dict["yolo_version"] == "YOLO11"
-        assert fake.values["yolo_version_combo"] == "YOLO11"
+    assert detector.names == {int(k): v for k, v in dict(v1.names).items()}
+    for mine, v1s in ((got, expected), (got_rgb, expected_rgb)):
+        assert len(mine) == len(v1s)
+        for g, e in zip(mine, v1s):
+            assert g == pytest.approx(e, abs=1e-4)
+    # And the two orders really do differ, or this would prove nothing.
+    assert got != got_rgb

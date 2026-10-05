@@ -13,13 +13,16 @@ import yaml
 
 from yoru.gui_base import apply_default_theme, process_frame as _process_frame
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui, start_gui_task
+from yoru.libs.create_yaml_train import is_obb_project
 from yoru.libs.evaluation_calculation import Evaluator, EvaluationImageAnalyzer
 from yoru.libs.file_operation_create_label import file_dialog_tk
+from yoru.libs.gui_error import GuiErrorMixin
 from yoru.libs.init_evaluation import init_evaluater
 
 
 
-class model_eval_gui:
+class model_eval_gui(GuiErrorMixin):
     def __init__(self, m_dict={}):
         print("Evaluater-gui")
         self.m_dict = m_dict
@@ -171,18 +174,7 @@ class model_eval_gui:
         # listener.start()
 
     def run(self):
-        self.gui_configure()
-        while dpg.is_dearpygui_running():
-            self.plot_callback()
-            dpg.render_dearpygui_frame()
-            if self.m_dict["quit"]:
-                if self.m_dict["back_to_home"]:
-                    # subprocess.call(["python", "app.py"])
-                    from yoru import app as YORU
-
-                    YORU.main()
-                dpg.destroy_context()
-                break
+        run_gui(self, dpg, self.gui_configure, self.plot_callback, None)
 
     def plot_callback(self) -> None:
         if dpg.get_value("streamingChkBox"):
@@ -198,53 +190,62 @@ class model_eval_gui:
 
     def load_pr_dir(self):
         print("load project")
-        cfg = self.m_dict["config_file_path"]
-        if not os.path.exists(cfg):
-            print("Don't find a project")
-            return None
+        try:
+            cfg = self.m_dict.get("config_file_path", "")
+            if not cfg or not os.path.exists(cfg):
+                raise FileNotFoundError(
+                    "Project config file is not selected or does not exist. "
+                    "Please select a valid config.yaml."
+                )
 
-        with open(cfg, "r") as yf:
-            data = yaml.safe_load(yf)
-        self.m_dict["project_dir"] = data["project_dir"]
+            with open(cfg, "r") as yf:
+                data = yaml.safe_load(yf)
+            self.m_dict["project_dir"] = data["project_dir"]
+            # The project decides the annotation format, the same as in the
+            # training GUI; labelImg is told explicitly in labelImg_bt.
+            self.m_dict["obb"] = is_obb_project(data)
 
-        if data.get("evaluation_info_date"):
-            # 既存の evaluation 情報を読み込む
-            self.m_dict["data_dir"]      = data["evaluate_data_dir"]
-            self.m_dict["result_dir"]    = data["evaluate_result_dir"]
-            self.m_dict["pr_curve_dir"]  = data["evaluate_pr_curve_dir"]
-        else:
-            # project_dir の下に model_evaluation フォルダを作成
-            base = os.path.join(self.m_dict["project_dir"], "model_evaluation")
-            folder_name = base
-            i = 1
-            # 既にあれば suffix を付ける
-            while os.path.exists(folder_name):
-                folder_name = f"{base}_{i}"
-                i += 1
-            os.makedirs(folder_name, exist_ok=True)
+            if data.get("evaluation_info_date"):
+                # Load existing evaluation information
+                self.m_dict["data_dir"]      = data["evaluate_data_dir"]
+                self.m_dict["result_dir"]    = data["evaluate_result_dir"]
+                self.m_dict["pr_curve_dir"]  = data["evaluate_pr_curve_dir"]
+            else:
+                # Create a model_evaluation folder under project_dir
+                base = os.path.join(self.m_dict["project_dir"], "model_evaluation")
+                folder_name = base
+                i = 1
+                # Append a suffix if it already exists
+                while os.path.exists(folder_name):
+                    folder_name = f"{base}_{i}"
+                    i += 1
+                os.makedirs(folder_name, exist_ok=True)
 
-            # data/results/pr_curves ディレクトリを下につくる
-            self.m_dict["data_dir"]     = os.path.join(folder_name, "data")
-            os.makedirs(self.m_dict["data_dir"], exist_ok=True)
+                # Create data/results/pr_curves directories underneath
+                self.m_dict["data_dir"]     = os.path.join(folder_name, "data")
+                os.makedirs(self.m_dict["data_dir"], exist_ok=True)
 
-            self.m_dict["result_dir"]   = os.path.join(folder_name, "results")
-            os.makedirs(self.m_dict["result_dir"], exist_ok=True)
+                self.m_dict["result_dir"]   = os.path.join(folder_name, "results")
+                os.makedirs(self.m_dict["result_dir"], exist_ok=True)
 
-            self.m_dict["pr_curve_dir"] = os.path.join(self.m_dict["result_dir"], "pr_curves")
-            os.makedirs(self.m_dict["pr_curve_dir"], exist_ok=True)
+                self.m_dict["pr_curve_dir"] = os.path.join(self.m_dict["result_dir"], "pr_curves")
+                os.makedirs(self.m_dict["pr_curve_dir"], exist_ok=True)
 
-            # YAML に追記
-            with open(cfg, "a") as yf:
-                yaml.dump({
-                    "evaluate_result_dir":    self.m_dict["result_dir"],
-                    "evaluate_data_dir":      self.m_dict["data_dir"],
-                    "evaluate_pr_curve_dir":  self.m_dict["pr_curve_dir"],
-                    "evaluation_info_date":   datetime.date.today(),
-                }, yf)
-            print("add class info in yaml file")
+                # Append to YAML
+                with open(cfg, "a") as yf:
+                    yaml.dump({
+                        "evaluate_result_dir":    self.m_dict["result_dir"],
+                        "evaluate_data_dir":      self.m_dict["data_dir"],
+                        "evaluate_pr_curve_dir":  self.m_dict["pr_curve_dir"],
+                        "evaluation_info_date":   datetime.date.today(),
+                    }, yf)
+                print("add class info in yaml file")
 
-        print("load complete")
-        dpg.set_value("step1_state", "Complete!!")
+            print("load complete")
+            dpg.set_value("step1_state", "Complete!!")
+        except Exception as e:
+            self._report_error("Failed to load project config", e)
+            dpg.set_value("step1_state", "Error")
 
     def grab_bt(self):
         # Launch as a module with this interpreter: running the file directly
@@ -253,43 +254,69 @@ class model_eval_gui:
         try:
             subprocess.Popen([sys.executable, "-m", "yoru.grab_GUI"])
         except OSError as e:
-            print(f"Failed to launch frame capture: {e}")
+            self._report_error("Failed to launch Frame Capture", e)
+            dpg.set_value("step2_state", "Error")
             return
         dpg.set_value("step2_state", "Complete!!")
 
     def labelImg_bt(self):
+        """Open the bundled labelImg on the evaluation images.
+
+        The bundled copy (``-m yoru.labelimg.labelimg``), not the ``labelImg``
+        on PATH: the two share ``~/.labelImgSettings.pkl``, and once the
+        bundled one has saved its settings the upstream one fails to start
+        wherever ``yoru`` is importable (the uv install).  Upstream also cannot
+        read YOLO-OBB labels.  ``--obb`` / ``--no-obb`` is always passed, so
+        the format follows the loaded project.
+        """
+        cmd = [sys.executable, "-m", "yoru.labelimg.labelimg"]
+        data_dir = self.m_dict.get("data_dir") or ""
+        if data_dir and os.path.isdir(data_dir):
+            classes_txt = os.path.join(data_dir, "classes.txt")
+            cmd += [
+                data_dir,
+                classes_txt if os.path.isfile(classes_txt) else "",
+                data_dir,
+            ]
+        cmd.append("--obb" if self.m_dict.get("obb") else "--no-obb")
+
         try:
-            subprocess.Popen(["labelImg"])
+            # Popen, not call, so the GUI keeps rendering.
+            subprocess.Popen(cmd, cwd=os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))))
         except OSError as e:
-            print(f"Failed to launch labelImg: {e}")
+            self._report_error("Failed to launch LabelImg", e)
+            dpg.set_value("step3_state", "Error")
             return
         dpg.set_value("step3_state", "Complete!!")
 
     def yolo_detection(self):
-        yolo_det = EvaluationImageAnalyzer(self.m_dict)
-        yolo_det.analyze_image()
-        dpg.set_value("step4_state", "Complete!!")
+        def work():
+            yolo_det = EvaluationImageAnalyzer(self.m_dict)
+            yolo_det.analyze_image()
+        start_gui_task(self, dpg, work, "Prediction failed", "step4_state")
 
     def cal_aps_btn(self):
-        evaluator = Evaluator(self.m_dict)
-        evaluator.run_evaluation(self.m_dict["data_dir"])
-        dpg.set_value("step5_state", "Complete!!")
+        def work():
+            data_dir = self.m_dict.get("data_dir")
+            if not data_dir:
+                raise RuntimeError(
+                    "Evaluation data directory is not set. "
+                    "Please load the project config first (Step1)."
+                )
+            evaluator = Evaluator(self.m_dict)
+            evaluator.run_evaluation(data_dir)
+        start_gui_task(self, dpg, work, "AP calculation failed", "step5_state")
 
     def quit_cb(self):
-        print("quit_pushed")
         self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
 
     def home_cb(self):
-        print("Back home")
         self.m_dict["back_to_home"] = True
-        self.m_dict["quit"] = True
-        dpg.destroy_context()  # <-- moved from __del__
+        self.quit_cb()
 
     def __del__(self):
-        if hasattr(self, "m_dict"):
-            self.m_dict["quit"] = True
-        print("=== GUI window quit ===")
+        pass
 
 
 def main():

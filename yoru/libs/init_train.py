@@ -16,21 +16,16 @@ class loadingParam:
 #: have no rotated-box head at all, so an OBB project cannot offer them.
 OBB_CAPABLE_FAMILIES = ("YOLO",)
 
-#: ...and within that family, only these versions.  YOLOv5 predates the OBB
-#: head entirely, so an OBB project must not offer it even though its family
-#: as a whole is OBB-capable.
+#: Within the YOLO family, the versions that have an OBB variant.  YOLOv5 has
+#: no rotated-box head either.
 OBB_CAPABLE_YOLO_VERSIONS = ("YOLOv8", "YOLO11")
-
-#: Version selected when nothing else decides, and the one an OBB project
-#: falls back to when the current selection cannot do oriented boxes.
-DEFAULT_YOLO_VERSION = "YOLO11"
 
 # Per-family option definitions
 MODEL_FAMILY_CONFIG = {
     "YOLO": {
-        # YOLOv5 here is upstream YOLOv5, trained and served by the vendored
-        # copy in yoru/libs/yolov5 -- not ultralytics' YOLOv5u, which is a
-        # different model and is reached by naming its weight directly.
+        # YOLOv5 is trained with the bundled ultralytics/yolov5 code
+        # (yoru/libs/yolov5), as in YORU v1 -- not with ultralytics, whose
+        # yolov5*u models are a different network.
         "versions":  ["YOLOv5", "YOLOv8", "YOLO11"],
         "sizes":     ["n", "s", "m", "l", "x"],
     },
@@ -56,7 +51,7 @@ class init_train:
         self.m_dict["project_dir"] = "."
         self.m_dict["yaml_path"] = self.m_dict["project_dir"] + "/config.yaml"
         self.m_dict["weight_list"] = [
-            # YOLOv5 (upstream, anchor-based -- no OBB variant exists)
+            # YOLOv5 (bundled ultralytics/yolov5)
             "yolov5n.pt", "yolov5s.pt", "yolov5m.pt", "yolov5l.pt", "yolov5x.pt",
             # YOLOv8
             "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
@@ -70,7 +65,9 @@ class init_train:
             # RT-DETR
             "rtdetr-l.pt", "rtdetr-x.pt",
         ]
-        self.m_dict["weight"] = "yolo11s.pt"
+        # YOLOv5 by default, as in YORU v1.  An OBB project
+        # moves to YOLO11, since YOLOv5 has no rotated-box head.
+        self.m_dict["weight"] = "yolov5s.pt"
 
         # Oriented bounding boxes.  Set when the project is created and stored
         # in its config.yaml as ``task: obb``; from there it decides the weight
@@ -80,15 +77,14 @@ class init_train:
         # rather than with the training run.
         self.m_dict["obb"] = False
         self.m_dict["obb_capable_families"] = list(OBB_CAPABLE_FAMILIES)
-        self.m_dict["obb_capable_yolo_versions"] = list(OBB_CAPABLE_YOLO_VERSIONS)
 
         # Model family
         self.m_dict["model_family_list"] = list(MODEL_FAMILY_CONFIG.keys())
         self.m_dict["model_family"]      = "YOLO"
 
         # YOLO-specific
-        self.m_dict["yolo_version_list"] = list(MODEL_FAMILY_CONFIG["YOLO"]["versions"])
-        self.m_dict["yolo_version"]      = DEFAULT_YOLO_VERSION
+        self.m_dict["yolo_version_list"] = MODEL_FAMILY_CONFIG["YOLO"]["versions"]
+        self.m_dict["yolo_version"]      = "YOLOv5"
         self.m_dict["yolo_size_list"]    = MODEL_FAMILY_CONFIG["YOLO"]["sizes"]
         self.m_dict["yolo_size"]         = "s"
 

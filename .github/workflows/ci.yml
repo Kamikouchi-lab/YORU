@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# The job only needs to read the repository; it installs and executes
+# third-party packages, so it must not carry a write-capable token.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Ubuntu is pinned so that ubuntu-latest moving to a new release
+        # (26.04 from October 2026) does not change the CI image unannounced.
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+
+    steps:
+      # Both actions run on Node.js 24. setup-uv publishes no major-version
+      # tag from v8 on, so it is pinned to a full release.
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.10"
+          enable-cache: true
+
+      - name: Check uv.lock is in sync with pyproject.toml
+        run: uv lock --check
+
+      - name: Install the project
+        run: uv sync --locked
+
+      - name: Run tests
+        run: uv run pytest

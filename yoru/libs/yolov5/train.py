@@ -100,31 +100,6 @@ WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
 GIT_INFO = check_git_info()
 
 
-def yoru_stop_requested():
-    """True once YORU's training GUI has asked this run to stop.
-
-    YORU addition to the vendored copy; the rest of this file is upstream.
-    The request is a file whose path arrives in ``YORU_STOP_FILE`` -- see
-    ``yoru/libs/train_stop.py`` for why a file and not a signal, and
-    ``yoru/libs/train_yolov5.py`` for who sets the variable.  Without it, and
-    for anyone running this train.py on its own, this is always False.
-
-    Taking the request also deletes it: a file left behind would end the next
-    run after a single epoch.
-    """
-    path = os.environ.get("YORU_STOP_FILE")
-    if not path:
-        return False
-    try:
-        from yoru.libs.train_stop import clear_stop, stop_requested
-    except ImportError:  # vendored tree used outside YORU
-        return False
-    if not stop_requested(path):
-        return False
-    clear_stop(path)
-    return True
-
-
 def train(hyp, opt, device, callbacks):
     """
     Trains YOLOv5 model with given hyperparameters, options, and device, managing datasets, model architecture, loss
@@ -469,16 +444,6 @@ def train(hyp, opt, device, callbacks):
             # Update best mAP
             fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
             stop = stopper(epoch=epoch, fitness=fi)  # early stop check
-            # YORU addition: cooperative stop from the training GUI.  Set here
-            # -- after validation, before the save block below -- so the epoch
-            # in progress is still validated and written to last.pt/best.pt,
-            # which is the same ending as a run that reaches its final epoch.
-            if yoru_stop_requested():
-                LOGGER.info(
-                    f"[yoru] Stop requested: ending after epoch {epoch + 1}. "
-                    f"Validation and the final weights are still written."
-                )
-                stop = True
             if fi > best_fitness:
                 best_fitness = fi
             log_vals = list(mloss) + list(results) + lr

@@ -19,18 +19,22 @@ import serial.tools.list_ports
 import yaml
 
 from yoru.gui_layout import GuiSession
+from yoru.gui_lifecycle import run_gui
 from yoru.libs.paths import list_trigger_plugins
 
+from yoru.libs.gui_error import GuiErrorMixin
+from yoru.libs.user_paths import log_exception
 
-class ConfigCreatorGUI:
+
+class ConfigCreatorGUI(GuiErrorMixin):
     def __init__(self):
+        self.m_dict = {"quit": False}
+        self._class_result = None
         self.class_list = ["None"]
         self.com_list = self._get_com_ports()
         self.plugin_list = self._get_plugins()
-        # "yolov5" means upstream YOLOv5, served by the vendored copy in
-        # yoru/libs/yolov5 -- the only backend that can read a checkpoint
-        # trained with YORU v1.  ultralytics' YOLOv5u models are reached
-        # through "yolov8"/"yolo11" (or "auto"), which share their format.
+        # "yolov5" runs on the bundled ultralytics/yolov5 code, as in v1;
+        # "auto" recognises a YOLOv5 checkpoint by its contents as well.
         self.model_type_list = [
             "auto", "yolov5", "yolov8", "yolo11", "rtdetr",
             "fasterrcnn", "maskrcnn", "ssd", "onnx",
@@ -332,14 +336,29 @@ class ConfigCreatorGUI:
             detector = get_detector(model_type if model_type != "auto" else "auto", model_path)
             names_dict = detector.names  # {0: "class0", 1: "class1", ...}
             class_names = [names_dict[i] for i in sorted(names_dict.keys())]
-            self.class_list = class_names + ["None"]
-            dpg.configure_item("cfg_class_list_box", items=self.class_list)
-            dpg.configure_item("cfg_trigger_class", items=self.class_list)
-            if class_names:
-                dpg.set_value("cfg_trigger_class", class_names[0])
-            dpg.set_value("cfg_class_loading_state", f" {len(class_names)} classes loaded")
+            self._class_result = (class_names, None)
         except Exception as e:
-            dpg.set_value("cfg_class_loading_state", f" Error: {e}")
+            # Worker thread: avoid _report_error (modal from a non-main thread);
+            # persist to ~/.yoru/logs/yoru.log and keep the GUI status string.
+            log_exception("Failed to load classes from model", e)
+            self._class_result = (None, str(e))
+
+    def _apply_class_result(self):
+        """The model-loading thread never calls widgets after the window closes."""
+        result = self._class_result
+        if result is None:
+            return
+        self._class_result = None
+        class_names, error = result
+        if error is not None:
+            dpg.set_value("cfg_class_loading_state", f" Error: {error}")
+            return
+        self.class_list = class_names + ["None"]
+        dpg.configure_item("cfg_class_list_box", items=self.class_list)
+        dpg.configure_item("cfg_trigger_class", items=self.class_list)
+        if class_names:
+            dpg.set_value("cfg_trigger_class", class_names[0])
+        dpg.set_value("cfg_class_loading_state", f" {len(class_names)} classes loaded")
 
     def _select_export_dir(self):
         root = tkinter.Tk()
@@ -420,22 +439,27 @@ class ConfigCreatorGUI:
             },
         }
 
-        out_dir = os.path.dirname(os.path.abspath(out_path))
-        os.makedirs(out_dir, exist_ok=True)
-        with open(out_path, "w") as f:
-            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        dpg.set_value("cfg_save_status", f"Saved: {out_path}")
+        try:
+            out_dir = os.path.dirname(os.path.abspath(out_path))
+            os.makedirs(out_dir, exist_ok=True)
+            with open(out_path, "w") as f:
+                yaml.dump(
+                    config, f, default_flow_style=False, allow_unicode=True, sort_keys=False
+                )
+            dpg.set_value("cfg_save_status", f"Saved: {out_path}")
+        except Exception as e:
+            # Consistent with other GUIs: stderr + modal display. Also reflect in the save status line.
+            self._report_error("Failed to save config", e)
+            dpg.set_value("cfg_save_status", f"Error: {type(e).__name__}: {e}")
 
     # ------------------------------------------------------------------
     # Run loop
     # ------------------------------------------------------------------
     def run(self):
-        self.startDPG()
-        while dpg.is_dearpygui_running():
-            dpg.render_dearpygui_frame()
+        run_gui(self, dpg, self.startDPG, self._apply_class_result, None)
 
     def quit_cb(self):
-        dpg.destroy_context()
+        self.m_dict["quit"] = True
 
     def __del__(self):
         pass

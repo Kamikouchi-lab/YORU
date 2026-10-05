@@ -9,7 +9,6 @@ This module is part of YORU core and is NOT subject to any plugin's license.
 import importlib
 import logging
 import os
-import re
 
 from yoru.libs.detector_base import DetectorBase
 from yoru.libs.trainer_base import TrainerBase
@@ -89,10 +88,8 @@ def _ensure_plugins_loaded():
 # ---------------------------------------------------------------------------
 
 _BACKEND_ALIASES: dict[str, str] = {
-    # "yolov5" is NOT here: it is a backend of its own, served by the vendored
-    # upstream copy.  Only that backend can read a v1 checkpoint, whose pickle
-    # names classes in YOLOv5's own 'models' package.
-    "yolov5u": "ultralytics",
+    # "yolov5" is a backend of its own (plugins/yolov5_detector.py), not an
+    # alias: ultralytics cannot read a YOLOv5 checkpoint.
     "yolov8": "ultralytics",
     "yolo11": "ultralytics",
     "fasterrcnn": "torchvision",
@@ -111,6 +108,13 @@ def _auto_detect_backend(model_path: str) -> str:
     if basename.endswith(".onnx"):
         return "onnx"
 
+    # A YOLOv5 checkpoint is recognised by its contents before anything is
+    # read into its name: YORU v1 users named their models freely, and one
+    # called e.g. "yolov8_compare.pt" must still reach the only backend that
+    # can load it.  No other backend's checkpoint carries these markers.
+    if _sniff_checkpoint(model_path) == "yolov5":
+        return "yolov5"
+
     # Filename-based heuristics
     if "rtdetr" in basename or "rt-detr" in basename:
         return "rtdetr"
@@ -124,18 +128,51 @@ def _auto_detect_backend(model_path: str) -> str:
         return "ultralytics"
     if "yolov8" in basename or "yolo8" in basename:
         return "ultralytics"
-    if "yolov5" in basename or "yolo5" in basename:
-        # "yolov5su.pt" and friends are ultralytics' re-trained YOLOv5u
-        # models, which the ultralytics backend reads and this one cannot.
-        # The "u" sits right after the size letter: yolov5s.pt / yolov5su.pt.
-        return "ultralytics" if re.search(r"yolov?5[nsmlx]6?u", basename) else "yolov5"
 
     # For ambiguous names (e.g. "best.pt"), inspect the checkpoint contents.
     sniffed = _sniff_checkpoint(model_path)
     if sniffed is not None:
         return sniffed
 
+    # A YOLOv5 name whose file cannot be read (typically an official weight
+    # such as "yolov5s.pt" that is not downloaded yet): the bundled YOLOv5
+    # fetches the real YOLOv5 release, where ultralytics would silently swap
+    # in its different "yolov5su.pt".
+    if "yolov5" in basename:
+        return "yolov5"
+
     return "ultralytics"
+
+
+#: How a YOLOv5 checkpoint's pickle names the yolov5 repository's modules.
+#: ``torch.save`` pickles with protocol 2, whose GLOBAL opcode writes
+#: ``c<module>\n<name>\n``; protocol 4+ pushes the module name as a
+#: SHORT_BINUNICODE string (``\x8c``, length byte, bytes).  Both spell the bare
+#: top-level ``models.`` package, which no other backend's checkpoint has:
+#: ultralytics' own ``ultralytics.models.yolo`` is never preceded by either.
+_YOLOV5_PICKLE_MARKERS = (
+    b"cmodels.yolo\n",
+    b"cmodels.common\n",
+    b"\x8c\x0bmodels.yolo",
+    b"\x8c\x0dmodels.common",
+)
+
+#: Bytes read from the head of a pre-zip (torch < 1.6) checkpoint.  Its model
+#: pickle, class names included, comes before the tensor data.
+_LEGACY_HEAD_BYTES = 4 << 20
+
+
+def _is_yolov5_pickle(blob: bytes) -> bool:
+    return any(marker in blob for marker in _YOLOV5_PICKLE_MARKERS)
+
+
+def _legacy_checkpoint_head(model_path: str):
+    """The first bytes of a pre-zip checkpoint, or None if unreadable."""
+    try:
+        with open(model_path, "rb") as f:
+            return f.read(_LEGACY_HEAD_BYTES)
+    except OSError:
+        return None
 
 
 def _sniff_checkpoint(model_path: str):
@@ -161,9 +198,18 @@ def _sniff_checkpoint(model_path: str):
                 return None
             blob = zf.read(entry)
     except (OSError, zipfile.BadZipFile):
-        # Not a zip-format checkpoint (torch < 1.6) or unreadable.
+        # Not a zip-format checkpoint (torch < 1.6) or unreadable.  YOLOv5
+        # predates the zip format, so its oldest checkpoints are still worth
+        # recognising; nothing else is identified from these.
+        head = _legacy_checkpoint_head(model_path)
+        if head is not None and _is_yolov5_pickle(head):
+            return "yolov5"
         return None
 
+    # First: a YOLOv5 checkpoint can mention "ultralytics" too (the git remote
+    # of a clone of ultralytics/yolov5 is saved with every run).
+    if _is_yolov5_pickle(blob):
+        return "yolov5"
     # Checkpoints written by yoru/libs/train_torchvision.py carry a
     # "model_type" field holding one of these names.
     if b"model_type" in blob:
@@ -172,11 +218,6 @@ def _sniff_checkpoint(model_path: str):
                 return "torchvision"
     if b"ultralytics" in blob:
         return "ultralytics"
-    # Upstream YOLOv5 pickles its classes in a top-level "models" package --
-    # the very reason ultralytics cannot read these files.  Checked after
-    # "ultralytics" because a YOLOv5u checkpoint is an ultralytics one.
-    if b"models.yolo" in blob or b"models.common" in blob:
-        return "yolov5"
     if b"torchvision" in blob:
         return "torchvision"
     return None
@@ -197,7 +238,7 @@ def get_detector(
     """Instantiate, load, and return a detector plugin.
 
     Args:
-        backend: One of ``'ultralytics'``, ``'yolov5'``, ``'rtdetr'``,
+        backend: One of ``'ultralytics'``, ``'rtdetr'``,
                  ``'torchvision'``, ``'onnx'``, or ``'auto'``.
         model_path: Path to model weights.
         conf_thresh: Confidence threshold applied by every backend.
@@ -257,12 +298,11 @@ def detect_trainer_backend(m_dict: dict) -> str:
     if family == "RT-DETR":
         return "ultralytics"
 
-    weight = m_dict.get("weight", "").lower()
+    weight = os.path.basename(str(m_dict.get("weight", ""))).lower()
+    if weight.startswith("yolov5"):
+        # Trained with the bundled YOLOv5 (yoru/libs/yolov5), as in YORU v1.
+        return "yolov5"
     if any(tag in weight for tag in ("yolov8", "yolo8", "yolo11", "yolov11")):
         return "ultralytics"
-    if "yolov5" in weight or "yolo5" in weight:
-        # Same "u" test as _auto_detect_backend: yolov5su.pt trains under
-        # ultralytics, yolov5s.pt under the vendored upstream trainer.
-        return "ultralytics" if re.search(r"yolov?5[nsmlx]6?u", weight) else "yolov5"
 
     return "ultralytics"

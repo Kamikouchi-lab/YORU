@@ -510,13 +510,29 @@ def check_file(file, suffix=""):
 
 
 def check_font(font=FONT, progress=False):
-    """Ensures specified font exists or downloads it from Ultralytics assets, optionally displaying progress."""
+    """Ensures the specified font exists locally, copying a standard system font instead of downloading."""
+    import shutil
+
     font = Path(font)
     file = CONFIG_DIR / font.name
     if not font.exists() and not file.exists():
-        url = f"https://ultralytics.com/assets/{font.name}"
-        LOGGER.info(f"Downloading {url} to {file}...")
-        torch.hub.download_url_to_file(url, str(file), progress=progress)
+        # Use a locally installed standard font instead of downloading from Ultralytics assets.
+        # Python 3.9's urllib does not follow the HTTP 308 redirect that ultralytics.com now returns,
+        # so the original download raises HTTPError 308 and aborts training. Copy a system font instead.
+        windir = os.environ.get("WINDIR", "C:/Windows")
+        candidates = (
+            Path(windir) / "Fonts" / font.name,                       # e.g. Arial.ttf (Windows, case-insensitive)
+            Path(windir) / "Fonts" / "arial.ttf",                     # Windows ships lowercase arial.ttf
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),  # Linux fallback
+            Path("/Library/Fonts/Arial.ttf"),                         # macOS fallback
+        )
+        src = next((p for p in candidates if p.exists()), None)
+        if src is not None:
+            file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(str(src), str(file))
+            LOGGER.info(f"Using local font {src} (copied to {file})")
+        else:
+            LOGGER.warning(f"check_font: no local font found for {font.name}; default font will be used")
 
 
 def check_dataset(data, autodownload=True):

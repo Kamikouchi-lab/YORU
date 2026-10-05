@@ -10,6 +10,11 @@ This module is part of YORU core and is NOT subject to any plugin's license.
 class TrainerBase:
     """Abstract interface that all training plugins must implement."""
 
+    #: Number the training output gives the first epoch.  The GUI reads its
+    #: progress off lines like ``1/300`` and shows epochs counted from 1, so
+    #: a trainer that prints ``0/299`` for the first of 300 epochs says 0 here.
+    epoch_base = 1
+
     def train(self, config: dict):
         """Start training with the given configuration.
 

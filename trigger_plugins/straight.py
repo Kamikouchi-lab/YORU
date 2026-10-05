@@ -19,3 +19,9 @@ class trigger_condition:
             self.ser.write(b"1")
         else:
             self.ser.write(b"0")
+
+    def close(self):
+        try:
+            self.ser.write(b"0")
+        finally:
+            self.ser.close()

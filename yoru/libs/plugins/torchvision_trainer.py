@@ -49,6 +49,9 @@ class TorchvisionTrainer(TrainerBase):
             # see libs/train_stop.py.
             cmd += ["--stop-file", str(config["stop_file"])]
 
+        if config.get("device"):
+            cmd += ["--device", str(config["device"])]
+
         return subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,

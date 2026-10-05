@@ -1,339 +1,167 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) YORU contributors — see LICENSE for details.
+"""Camera and screen acquisition with ordered, buffered recording."""
 
-import csv
-import datetime
+import sys
 import time
 import tkinter as tk
-from threading import Thread
+from pathlib import Path
 
 import cv2
 import mss
 import numpy as np
-from PIL import Image, ImageTk
-from pynput import mouse
 
-from yoru.libs.detector_base import DETECTION_COLUMNS
+from yoru.libs.recording import BufferedRecorder
+from yoru.libs.realtime_state import clear_detection, fresh_results
+from yoru.libs.user_paths import log_exception
 
 
-class capture_streamCV2:
-    def __init__(self, srcCam=1, m_dict={}):
-        print("CV-initialization...")
-        self.m_dict = m_dict
-        self.src = srcCam
+class _CaptureStream:
+    def __init__(self, m_dict=None):
+        self.m_dict = m_dict if m_dict is not None else {}
         self.t0 = self.m_dict["t0"]
-        # Configured fps. The run loop republishes the *measured* rate into
-        # m_dict["camera_fps"] for the GUI read-out, so keep the configured one.
-        self.default_FPS = max(1, int(self.m_dict["camera_fps"]))
+        self.default_FPS = max(1.0, float(self.m_dict["camera_fps"]))
         self.resized_resolution = (
-            int(self.m_dict["camera_width"] * self.m_dict["camera_scale"]),
-            int(self.m_dict["camera_height"] * self.m_dict["camera_scale"]),
+            max(1, int(self.m_dict["camera_width"] * self.m_dict["camera_scale"])),
+            max(1, int(self.m_dict["camera_height"] * self.m_dict["camera_scale"])),
         )
+        self.recorder = None
 
-        self.frameBufLen = 200
-        self.frameBuffer = np.zeros(
-            (self.resized_resolution[1], self.resized_resolution[0], 3, self.frameBufLen),
-            dtype="uint8",
-        )
-        self.fmt = cv2.VideoWriter_fourcc("D", "I", "V", "X")
-        print("CV-initialization Finished")
+    def _recording(self, frame, timestamp):
+        if self.m_dict.get("stream", False):
+            base = Path(self.m_dict["export"]) / self.m_dict["curLog"]
+            if self.recorder is not None and self.recorder.base_path != str(base):
+                recorder, self.recorder = self.recorder, None
+                recorder.close()
+            if self.recorder is None:
+                self.recorder = BufferedRecorder(
+                    base, self.default_FPS, self.resized_resolution,
+                    self.m_dict.get("config_path"),
+                )
+            self.recorder.write(frame, timestamp, fresh_results(self.m_dict))
+        elif self.recorder is not None:
+            recorder, self.recorder = self.recorder, None
+            recorder.close()
+
+    def run(self):
+        previous = time.perf_counter()
+        frame_id = 0
+        try:
+            self.startCapture()
+            self.m_dict["capture_running"] = True
+            while not self.m_dict.get("quit", False):
+                loop_start = time.perf_counter()
+                frame = self._read()
+                if frame is None:
+                    raise RuntimeError("Capture returned no frame; check the camera connection")
+                captured_at = time.perf_counter()
+                frame = cv2.resize(frame, self.resized_resolution)
+                elapsed = captured_at - self.t0
+                frame_id += 1
+                # A single manager assignment keeps image and acquisition time paired.
+                self.m_dict["camera_snapshot"] = (frame_id, captured_at, frame)
+                self.m_dict["camera_frame_id"] = frame_id
+                self.m_dict["current_camera_frame"] = frame
+                self.m_dict["total_time"] = elapsed
+                interval = captured_at - previous
+                self.m_dict["camera_fps"] = 1.0 / interval if interval > 0 else 0.0
+                previous = captured_at
+                self._recording(frame, elapsed)
+                if self.m_dict.get("camera_imshow", False):
+                    cv2.imshow("frame", frame)
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
+                self._pace(loop_start)
+        except Exception as exc:
+            log_exception("Capture failed", exc)
+            self.m_dict["capture_error"] = str(exc)
+            raise
+        finally:
+            self.m_dict["capture_running"] = False
+            self.m_dict["quit"] = True
+            self.m_dict["stream"] = False
+            clear_detection(self.m_dict)
+            try:
+                if self.recorder is not None:
+                    recorder, self.recorder = self.recorder, None
+                    recorder.close()
+            finally:
+                self._release()
+                if self.m_dict.get("camera_imshow", False):
+                    cv2.destroyAllWindows()
+
+    def run_Buffering(self):
+        """Compatibility entry point: all capture now uses bounded recording."""
+        self.run()
+
+    def _pace(self, loop_start):
+        pass
+
+
+class capture_streamCV2(_CaptureStream):
+    def __init__(self, srcCam=1, m_dict=None):
+        super().__init__(m_dict)
+        self.src = srcCam
+        self.capture = None
 
     def startCapture(self):
-        print("CV-capture start...")
-        self.capture = cv2.VideoCapture(self.src + cv2.CAP_DSHOW)
+        preferred = {"win32": cv2.CAP_DSHOW, "darwin": cv2.CAP_AVFOUNDATION,
+                     "linux": cv2.CAP_V4L2}.get(sys.platform, cv2.CAP_ANY)
+        for backend in dict.fromkeys((preferred, cv2.CAP_ANY)):
+            self.capture = cv2.VideoCapture(self.src, backend)
+            if self.capture.isOpened():
+                break
+            self.capture.release()
+            self.capture = None
+        if self.capture is None:
+            raise RuntimeError(f"Could not open camera id {self.src}")
         self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.m_dict["camera_width"])
         self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.m_dict["camera_height"])
         self.capture.set(cv2.CAP_PROP_FPS, self.default_FPS)
-        # Opt-in: this pops up the DirectShow driver property dialog, which used
-        # to appear on every start of the real-time process.
-        if self.m_dict.get("camera_settings_dialog", False):
+        # Avoid a long queue of old camera frames in a closed-loop experiment.
+        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        if sys.platform == "win32" and self.m_dict.get("camera_settings_dialog", False):
             self.capture.set(cv2.CAP_PROP_SETTINGS, 1)
-        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2000)
-        if not self.capture.isOpened():
-            raise RuntimeError(
-                f"Could not open camera id {self.src}. "
-                "Check hardware.camera_id in the condition file."
-            )
-        (status, frame) = self.capture.read()
-        if not status or frame is None:
+
+    def _read(self):
+        ok, frame = self.capture.read()
+        return frame if ok else None
+
+    def _release(self):
+        if self.capture is not None:
             self.capture.release()
-            raise RuntimeError(
-                f"Camera id {self.src} opened but returned no frame. "
-                "Another application may be using it."
-            )
-        print("CV-capture start success")
-
-    def run(self):
-        self.startCapture()
-        t0 = time.perf_counter()
-        stream_flag = False
-        self.frame_count = 0
-        while True:
-            now = datetime.datetime.now()
-            if (not stream_flag) and self.m_dict["stream"]:
-                file_name_base = self.m_dict["export"] + "/" + self.m_dict["curLog"]
-                curVidName = file_name_base + "_vid.avi"
-                self.vwriter = cv2.VideoWriter(
-                    curVidName,
-                    self.fmt,
-                    self.default_FPS,
-                    self.resized_resolution,
-                    1,
-                )
-                # self.currentLogFile = open(curVidName + ".log", "a+")
-                # self.currentLogFile.write(
-                #     "# Streaming start: " + str(datetime.datetime.now()) + "\r"
-                # )
-                # self.currentLogFile.write("Date, Time" + "\r")
-
-                self.LogFile = open(file_name_base + "_log.csv", "a+", newline="")
-                self.log_writer = csv.writer(self.LogFile)
-                self.log_writer.writerows(
-                    [
-                        [
-                            "frame",
-                            "total_time",
-                        ]
-                    ]
-                )
-
-                self.detectionlogfile = open(
-                    file_name_base + "_detect.csv", "a+", newline=""
-                )
-                self.rtesult_writer = csv.writer(self.detectionlogfile)
-                # Header straight from the detection schema, so a column added
-                # there can never be written without a name to go with it.
-                self.rtesult_writer.writerows([list(DETECTION_COLUMNS)])
-                stream_flag = True
-                print("Start: Video-streaming")
-
-            elif stream_flag and (not self.m_dict["stream"]):
-                self.frame_count = 0
-                # Streaming Done.
-                stream_flag = False
-                self.vwriter.release()
-                print(curVidName)
-                self.detectionlogfile.close()
-                self.LogFile.close()
-                print("Finished: Video-streaming")
-
-            # Ensure camera is connected
-            if self.capture.isOpened():
-                (status, frame) = self.capture.read()
-                t1 = time.perf_counter()
-                self.m_dict["total_time"] = t1 - self.m_dict["t0"]
-
-                # Check the read succeeded *before* using the frame: a failed
-                # read yields None and cv2.resize would raise a cryptic error.
-                if not status or frame is None:
-                    print("Camera returned no frame; stopping capture.")
-                    break
-
-                halfImg = cv2.resize(frame, self.resized_resolution)
-
-                if self.m_dict["camera_imshow"]:
-                    cv2.imshow("frame", halfImg)
-                if self.m_dict["stream"] and stream_flag:
-                    self.vwriter.write(halfImg)
-                    self.log_writer.writerows(
-                        [[self.frame_count, str(self.m_dict["total_time"])]]
-                    )
-                    if self.m_dict["yolo_process_state"]:
-                        self.rtesult_writer.writerows(self.m_dict["yolo_results"])
-                    self.frame_count += 1
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
-                elif self.m_dict["quit"]:
-                    break
-                self.m_dict["current_camera_frame"] = halfImg
-            else:
-                t1 = time.perf_counter()
-            # while (t1-t0) < 1/(self.default_FPS+1.0):
-            #     t1 = time.perf_counter()
-            elapsed = t1 - t0
-            self.m_dict["camera_fps"] = int(1 / elapsed) if elapsed > 0 else 0
-            t0 = t1 * 1
-            if self.m_dict["quit"]:
-                break
-
-    def run_Buffering(self):
-        # TODO: faster buffering and exporting
-        self.startCapture()
-        k = 0
-        self.frameTimeStamp = np.zeros((self.frameBufLen))
-        while not self.m_dict["quit"]:
-            self.frameTimeStamp[k % self.frameBufLen] = time.perf_counter() - self.t0
-            (status, frame) = self.capture.read()
-            self.m_dict["currentFrame"] = frame
-            self.frameBuffer[:, :, :, k % self.frameBufLen] = frame
-            self.fps = self.frameBufLen / (
-                np.max(self.frameTimeStamp) - np.min(self.frameTimeStamp)
-            )
-            k = k + 1
-
-    def __del__(self):
-        if hasattr(self, "capture") and self.capture is not None:
-            self.capture.release()
-        try:
-            cv2.destroyAllWindows()
-        except ImportError:
-            pass
+            self.capture = None
 
 
-class capture_streamMSS:
-    def __init__(self, m_dict={}):
-        print("CV-initialization...")
-        self.m_dict = m_dict
-        self.initialized = False  # Add this line
-
-        self.disp = m_dict["capture_area"]
-        self.t0 = self.m_dict["t0"]
-        # Captured before the run loop starts overwriting camera_fps with the
-        # measured rate; this is what the recorded video is timestamped with.
-        self.default_FPS = max(1, int(self.m_dict["camera_fps"]))
-        self.resized_resolution = (
-            int(self.m_dict["camera_width"] * self.m_dict["camera_scale"]),
-            int(self.m_dict["camera_height"] * self.m_dict["camera_scale"]),
-        )
-
-        self.frameBufLen = 200
-        self.frameBuffer = np.zeros(
-            (self.resized_resolution[1], self.resized_resolution[0], 3, self.frameBufLen),
-            dtype="uint8",
-        )
-        self.fmt = cv2.VideoWriter_fourcc("D", "I", "V", "X")
-        print("CV-initialization Finished")
+class capture_streamMSS(_CaptureStream):
+    def __init__(self, m_dict=None):
+        super().__init__(m_dict)
+        self.disp = self.m_dict["capture_area"]
+        self.src = None
 
     @staticmethod
     def _to_bgr(frame):
-        """mss grabs BGRA frames; the VideoWriter, the detector backends and
-        the DearPyGui textures all expect 3-channel BGR."""
-        if frame.ndim == 3 and frame.shape[2] == 4:
-            return cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-        return frame
+        return cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR) if frame.shape[2] == 4 else frame
 
     def startCapture(self):
+        if self.disp["width"] <= 0 or self.disp["height"] <= 0:
+            raise ValueError("Select a screen area with positive width and height")
         self.src = mss.mss()
-        frame = self._to_bgr(np.array(self.src.grab(self.disp), dtype=np.uint8))
-        cv2.resize(frame, self.resized_resolution)
-        print("CV-capture start success")
 
-    def run(self):
-        self.startCapture()
-        t0 = time.perf_counter()
-        stream_flag = False
-        self.frame_count = 0
-        while True:
-            now = datetime.datetime.now()
-            if (not stream_flag) and self.m_dict["stream"]:
-                file_name_base = self.m_dict["export"] + "/" + self.m_dict["curLog"]
-                curVidName = file_name_base + "_vid.avi"
+    def _read(self):
+        return self._to_bgr(np.asarray(self.src.grab(self.disp), dtype=np.uint8))
 
-                self.vwriter = cv2.VideoWriter(
-                    curVidName,
-                    self.fmt,
-                    self.default_FPS,
-                    self.resized_resolution,
-                    1,
-                )
-                # self.currentLogFile = open(curVidName + ".log", "a+")
+    def _release(self):
+        if self.src is not None:
+            self.src.close()
+            self.src = None
 
-                # self.currentLogFile.write(
-                #     "# Streaming start: " + str(datetime.datetime.now()) + "\r"
-                # )
-                # self.currentLogFile.write("Date, Time" + "\r")
-
-                self.LogFile = open(file_name_base + "_log.csv", "a+", newline="")
-                self.log_writer = csv.writer(self.LogFile)
-                self.log_writer.writerows(
-                    [
-                        [
-                            "frame",
-                            "total_time",
-                        ]
-                    ]
-                )
-
-                self.detectionlogfile = open(
-                    file_name_base + "_detect.csv", "a+", newline=""
-                )
-                self.rtesult_writer = csv.writer(self.detectionlogfile)
-                # Header straight from the detection schema, so a column added
-                # there can never be written without a name to go with it.
-                self.rtesult_writer.writerows([list(DETECTION_COLUMNS)])
-                stream_flag = True
-                print("Start: Video-streaming")
-            elif stream_flag and (not self.m_dict["stream"]):
-                self.frame_count = 0
-                # Streaming Done.
-                stream_flag = False
-                self.vwriter.release()
-                print(curVidName)
-                self.detectionlogfile.close()
-                self.LogFile.close()
-                print("Finished: Video-streaming")
-
-            # Ensure camera is connected
-            if True:  # self.capture.isOpened():
-                frame = self._to_bgr(
-                    np.array(self.src.grab(self.disp), dtype=np.uint8)
-                )
-                t1 = time.perf_counter()
-                self.m_dict["total_time"] = t1 - self.m_dict["t0"]
-                halfImg = cv2.resize(frame, self.resized_resolution)
-
-                if True:
-                    if self.m_dict["camera_imshow"]:
-                        cv2.imshow("frame", halfImg)
-                    if self.m_dict["stream"] and stream_flag:
-                        self.vwriter.write(halfImg)
-                        self.log_writer.writerows(
-                            [[self.frame_count, str(self.m_dict["total_time"])]]
-                        )
-                        if self.m_dict["yolo_process_state"]:
-                            self.rtesult_writer.writerows(self.m_dict["yolo_results"])
-                        self.frame_count += 1
-
-                else:
-                    break
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
-                elif self.m_dict["quit"]:
-                    break
-                self.m_dict["current_camera_frame"] = halfImg
-            else:
-                t1 = time.perf_counter()
-            while (t1 - t0) < 1 / 16:
-                t1 = time.perf_counter()
-            elapsed = t1 - t0
-            self.m_dict["camera_fps"] = int(1 / elapsed) if elapsed > 0 else 0
-            t0 = t1 * 1
-
-            if self.m_dict["quit"]:
-                break
-
-    def run_Buffering(self):
-        # TODO: faster buffering and exporting
-        self.startCapture()
-        k = 0
-        self.frameTimeStamp = np.zeros((self.frameBufLen))
-        while not self.m_dict["quit"]:
-            self.frameTimeStamp[k % self.frameBufLen] = time.perf_counter() - self.t0
-            frame = self._to_bgr(np.array(self.src.grab(self.disp), dtype=np.uint8))
-            self.m_dict["currentFrame"] = frame
-            self.frameBuffer[:, :, :, k % self.frameBufLen] = frame
-            self.fps = self.frameBufLen / (
-                np.max(self.frameTimeStamp) - np.min(self.frameTimeStamp)
-            )
-            k = k + 1
-
-    def __del__(self):
-        if hasattr(self, "capture") and self.capture is not None:
-            self.capture.release()
-        try:
-            cv2.destroyAllWindows()
-        except ImportError:
-            pass
+    def _pace(self, loop_start):
+        # Honour the configured rate without burning a CPU core between frames.
+        remaining = 1.0 / self.default_FPS - (time.perf_counter() - loop_start)
+        deadline = time.perf_counter() + max(0.0, remaining)
+        while remaining > 0 and not self.m_dict.get("quit", False):
+            time.sleep(min(remaining, 0.05))
+            remaining = deadline - time.perf_counter()
 
 
 class SelectCaptureArea:
@@ -358,26 +186,28 @@ class SelectCaptureArea:
         self.root.attributes("-fullscreen", True)  # Fullscreen
         self.root.update()  # Make sure the window is shown
 
-        self.listener = mouse.Listener(on_click=self.on_click, on_move=self.on_move)
-        self.listener.start()
+        # Tk operations stay on Tk's thread; a global mouse listener used to
+        # modify widgets from its own thread.
+        self.canvas.bind("<ButtonPress-1>", lambda e: self.on_click(e.x_root, e.y_root, "left", True))
+        self.canvas.bind("<ButtonRelease-1>", lambda e: self.on_click(e.x_root, e.y_root, "left", False))
+        self.canvas.bind("<B1-Motion>", lambda e: self.on_move(e.x_root, e.y_root))
+        self.selected = False
+        self.root.bind("<Escape>", lambda e: self.root.quit())
+        self.root.protocol("WM_DELETE_WINDOW", self.root.quit)
 
     def draw_rectangle(self, start_x, start_y, end_x, end_y):
         if start_x > end_x:
             start_x, end_x = end_x, start_x
         if start_y > end_y:
             start_y, end_y = end_y, start_y
-        image = Image.new(
-            "RGBA",
-            (end_x - start_x, end_y - start_y),
-            (*self.color, int(255 * self.opacity)),
-        )
-        self.photo = ImageTk.PhotoImage(image)
-        self.rectangle = self.canvas.create_image(
-            start_x, start_y, image=self.photo, anchor="nw"
+        ox, oy = self.canvas.winfo_rootx(), self.canvas.winfo_rooty()
+        self.rectangle = self.canvas.create_rectangle(
+            start_x - ox, start_y - oy, end_x - ox, end_y - oy,
+            outline="#db4d6d", fill="#db4d6d", stipple="gray50",
         )
 
     def on_click(self, x, y, button, pressed):
-        if button == mouse.Button.left:
+        if button == "left":
             if pressed:
                 self.start_x = x
                 self.start_y = y
@@ -387,23 +217,14 @@ class SelectCaptureArea:
                     "-alpha", 0.2
                 )  # Make visible when we start the drag
             else:
+                if self.start_x is None or self.start_y is None:
+                    return
                 self.canvas.delete(self.rectangle)
-                if y > self.top and x > self.left:
-                    self.width = x - self.left
-                    self.height = y - self.top
-                else:
-                    self.width = self.left - x
-                    self.height = self.top - y
-                    self.top = y
-                    self.left = x
-                self.m_dict["capture_area"]["top"] = self.top
-                self.m_dict["capture_area"]["left"] = self.left
-                self.m_dict["capture_area"]["width"] = self.width
-                self.m_dict["capture_area"]["height"] = self.height
-                # self.m_dict["camera_width"] = self.width
-                # self.m_dict["camera_height"] = self.height
-                self.m_dict["camera_width"] = 640
-                self.m_dict["camera_height"] = 480
+                self.left, self.top = min(self.start_x, x), min(self.start_y, y)
+                self.width, self.height = abs(x - self.start_x), abs(y - self.start_y)
+                self.start_x = self.start_y = None
+                if self.width == 0 or self.height == 0:
+                    return
                 self.m_dict["capture_area"] = {
                     "top": self.top,
                     "left": self.left,
@@ -411,6 +232,7 @@ class SelectCaptureArea:
                     "height": self.height,
                 }
                 print(self.m_dict["capture_area"])
+                self.selected = True
                 self.root.quit()  # Close the window when we release the mouse button
 
     def on_move(self, x, y):
@@ -428,11 +250,12 @@ class select_run:
         # select capture area
         if self.m_dict["capture_area_select"]:  # Modify this line
             self.root = tk.Tk()
-            self.area = SelectCaptureArea(self.root, m_dict=self.m_dict)
-            self.root.mainloop()
-            self.area.listener.stop()
-            self.root.destroy()
-            self.initialized = True  # Add this line
+            try:
+                self.area = SelectCaptureArea(self.root, m_dict=self.m_dict)
+                self.root.mainloop()
+                self.m_dict["quit"] = not self.area.selected
+            finally:
+                self.root.destroy()
 
 
 if __name__ == "__main__":

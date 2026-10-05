@@ -59,8 +59,9 @@ def test_unknown_weight_yields_no_estimate():
 def test_size_ordering_within_a_family():
     """A bigger model must never estimate cheaper than a smaller one."""
     sizes = ["n", "s", "m", "l", "x"]
-    totals = [estimate_training_vram(f"yolo11{s}.pt", 640, 16).total_gb for s in sizes]
-    assert totals == sorted(totals), totals
+    for family in ("yolov5", "yolo11"):
+        totals = [estimate_training_vram(f"{family}{s}.pt", 640, 16).total_gb for s in sizes]
+        assert totals == sorted(totals), (family, totals)
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +125,22 @@ def test_rtdetr_l_matches_a_measured_run():
     est = estimate_training_vram("rtdetr-l.pt", 640, 5)
     reserved = est.total_gb - CUDA_CONTEXT_GB
     assert reserved == pytest.approx(5.5, rel=0.3), reserved
+
+
+@pytest.mark.parametrize(
+    "weight,batch,measured",
+    [("yolov5s.pt", 16, 3.35), ("yolov5x.pt", 8, 7.35)],
+)
+def test_yolov5_matches_measured_runs(weight, batch, measured):
+    """GPU_mem the bundled yolov5 train.py printed at 640 px (RTX 5070 Ti, AMP).
+
+    yolov5 prints memory_reserved in units of 1e9 bytes; the estimate is in
+    GiB, so the reading is converted before comparing.  The rows reproduce
+    their calibration runs to within 4%; 10% here leaves room for rounding.
+    """
+    est = estimate_training_vram(weight, 640, batch)
+    reserved = est.total_gb - CUDA_CONTEXT_GB
+    assert reserved == pytest.approx(measured * 1e9 / 2**30, rel=0.1), reserved
 
 
 # ---------------------------------------------------------------------------

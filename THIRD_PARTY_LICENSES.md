@@ -89,14 +89,21 @@ Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency
   those files at all, and pinning them to a pip release would make an old
   project's weights depend on what happens to be installed.
 - **Modifications:**
-  - `weights_only=False` on every `torch.load`, and `torch.amp.autocast` in
-    place of the deprecated `torch.cuda.amp.autocast`, for PyTorch 2.6
+  - `weights_only=False` on every `torch.load`, for PyTorch 2.6, which flipped
+    that default
+  - `torch.amp.autocast` and `torch.amp.GradScaler` in place of the deprecated
+    `torch.cuda.amp.*`
   - `pkg_resources` imported under a suppressed deprecation warning
-  - `yoru/libs/yolov5/__init__.py` added (YORU's, not upstream's): binds the
-    top-level `models` and `utils` the checkpoints name, without putting the
-    directory ahead of anything on `sys.path`
-  - `train.py` gained `yoru_stop_requested()` and one call to it at the end of
-    the epoch loop, for the training GUI's "stop after this epoch"
+  - `check_font()` copies a system font instead of downloading one:
+    ultralytics.com now answers with HTTP 308, which Python's urllib does not
+    follow, and the resulting error aborted training
+  - `select_device()` tests `torch.backends.mps` rather than `torch.has_mps`,
+    which newer PyTorch no longer defines
+- **Not modified for the "stop after this epoch" button:** `yoru/libs/
+  train_yolov5.py` substitutes a subclass of upstream's `EarlyStopping` into
+  `train.py`'s namespace, so the bundled code itself stays as it is. How the
+  directory is made importable lives outside it too, in
+  `yoru/libs/yolov5_support.py`.
 
 ### labelImg
 
@@ -112,6 +119,28 @@ Not exhaustive; `uv.lock` is the authoritative record of the resolved dependency
   - Added the Click to Box tool, a command line (`--obb` / image directory /
     classes file / save directory), and a fix for a settings file written by a
     different labelImg build
+
+### YOLOv5
+
+- **Location:** `yoru/libs/yolov5/`
+- **License:** AGPL-3.0
+- **Copyright:** Ultralytics
+- **License file:** `yoru/libs/yolov5/LICENSE`
+- **Upstream:** https://github.com/ultralytics/yolov5
+- **Why bundled:** it is the only code that can load a YOLOv5 checkpoint
+  (every model trained with YORU v1) and the code YOLOv5 training runs; the
+  `ultralytics` package refuses these checkpoints. The copy is the one YORU
+  v1.1.2 shipped, unchanged.
+- **Modifications** (all made for YORU v1):
+  - `torch.load(..., weights_only=False)` wherever checkpoints are read, for
+    PyTorch 2.6+
+  - `torch.cuda.amp.autocast` replaced by `torch.amp.autocast("cuda", ...)`;
+    `models/common.py` (`AutoShape.forward`) runs inference under CUDA
+    autocast unconditionally
+  - `utils/general.py`: the `pkg_resources` deprecation warning is silenced,
+    and `check_font` copies a local system font instead of downloading one
+  - `utils/torch_utils.py`: MPS detected with `torch.backends.mps` instead
+    of the removed `torch.has_mps`
 
 ### Click to Box engine
 

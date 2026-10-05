@@ -8,9 +8,9 @@
   name: Experiment name
   export: Folder path for video exporting
   export_name: Name of exporting videos
-  s
+
   model:
-   yolo_model_path: Path to YORU mode
+   yolo_model_path: Path to YORU model
   
   capture_style:
    stream_MSS: False # If True, YORU start screen capture mode
@@ -55,3 +55,33 @@ analysis scripts and trigger plugins keep working.
 An OBB model needs no special setting here: leave `yolo_model_type: "auto"` and
 YORU recognises it from the model itself. See
 [Oriented bounding boxes](training.md#oriented-bounding-boxes).
+
+## Stopping, recording and capture rate
+
+Turning detection off or reloading the model invalidates its previous results.
+Triggers also ignore results whose source frame is older than
+`trigger.result_max_age` seconds (default `1.0`). Set this optional YAML value
+to match the maximum acceptable delay for the experiment, allowing for the
+model's inference time. Drawing the preview does not extend this lifetime.
+
+Closing the window, choosing Quit, or losing the camera stops the workers.
+Buffered video and CSV output is drained and closed, and the condition YAML
+is copied when recording starts. A driver that does not respond to shutdown
+is forcibly stopped after the shutdown grace period; this is reported as an
+error because its recording may be incomplete. Trigger plugins may implement
+`close()` to reset outputs and release resources; the bundled serial, display
+and NI-DAQ plugins do so.
+
+Screen capture uses `hardware.camera_fps` as its target rate and sleeps between
+frames. Recording uses a bounded queue instead of reserving a 200-frame array.
+If disk encoding cannot keep up, acquisition waits for space rather than
+silently dropping queued frames. The AVI uses the configured constant FPS;
+`*_log.csv` records the actual acquisition time for each saved frame, which is
+the timing reference when capture is slower than requested. In the detection
+CSV, `total_time` is the acquisition time of the frame used for inference; a
+result can be reused for subsequent recorded frames until it expires.
+
+Camera acquisition selects DirectShow on Windows, AVFoundation on macOS, or
+V4L2 on Linux, with an automatic-backend fallback. The driver settings dialog
+is available only on Windows. Screen regions can be dragged in any direction;
+Escape cancels selection, and a zero-area click leaves selection open.

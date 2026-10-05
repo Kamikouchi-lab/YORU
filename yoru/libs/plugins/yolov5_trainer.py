@@ -1,11 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) YORU contributors — see LICENSE for details.
 
-"""YOLOv5 training plugin, backed by the vendored copy in ``yoru/libs/yolov5``.
+"""YOLOv5 training plugin, run by the bundled ultralytics/yolov5 code.
 
-Upstream YOLOv5, not the YOLOv5u models ultralytics ships: the anchor-based
-model YORU v1 trained with.  Oriented boxes are not available here -- YOLOv5
-has no rotated-box head.
+Requires the bundled ``yoru/libs/yolov5``; see ``libs/train_yolov5.py``.
 """
 
 import subprocess
@@ -18,16 +16,13 @@ from yoru.libs.trainer_base import TrainerBase
 # Resolve relative to this package, not the current working directory.
 _TRAIN_SCRIPT = Path(__file__).resolve().parent.parent / "train_yolov5.py"
 
-# Upstream's train.py re-expresses its own directory relative to the working
-# directory, which raises on Windows when the two are on different drives.
-# Running from the repository root keeps that relative path computable
-# wherever the user's project directory happens to live.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-
 
 @register_trainer("yolov5")
 class YOLOv5Trainer(TrainerBase):
-    """Launch YOLOv5 training as a subprocess."""
+    """Launch YOLOv5 training as a subprocess, as YORU v1 did."""
+
+    # yolov5's train.py prints the first of 300 epochs as "0/299".
+    epoch_base = 0
 
     def train(self, config: dict) -> subprocess.Popen:
         cmd = [
@@ -56,7 +51,6 @@ class YOLOv5Trainer(TrainerBase):
 
         return subprocess.Popen(
             cmd,
-            cwd=str(_REPO_ROOT),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

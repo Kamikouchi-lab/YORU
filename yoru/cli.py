@@ -50,16 +50,16 @@ Examples:
                             "(default: the last-used file)")
     p_gui.set_defaults(func=_cmd_gui)
 
-    # ここがポイント：引数なしのときは GUI を既定動作にする
+    # Key point: when no arguments are given, default to launching the GUI
     parser.set_defaults(func=_cmd_gui, command="gui", config=None)
     return parser
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    # argparse が --help を処理した場合はここに来ない（0終了）
-    # 既定（引数なし）は func=_cmd_gui が入っている
-    return int(bool(args.func(args)))  # 成功は 0/None, 失敗は非0
+    # If argparse handled --help, execution never reaches here (exits with 0)
+    # The default (no arguments) has func=_cmd_gui set
+    return int(bool(args.func(args)))  # success is 0/None, failure is non-zero
 
 # -------------------------
 # Subcommand impls
@@ -67,9 +67,15 @@ def main(argv: list[str] | None = None) -> int:
 
 def _cmd_gui(args) -> int:
     """Launch GUI. Keep imports lazy so '--help' stays fast."""
+    # Imported here (not at module top) so '--help'/'--version' stay fast and
+    # do not create the ~/.yoru directory.
+    from yoru.libs.user_paths import log_exception, setup_logging
+    setup_logging()
+
     try:
-        from yoru.app import main as app_main   # ←あなたの既存 GUI エントリ
+        from yoru.app import main as app_main   # <- your existing GUI entry point
     except Exception as e:
+        log_exception("failed to import yoru.app.main", e)
         print(f"[yoru] failed to import yoru.app.main: {e}")
         return 1
 
@@ -90,6 +96,7 @@ def _cmd_gui(args) -> int:
         print(f"[yoru] {code}")  # SystemExit("message") means failure
         return 1
     except Exception as e:
+        log_exception("GUI crashed", e)
         print(f"[yoru] GUI crashed: {e}")
         return 1
 

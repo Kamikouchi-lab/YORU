@@ -10,7 +10,6 @@ from tkinter import filedialog
 import cv2
 import numpy as np
 import pandas as pd
-import torch
 from munkres import Munkres
 
 from yoru.libs.detector_base import obb_of
@@ -35,6 +34,49 @@ def _conf_thresh(m_dict) -> float:
         return DEFAULT_CONF_THRESH
 
 
+def _tracking_max_dist(m_dict):
+    """Per-frame movement cap for tracking, in pixels; ``None`` for no cap."""
+    try:
+        max_dist = float(m_dict.get("tracking_max_dist", 0))
+    except (TypeError, ValueError):
+        return None
+    return max_dist if max_dist > 0 else None
+
+
+def match_to_previous(pre_pos, cur_pos, max_dist=None):
+    """Match this frame's detection centres to the previous frame's.
+
+    Returns one entry per current detection: the index into ``pre_pos`` of the
+    detection it continues, or -1 when it starts a new track.
+
+    The assignment minimises the summed centre distance over matched pairs.
+    When the frames hold different numbers of detections, Munkres pads the
+    rectangular matrix with zeros, so the surplus is left unmatched at a
+    constant cost and which detection is left over depends only on distances
+    between real detections -- not on where it sits in the image.
+
+    ``max_dist`` caps how far a detection may move between frames and keep its
+    ID.  Distances are clipped at the cap before the assignment and pairs past
+    it are split afterwards, which is the optimum of letting each detection
+    stay unmatched at half the cap.
+    """
+    if not cur_pos:
+        return []
+    if not pre_pos:
+        return [-1] * len(cur_pos)
+    pre = np.asarray(pre_pos, dtype=np.float64)
+    cur = np.asarray(cur_pos, dtype=np.float64)
+    dist = np.linalg.norm(pre[:, None, :] - cur[None, :, :], axis=2)
+    cost = dist if max_dist is None else np.minimum(dist, max_dist)
+    matches = [-1] * len(cur_pos)
+    # A list, not an array: pad_matrix() extends rows with ``+=``, which
+    # would add elementwise to a numpy row instead of appending.
+    for i, j in Munkres().compute(cost.tolist()):
+        if max_dist is None or dist[i, j] <= max_dist:
+            matches[j] = i
+    return matches
+
+
 class yolo_analysis:
     def __init__(self, m_dict):
         self.m_dict = m_dict
@@ -42,41 +84,6 @@ class yolo_analysis:
         self.mov_path_list = self.m_dict["input_path"]
         self.out_path = self.m_dict["output_path"]
         logger.debug("yolo_analysis initialized")
-
-    def cal_id(self, pre_mat, cur_mat):
-        pre_mat_calculate = pre_mat.copy()
-        cur_mat_calculate = cur_mat.copy()
-
-
-        actual_cur_num = len(cur_mat_calculate)
-        actual_pre_num = len(pre_mat_calculate)
-
-        while len(cur_mat_calculate) > len(pre_mat_calculate):
-            pre_mat_calculate.append((-1000, -1000))
-        while len(pre_mat_calculate) > len(cur_mat_calculate):
-            cur_mat_calculate.append((-1000, -1000))
-
-        if actual_cur_num < 1:
-            return None
-        pre_mat_calculate = torch.tensor(pre_mat_calculate).type(torch.float64)
-        cur_mat_calculate = torch.tensor(cur_mat_calculate).type(torch.float64)
-
-        # print(pre_mat , "pre_mat")
-        # print(cur_mat , "cur_mat")
-        matrix = torch.cdist(pre_mat_calculate, cur_mat_calculate)
-        matrix = matrix.numpy()
-        match_mat = Munkres().compute(matrix)
-
-        ret_match_mat = []
-
-        for i, j in match_mat:
-            if i >= actual_pre_num:
-                i = -1
-            if j >= actual_cur_num:
-                j = -1
-            ret_match_mat.append((i, j))
-
-        return ret_match_mat
 
     def drawing(self, result, img):
         for (res_frame_no, *res_box, res_x_center, res_y_center,
@@ -117,35 +124,40 @@ class yolo_analysis:
             "auto", self.yolo_model_path, conf_thresh=_conf_thresh(self.m_dict)
         )
 
-        # クラス名の取得
+        # Get class names
         self.class_names = detector.names
 
         self.colormap = get_colormap(self.class_names, "gist_rainbow")
+        max_dist = _tracking_max_dist(self.m_dict)
 
         movie_count = len(self.mov_path_list)
+        total_movies = movie_count
         self.m_dict["no_movies"] = f"Leaving movies: {int(movie_count)} movies"
+        print(f"=== Start movie analysis: {total_movies} movie(s) ===", flush=True)
 
-        for self.mov_path in self.mov_path_list:
+        for movie_index, self.mov_path in enumerate(self.mov_path_list, start=1):
+            if self.m_dict.get("quit", False):
+                break
             df_results = pd.DataFrame()
             result_list = []
             video = cv2.VideoCapture(self.mov_path)
             out = None
             frame_count = 0
 
-            # トラッキング用
+            # For tracking
             pre_ids = []
-            pre_center_pos = []  # 以前の位置情報を入力する
+            pre_center_pos = []  # Stores the previous position information
             global_counter = 0
 
-            # ファイル名の取得（拡張子なし）
+            # Get the file name (without extension)
             base_name = os.path.basename(self.mov_path)
             file_name_without_ext = os.path.splitext(base_name)[0]
 
-            # 指定の出力ディレクトリに新しいファイル名を結合
+            # Join the new file name with the specified output directory
             file_path = os.path.join(self.out_path, file_name_without_ext + ".csv")
 
             try:
-                # 出力動画の設定
+                # Output video settings
                 if self.m_dict["create_video"]:
                     out_movie_path = os.path.join(
                         self.out_path, file_name_without_ext + "_render_" + ".mp4"
@@ -160,7 +172,7 @@ class yolo_analysis:
                         ),
                     )
 
-                # ビデオのフレーム数を取得
+                # Get the number of frames in the video
                 total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
                 process_times = []
 
@@ -168,7 +180,16 @@ class yolo_analysis:
                 pre_ids = []
                 self.m_dict["movie_progress"] = 0.0
 
+                print(
+                    f"[{movie_index}/{total_movies}] Analyzing '{base_name}' "
+                    f"({total_frames} frames)...",
+                    flush=True,
+                )
+                last_logged_pct = -10  # stdout progress, logged in 10% steps
+
                 while video.isOpened():
+                    if self.m_dict.get("quit", False):
+                        break
                     ret, frame = video.read()
                     if not ret:
                         self.m_dict["estimate_time"] = (
@@ -222,28 +243,21 @@ class yolo_analysis:
                             cur_center_pos.append((x_center, y_center))
 
                     if self.m_dict["tracking_state"]:
-                        id_matrix = self.cal_id(pre_center_pos, cur_center_pos)
                         cur_ids = []
-                        if id_matrix is not None:
-                            id_matrix.sort(
-                                key=lambda x: x[1] if x[1] >= 0 else float("inf")
-                            )
-                            for ids in id_matrix:
-                                if ids[0] == -1 or ids[1] == -1:
-                                    cur_ids.append(global_counter)
-                                    global_counter += 1
-                                else:
-                                    if 0 <= ids[0] < len(pre_ids):
-                                        cur_ids.append(pre_ids[ids[0]])
-                                    else:
-                                        cur_ids.append(global_counter)
-                                        global_counter += 1
-                            result = [x + [y] for x, y in zip(result, cur_ids)]
+                        for i in match_to_previous(
+                            pre_center_pos, cur_center_pos, max_dist
+                        ):
+                            if i >= 0:
+                                cur_ids.append(pre_ids[i])
+                            else:
+                                cur_ids.append(global_counter)
+                                global_counter += 1
+                        result = [x + [y] for x, y in zip(result, cur_ids)]
 
                         pre_ids = cur_ids
                         pre_center_pos = cur_center_pos
 
-                        # 除外クラスはtracking_id=-1として追加
+                        # Add excluded classes with tracking_id=-1
                         result = result + [x + [-1] for x in result_excluded]
 
                     if self.m_dict["create_video"]:
@@ -259,6 +273,15 @@ class yolo_analysis:
                     progress = frame_count / total_frames if total_frames > 0 else 0.0
                     self.m_dict["movie_progress"] = progress
 
+                    pct = int(progress * 100)
+                    if pct // 10 > last_logged_pct // 10:
+                        last_logged_pct = pct
+                        print(
+                            f"[{movie_index}/{total_movies}] {base_name}: "
+                            f"{pct}% ({frame_count}/{total_frames} frames)",
+                            flush=True,
+                        )
+
                     end_time = time.time()
                     process_time = end_time - start_time
                     process_times.append(process_time)
@@ -270,7 +293,7 @@ class yolo_analysis:
                         f"Estimated remaining time: {int(remaining_time_estimate)} seconds"
                     )
 
-                # リストをデータフレームに変換
+                # Convert the list to a dataframe
                 if self.m_dict["tracking_state"]:
                     df_results = pd.DataFrame(
                         result_list,
@@ -318,6 +341,7 @@ class yolo_analysis:
         self.m_dict["estimate_time"] = "Estimated remaining time: none"
         self.m_dict["no_movies"] = "Leaving movies: none"
         self.m_dict["movie_progress"] = 1.0
+        print("=== Movie analysis complete ===", flush=True)
 
     def create_video(self, mov_path=None):
         """Render an annotated copy of *mov_path*.
@@ -449,19 +473,23 @@ class yolo_analysis_image:
             "auto", self.yolo_model_path, conf_thresh=conf_thresh
         )
 
-        # クラス名の取得
+        # Get class names
         self.class_names = detector.names
 
         self.colormap = get_colormap(self.class_names, "gist_rainbow")
 
         image_count = len(self.img_path_list)
+        print(f"=== Start image analysis: {image_count} image(s) ===", flush=True)
+        last_logged_pct = -10  # For progress logging to stdout (output in 10% steps)
 
         df_results = pd.DataFrame()
         result_list = []
-        # 指定の出力ディレクトリに新しいファイル名を結合
+        # Join the new file name with the specified output directory
         file_path = os.path.join(self.out_path, "image_analysis_results" + ".csv")
 
         for image_index, self.img_path in enumerate(self.img_path_list):
+            if self.m_dict.get("quit", False):
+                break
             base_name = os.path.basename(self.img_path)
             file_name_without_ext = os.path.splitext(base_name)[0]
 
@@ -483,7 +511,7 @@ class yolo_analysis_image:
                     continue
                 x_center, y_center, box_w, box_h, box_angle = obb_of(d)
 
-                # 結果をリストに保存
+                # Save the results to the list
                 result_list.append(
                     [
                         file_name_without_ext,
@@ -509,7 +537,7 @@ class yolo_analysis_image:
                     d["class_id"],
                 )
 
-            # フレームを出力動画に書き込む
+            # Write the frame to the output video
             result_file_path = os.path.join(
                 self.out_path, file_name_without_ext + "_render.png"
             )
@@ -519,7 +547,16 @@ class yolo_analysis_image:
             self.m_dict["image_progress"] = progress
             self.m_dict["image_progress_label"] = f"{image_index + 1}/{image_count}"
 
-        # リストをデータフレームに変換
+            # Emit progress to stdout in 10% steps
+            pct = int(progress * 100)
+            if pct // 10 > last_logged_pct // 10:
+                last_logged_pct = pct
+                print(
+                    f"    {pct}% ({image_index + 1}/{image_count}) {base_name}",
+                    flush=True,
+                )
+
+        # Convert the list to a DataFrame
         df_results = pd.DataFrame(
             result_list,
             columns=[
@@ -536,8 +573,9 @@ class yolo_analysis_image:
                 "class_name",
             ],
         )
-        # csvとして出力
+        # Output as CSV
         df_results.to_csv(file_path, index=False)
+        print(f"=== Image analysis complete -> {file_path} ===", flush=True)
 
         self.m_dict["analy_state"] = "Done!"
         self.m_dict["image_progress"] = 1.0
@@ -550,24 +588,24 @@ class file_open:
 
     def get_file_path(self):
         root = tk.Tk()
-        root.withdraw()  # Tkのルートウィンドウを表示しない
+        root.withdraw()  # Do not display the Tk root window
 
-        # ファイル選択ダイアログを表示
+        # Show the file selection dialog
         file_path = filedialog.askopenfilename()
 
         return file_path
 
     def get_directory_path(self):
         root = tk.Tk()
-        root.withdraw()  # Tkのルートウィンドウを表示しない
+        root.withdraw()  # Do not display the Tk root window
 
-        # フォルダ選択ダイアログを表示
+        # Show the folder selection dialog
         directory_path = filedialog.askdirectory()
 
         return directory_path
 
 
-# 使用例
+# Usage example
 if __name__ == "__main__":
     fileopen = file_open()
     model_path = fileopen.get_file_path()
