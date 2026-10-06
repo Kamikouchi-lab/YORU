@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Camera and screen acquisition with ordered, buffered recording."""
 
-import sys
 import time
 import tkinter as tk
 from pathlib import Path
@@ -10,6 +9,7 @@ import cv2
 import mss
 import numpy as np
 
+from yoru.libs.camera import open_camera
 from yoru.libs.recording import BufferedRecorder
 from yoru.libs.realtime_state import clear_detection, fresh_results
 from yoru.libs.user_paths import log_exception
@@ -104,23 +104,13 @@ class capture_streamCV2(_CaptureStream):
         self.capture = None
 
     def startCapture(self):
-        preferred = {"win32": cv2.CAP_DSHOW, "darwin": cv2.CAP_AVFOUNDATION,
-                     "linux": cv2.CAP_V4L2}.get(sys.platform, cv2.CAP_ANY)
-        for backend in dict.fromkeys((preferred, cv2.CAP_ANY)):
-            self.capture = cv2.VideoCapture(self.src, backend)
-            if self.capture.isOpened():
-                break
-            self.capture.release()
-            self.capture = None
-        if self.capture is None:
-            raise RuntimeError(f"Could not open camera id {self.src}")
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.m_dict["camera_width"])
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.m_dict["camera_height"])
-        self.capture.set(cv2.CAP_PROP_FPS, self.default_FPS)
-        # Avoid a long queue of old camera frames in a closed-loop experiment.
-        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if sys.platform == "win32" and self.m_dict.get("camera_settings_dialog", False):
-            self.capture.set(cv2.CAP_PROP_SETTINGS, 1)
+        self.capture = open_camera(
+            self.src,
+            self.m_dict["camera_width"],
+            self.m_dict["camera_height"],
+            self.default_FPS,
+            settings_dialog=self.m_dict.get("camera_settings_dialog", False),
+        )
 
     def _read(self):
         ok, frame = self.capture.read()

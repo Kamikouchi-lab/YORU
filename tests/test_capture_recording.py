@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from yoru.libs import imager, recording
+from yoru.libs import camera, imager, recording
 
 
 def state():
@@ -128,7 +128,7 @@ def test_capture_finalizes_recording_on_quit_and_disconnect(tmp_path, monkeypatc
 @pytest.mark.parametrize("platform,backend", [("win32", imager.cv2.CAP_DSHOW),
     ("darwin", imager.cv2.CAP_AVFOUNDATION), ("linux", imager.cv2.CAP_V4L2)])
 def test_camera_backend_selection_and_fallback(monkeypatch, platform, backend):
-    monkeypatch.setattr(imager, "sys", SimpleNamespace(platform=platform))
+    monkeypatch.setattr(camera, "sys", SimpleNamespace(platform=platform))
     calls, released = [], []
     def open_camera(index, api):
         calls.append((index, api))

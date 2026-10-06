@@ -281,6 +281,17 @@ def get_detector(
     return detector
 
 
+def list_detector_backends() -> list:
+    """Names :func:`get_detector` accepts on this machine, ``"auto"`` first.
+
+    Only backends whose plugin imported are listed, so a selector built from
+    this never offers one that would fail with "unknown backend".  Aliases
+    (``yolov8``, ``ssd``, ...) are left out: they name the same plugins.
+    """
+    _ensure_plugins_loaded()
+    return ["auto", *sorted(_DETECTOR_REGISTRY)]
+
+
 # ---------------------------------------------------------------------------
 # Public API – trainers
 # ---------------------------------------------------------------------------

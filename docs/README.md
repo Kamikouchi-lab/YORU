@@ -15,6 +15,10 @@
 
     See [Closed-loop system](closed-loop.md)
 
+5. Building on YORU from another application (e.g. YORU-Tracker).
+
+    See [YORU's external API](external_api.md)
+
 # The YORU window
 
 Every YORU screen opens sized to the monitor it is on and centred, so the same
