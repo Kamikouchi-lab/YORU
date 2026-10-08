@@ -95,5 +95,6 @@ application writes its own log file into `get_log_dir()` (YORU-Tracker writes
 
 ## Version
 
-`yoru.__version__`. A sister application declares the YORU versions it supports
-in its own dependencies (for example `yoru>=2.0.0b3,<3`).
+`yoru.__version__`. This API first ships in 2.0.0 Beta 4. A sister application
+declares the YORU versions it supports in its own dependencies (for example
+`yoru>=2.0.0b4,<3`).

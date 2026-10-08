@@ -1,4 +1,4 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) YORU contributors — see LICENSE for details.
 
-__version__ = "2.0.0b3"  # <- update only this line on release
+__version__ = "2.0.0b4"  # <- update only this line on release

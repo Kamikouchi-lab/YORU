@@ -1508,7 +1508,7 @@ wheels = [
 
 [[package]]
 name = "yoru"
-version = "2.0.0b3"
+version = "2.0.0b4"
 source = { editable = "." }
 dependencies = [
     { name = "dearpygui" },
