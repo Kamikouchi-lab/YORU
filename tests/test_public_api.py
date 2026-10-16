@@ -1,9 +1,10 @@
 """The names sister applications build on, and the rule that keeps YORU apart.
 
 docs/external_api.md promises that the names below stay put.  YORU-Tracker
-imports them; nothing in this repository would otherwise notice if one were
-renamed or had a parameter dropped, so each is pinned here.  The last test is
-the dependency rule itself: YORU never imports the tracker.
+and YORU-Explain import them; nothing in this repository would otherwise
+notice if one were renamed or had a parameter dropped, so each is pinned here.
+The last test is the dependency rule itself: YORU never imports a sister
+application.
 """
 
 from __future__ import annotations
@@ -21,6 +22,12 @@ PUBLIC_NAMES = {
         "get_detector", "list_detector_backends",
         "DEFAULT_CONF_THRESH", "DEFAULT_IOU_THRESH",
     ),
+    # The model behind get_detector("yolov5", ...), for YORU-Explain.
+    "yoru.libs.plugins.yolov5_detector": (
+        "load_yolov5_model", "rgb_input_requested", "V1_NMS_CONF",
+    ),
+    "yoru.libs.yolov5_support": ("yolov5_importable", "YOLOV5_DIR"),
+    "yoru.libs.device": ("torch_device",),
     "yoru.libs.detector_base": (
         "DetectorBase", "DETECTION_COLUMNS", "obb_of", "detection_row",
     ),
@@ -103,8 +110,26 @@ def test_gui_session_methods():
         assert callable(getattr(GuiSession, name, None)), name
 
 
-def test_yoru_never_imports_the_tracker(repo_root: Path):
-    """YORU must run without YORU-Tracker installed: no import, anywhere."""
+def test_yolov5_entry_point_signatures():
+    """What YORU-Explain calls to get the model and settings the YOLOv5 plugin uses."""
+    from yoru.libs.device import torch_device
+    from yoru.libs.plugins.yolov5_detector import (
+        V1_NMS_CONF,
+        load_yolov5_model,
+        rgb_input_requested,
+    )
+
+    assert _params(load_yolov5_model)[:2] == ["model_path", "device"]
+    assert _params(rgb_input_requested)[:1] == ["value"]
+    assert _params(torch_device)[:1] == ["preference"]
+    assert V1_NMS_CONF == 0.25
+
+
+SISTER_PACKAGES = ("yoru_tracker", "yoru_explain")
+
+
+def test_yoru_never_imports_a_sister_application(repo_root: Path):
+    """YORU must run without its sister applications installed: no import, anywhere."""
     offenders = []
     for path in sorted((repo_root / "yoru").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
@@ -115,6 +140,6 @@ def test_yoru_never_imports_the_tracker(repo_root: Path):
                 names = [node.module or ""]
             else:
                 continue
-            if any(n == "yoru_tracker" or n.startswith("yoru_tracker.") for n in names):
+            if any(n.split(".")[0] in SISTER_PACKAGES for n in names):
                 offenders.append(f"{path.relative_to(repo_root)}:{node.lineno}")
-    assert not offenders, "YORU imports YORU-Tracker:\n" + "\n".join(offenders)
+    assert not offenders, "YORU imports a sister application:\n" + "\n".join(offenders)
