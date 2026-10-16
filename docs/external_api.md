@@ -1,9 +1,9 @@
 # YORU's external API
 
 YORU is also a library. Sister applications — today
-[YORU-Tracker](https://github.com/Kamikouchi-lab/YORU-Tracker) — load
-detectors, read detections and draw their windows through the names listed on
-this page instead of copying YORU's code.
+[YORU-Tracker](https://github.com/Kamikouchi-lab/YORU-Tracker) and
+YORU-Explain — load detectors, read detections and draw their windows through
+the names listed on this page instead of copying YORU's code.
 
 These names are the **supported surface**. Changing one of them is a breaking
 change for every application built on YORU: it needs a major version, or a
@@ -17,17 +17,18 @@ processes — is internal and may change at any time.
 ## The dependency rule
 
 ```text
-YORU-Tracker  ──depends on──▶  YORU
-YORU          ──never imports──▶  YORU-Tracker
+YORU-Tracker, YORU-Explain  ──depend on──▶  YORU
+YORU                        ──never imports──▶  YORU-Tracker, YORU-Explain
 ```
 
 YORU must start, run and pass its tests without any sister application
-installed. Nothing under `yoru/` imports `yoru_tracker`, and the normal YORU
-GUI carries no tracker-specific branches; `tests/test_public_api.py` checks the
-first of these. A feature belongs in YORU only when YORU's own closed-loop
-detection role needs it, or when it is a genuinely general detector / OBB /
-camera / GUI primitive. Tracking policy, identity logic and the tracking GUI
-belong to YORU-Tracker.
+installed. Nothing under `yoru/` imports `yoru_tracker` or `yoru_explain`, and
+the normal YORU GUI carries no branches for either; `tests/test_public_api.py`
+checks the first of these. A feature belongs in YORU only when YORU's own
+closed-loop detection role needs it, or when it is a genuinely general detector
+/ OBB / camera / GUI primitive. Tracking policy, identity logic and the
+tracking GUI belong to YORU-Tracker; explanation methods and their GUI belong
+to YORU-Explain.
 
 ## Detectors — `yoru.libs.plugins`
 
@@ -55,6 +56,27 @@ dicts:
 | `obb_of(detection)` | `(cx, cy, w, h, angle)` for any detection dict — the upright box with angle 0 when the model does not predict rotation. Use this instead of reading `cx..angle` directly. |
 | `DETECTION_COLUMNS` | Column order of a detection row and of the realtime `*_detect.csv` header. |
 | `detection_row(detection, total_time)` | One detection as a row in that order. |
+
+## The YOLOv5 model underneath — `yoru.libs.plugins.yolov5_detector`, `yoru.libs.yolov5_support`, `yoru.libs.device`
+
+For applications that analyse a YOLOv5 model rather than only its boxes
+(YORU-Explain reads the pre-NMS candidates and gradients of the very model
+`get_detector("yolov5", ...)` runs). These give that model and the settings
+the YOLOv5 plugin runs it with.
+
+| Name | What it is |
+|------|------------|
+| `yolov5_detector.load_yolov5_model(model_path, device)` | The bundled YOLOv5's `AutoShape(DetectMultiBackend(weights, fuse=True))` on `device` (a `torch.device`), loaded as the YOLOv5 plugin loads it. Refuses non-YOLOv5 and non-detection checkpoints. |
+| `yolov5_detector.rgb_input_requested(value=None)` | Whether frames go in as RGB: `value` when given, else `$YORU_YOLOV5_RGB`; BGR otherwise, as in YORU v1. |
+| `yolov5_detector.V1_NMS_CONF` | The confidence YOLOv5's NMS runs at (0.25); a higher threshold is applied after NMS. |
+| `yolov5_support.yolov5_importable()` | Context manager that makes the bundled `models` / `utils` packages importable, as `torch.hub.load` did for YORU v1. |
+| `yolov5_support.YOLOV5_DIR` | Where the bundled code lives. |
+| `device.torch_device(preference="auto")` | The `torch.device` YORU resolves `preference` to (`$YORU_DEVICE`, then CUDA, MPS, CPU). |
+
+The bundled YOLOv5's own functions (`utils.augmentations.letterbox`,
+`utils.general.non_max_suppression`, ...) belong to the copy of
+ultralytics/yolov5 that YORU v1.1.2 shipped. They are not YORU API, and YORU
+keeps the copy as it is.
 
 ## Oriented boxes — `yoru.libs.obb`
 
@@ -91,7 +113,8 @@ from these and never subclasses one of YORU's `*_GUI` classes.
 `get_yoru_home()`, `get_log_dir()`, `get_log_file()`, `setup_logging()`,
 `log_exception(context, exc)`, `log_message(message, level)`. A sister
 application writes its own log file into `get_log_dir()` (YORU-Tracker writes
-`yoru_tracker.log`) so both are found in one place, `~/.yoru/logs/`.
+`yoru_tracker.log`, YORU-Explain `yoru_explain.log`) so all are found in one
+place, `~/.yoru/logs/`.
 
 ## Version
 

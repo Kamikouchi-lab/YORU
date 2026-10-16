@@ -54,18 +54,20 @@ different network. Never route YOLOv5 to ultralytics or offer `yolov5*u`.
   `tests/test_yolov5_backend.py::test_detections_match_yoru_v1` checks both
   against v1's `torch.hub.load` path.
 
-## External API and YORU-Tracker
+## External API and the sister applications
 
 `docs/external_api.md` lists the names sister applications (YORU-Tracker,
-`../YORU-Tracker`) import: `get_detector`, `list_detector_backends`,
-`DETECTION_COLUMNS`, `obb_of`, `yoru.libs.obb`, `yoru.libs.camera.open_camera`,
-the GUI primitives and `user_paths`. `tests/test_public_api.py` pins them —
-renaming one is a breaking change, not a refactor.
+`../YORU-Tracker`; YORU-Explain, `../YORU-Explain`) import: `get_detector`,
+`list_detector_backends`, `DETECTION_COLUMNS`, `obb_of`, `yoru.libs.obb`,
+`yoru.libs.camera.open_camera`, the GUI primitives, `user_paths`, and the YOLOv5
+entry points (`load_yolov5_model`, `rgb_input_requested`, `V1_NMS_CONF`,
+`yolov5_importable`, `YOLOV5_DIR`, `torch_device`). `tests/test_public_api.py`
+pins them — renaming one is a breaking change, not a refactor.
 
-YORU never imports `yoru_tracker` (the same test enforces it) and its GUI gets
-no tracker-specific branches. Tracking, identity, trajectories and the tracking
-GUI live in YORU-Tracker; only general detector / OBB / camera / GUI primitives
-belong here.
+YORU never imports `yoru_tracker` or `yoru_explain` (the same test enforces it)
+and its GUI gets no branches for either. Tracking, identity, trajectories and
+the tracking GUI live in YORU-Tracker, explanation methods in YORU-Explain;
+only general detector / OBB / camera / GUI primitives belong here.
 
 ## Environment
 
