@@ -67,6 +67,16 @@ towards +y, folded into `[-pi/2, pi/2)`. A rectangle's angle is only defined
 modulo pi, so it is **not** a heading — the two ends of an animal are not told
 apart.
 
+## Video-analysis IDs — `yoru.libs.analysis`
+
+| Name | What it is |
+|------|------------|
+| `match_to_previous(pre_pos, cur_pos, max_dist=None)` | The frame-to-frame ID matching of YORU's video analysis: for each centre in `cur_pos`, the index into `pre_pos` of the centre it continues, or -1 for a new ID. YORU-Tracker's baseline tracker calls it, so its benchmark compares against what YORU users get. |
+
+Importing `yoru.libs.analysis` loads neither pandas nor torch: on Windows,
+pandas' own `msvcp140.dll` loaded before torch makes torch fail to load
+(WinError 1114).
+
 ## Cameras — `yoru.libs.camera`
 
 | Name | What it is |

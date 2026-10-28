@@ -11,6 +11,8 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -40,6 +42,8 @@ PUBLIC_NAMES = {
         "get_yoru_home", "get_log_dir", "get_log_file", "setup_logging",
         "log_exception", "log_message",
     ),
+    # YORU's own ID matching, which YORU-Tracker's baseline tracker calls.
+    "yoru.libs.analysis": ("match_to_previous",),
 }
 
 
@@ -93,6 +97,27 @@ def test_open_camera_signature():
     params = inspect.signature(open_camera).parameters
     assert list(params)[:4] == ["src", "width", "height", "fps"]
     assert params["settings_dialog"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_match_to_previous_signature():
+    from yoru.libs.analysis import match_to_previous
+
+    assert _params(match_to_previous) == ["pre_pos", "cur_pos", "max_dist"]
+    assert match_to_previous([(0, 0)], [(50, 50), (1, 1)]) == [-1, 0]
+
+
+def test_importing_the_analysis_module_loads_neither_pandas_nor_torch():
+    """pandas' own msvcp140.dll, loaded first, keeps torch from loading on Windows.
+
+    YORU-Tracker imports this module for ``match_to_previous`` and may load a
+    model afterwards in the same process.  A fresh interpreter, because this
+    one has long since imported both.
+    """
+    code = ("import sys, yoru.libs.analysis; "
+            "print(sorted(m for m in ('pandas', 'torch') if m in sys.modules))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         check=True, cwd=Path(__file__).resolve().parents[1])
+    assert out.stdout.strip() == "[]"
 
 
 def test_gui_session_methods():
