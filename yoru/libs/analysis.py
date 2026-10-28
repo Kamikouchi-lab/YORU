@@ -9,7 +9,6 @@ from tkinter import filedialog
 
 import cv2
 import numpy as np
-import pandas as pd
 from munkres import Munkres
 
 from yoru.libs.detector_base import obb_of
@@ -24,6 +23,21 @@ from yoru.libs.plugins import DEFAULT_CONF_THRESH, get_detector
 OBB_COLUMNS = ["w", "h", "angle"]
 
 logger = logging.getLogger(__name__)
+
+
+def _pandas():
+    """pandas, imported when a table is written rather than with this module.
+
+    On Windows the pandas 2.0.3 wheel carries its own, older
+    ``msvcp140.dll``.  Loaded first, it is the copy the whole process uses,
+    and torch 2.11 then fails to load (WinError 1114 in ``c10.dll``).  This
+    module is also imported for ``match_to_previous`` alone (YORU-Tracker's
+    baseline tracker), so importing it must not load pandas; the analyses
+    below need it only after ``get_detector`` has loaded the model.
+    """
+    import pandas
+
+    return pandas
 
 
 def _conf_thresh(m_dict) -> float:
@@ -123,6 +137,7 @@ class yolo_analysis:
         detector = get_detector(
             "auto", self.yolo_model_path, conf_thresh=_conf_thresh(self.m_dict)
         )
+        pd = _pandas()
 
         # Get class names
         self.class_names = detector.names
@@ -472,6 +487,7 @@ class yolo_analysis_image:
         detector = get_detector(
             "auto", self.yolo_model_path, conf_thresh=conf_thresh
         )
+        pd = _pandas()
 
         # Get class names
         self.class_names = detector.names
